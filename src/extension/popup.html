@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Latch</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <span class="mark">⌑</span><strong>Latch</strong><span class="badge">PREVIEW</span>
+    </header>
+    <p id="status">Connecting…</p>
+    <button id="open">Open Latch <span>↗</span></button>
+    <div class="setting">
+      <label><input type="checkbox" id="autofill" disabled /> Fill automatically on this site</label
+      ><small id="domain">Open a website to enable</small>
+    </div>
+    <p id="message" class="hint">Inline suggestions appear when you focus a login field.</p>
+    <footer>Your vault, within reach.</footer>
+    <script src="popup.js"></script>
+  </body>
+</html>

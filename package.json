@@ -1,0 +1,77 @@
+{
+  "name": "latch",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A quiet, fast Mac companion for your Bitwarden vault.",
+  "author": "Dillion Verma",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "overrides": {
+    "multer": "^2.3.0",
+    "tmp": "^0.2.6"
+  },
+  "main": "dist/desktop/main.cjs",
+  "scripts": {
+    "dev": "npm run build && electron .",
+    "build": "node scripts/build.mjs",
+    "start": "electron .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:aside": "LATCH_TEST_BROWSER=aside playwright test",
+    "test:server": "node scripts/test-server.mjs start",
+    "test:server:stop": "node scripts/test-server.mjs stop",
+    "check": "npm run typecheck && npm test && npm run build",
+    "format": "prettier --write src scripts tests docs *.json *.md",
+    "format:check": "prettier --check src scripts tests docs *.json *.md",
+    "package": "npm run build && electron-builder --mac dir --arm64"
+  },
+  "devDependencies": {
+    "@bitwarden/cli": "2026.8.0",
+    "@tanstack/react-virtual": "^3.13.12",
+    "lucide-react": "^0.577.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tldts": "^7.4.2",
+    "zod": "^4.3.6",
+    "@playwright/test": "^1.58.2",
+    "@types/chrome": "^0.1.36",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.4",
+    "electron": "44.4.1",
+    "electron-builder": "^26.8.1",
+    "esbuild": "^0.28.2",
+    "jsdom": "^26.1.0",
+    "prettier": "^3.8.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.0",
+    "vitest": "^4.0.18"
+  },
+  "build": {
+    "appId": "app.latch.vault",
+    "productName": "Latch",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json",
+      "LICENSE",
+      "THIRD_PARTY.md"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "dist/extension/**/*",
+      "dist/desktop/native-host.cjs"
+    ],
+    "mac": {
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.productivity",
+      "target": "dir",
+      "identity": null,
+      "hardenedRuntime": true
+    }
+  }
+}
