@@ -25,6 +25,8 @@ No personal vault or production Cloud account was used. The actual installed Asi
 - Actual browser extension in Chrome for Testing and Aside: native host connection, inline account selection, filling both fields, successful server-validated login, per-site page-load filling without submission, and mismatched-origin rejection.
 - Lock removes match results, clears copied credentials, and rejects further secret access. The on-disk CLI cache is checked for absence of the synthetic login and master passwords in plaintext.
 - Local ad-hoc code-signature verification of the packaged application. No Developer ID notarization claim.
+- Installed application smoke test: launches signed out, discovers the separately installed official CLI, and registers the native browser bridge.
+- [GitHub Actions](https://github.com/dillionverma/latch/actions/runs/35050528081) independently passed a clean dependency install, formatting, strict type checking, all 18 focused tests, and the production build on macOS with Node 22.
 - `npm audit`: zero reported vulnerabilities in the repository dependency tree at verification time. This does not audit the separately installed CLI or replace a security audit.
 
 ## Performance
