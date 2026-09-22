@@ -36,6 +36,10 @@ export interface CliPort {
   cancel(): void;
   /** Releases anything held between commands, such as a warm vault server. */
   stop?(): Promise<void>;
+  /** Prepare a worker without unlocking or retaining a vault key. */
+  prepare?(): Promise<void>;
+  /** Cancel pending work and lock, retaining only an idle, locked worker. */
+  lock?(): Promise<void>;
 }
 
 /** Bitwarden rejected a two-step or new-device verification code. */

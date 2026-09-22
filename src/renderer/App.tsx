@@ -47,6 +47,9 @@ import './workspace.css';
 import { useWindowAppearance } from './useWindowAppearance';
 
 const initialState: VaultState = {
+  revision: -1,
+  itemsRevision: 0,
+  trashLoaded: false,
   status: 'signed-out',
   email: '',
   server: 'https://vault.bitwarden.com',
@@ -120,6 +123,7 @@ export function App() {
   const locking = useRef(false);
   const receiveState = useCallback((next: VaultState) => {
     if (locking.current && next.status === 'unlocked') return;
+    if (next.revision < stateRef.current.revision) return;
     stateVersion.current++;
     stateRef.current = next;
     // External lock events must remove the entire workspace and its portals
@@ -224,6 +228,7 @@ function VaultWorkspace({
   const [settings, setSettings] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [trashLoading, setTrashLoading] = useState(false);
   const [listError, setListError] = useState({ all: '', trash: '' });
   const alive = useRef(true);
   const selectionVersion = useRef(0);
@@ -254,26 +259,57 @@ function VaultWorkspace({
   useEffect(() => {
     const version = ++listVersion.current;
     setLoading(true);
-    void Promise.all([window.latch.items(), window.latch.trash()])
-      .then(([listed, binned]) => {
+    void window.latch
+      .items()
+      .then((listed) => {
         if (!alive.current || version !== listVersion.current) return;
         if (listed.ok) setItems(listed.value);
-        if (binned.ok) setTrashed(binned.value);
-        setListError({
+        setListError((current) => ({
+          ...current,
           all: listed.ok ? '' : 'Could not load vault items. Try Sync vault.',
-          trash: binned.ok ? '' : 'Could not load Trash. Try Sync vault.',
-        });
+        }));
         setLoading(false);
       })
       .catch(() => {
         if (!alive.current || version !== listVersion.current) return;
-        setListError({
+        setListError((current) => ({
+          ...current,
           all: 'Could not load vault items. Try Sync vault.',
-          trash: 'Could not load Trash. Try Sync vault.',
-        });
+        }));
         setLoading(false);
       });
-  }, [state]);
+    return () => {
+      ++listVersion.current;
+    };
+  }, [state.itemsRevision]);
+
+  useEffect(() => {
+    if (filter !== 'trash') return;
+    let current = true;
+    setTrashLoading(true);
+    void window.latch
+      .trash()
+      .then((result) => {
+        if (!alive.current || !current) return;
+        if (result.ok) setTrashed(result.value);
+        setListError((previous) => ({
+          ...previous,
+          trash: result.ok ? '' : 'Could not load Trash. Try Sync vault.',
+        }));
+        setTrashLoading(false);
+      })
+      .catch(() => {
+        if (!alive.current || !current) return;
+        setListError((previous) => ({
+          ...previous,
+          trash: 'Could not load Trash. Try Sync vault.',
+        }));
+        setTrashLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [filter, state.itemsRevision]);
 
   const commands = useRef({ editor, settings });
   commands.current = { editor, settings };
@@ -363,6 +399,16 @@ function VaultWorkspace({
     }
   }
 
+  const refreshSelection = useRef(select);
+  refreshSelection.current = select;
+  useEffect(() => {
+    if (!selectedId) return;
+    const item =
+      items.find((entry) => entry.id === selectedId) ??
+      trashed.find((entry) => entry.id === selectedId);
+    if (item) void refreshSelection.current(item);
+  }, [state.itemsRevision]);
+
   async function setBiometrics(enabled: boolean) {
     if (!alive.current) return;
     const pending = notify.show(
@@ -432,8 +478,8 @@ function VaultWorkspace({
                   <Icon size={16} />
                   <span>{label}</span>
                   {id === 'all' && <small>{items.length.toLocaleString()}</small>}
-                  {id === 'trash' && trashed.length > 0 && (
-                    <small>{trashed.length.toLocaleString()}</small>
+                  {id === 'trash' && state.trashLoaded && state.trashCount > 0 && (
+                    <small>{state.trashCount.toLocaleString()}</small>
                   )}
                 </Button>
               ))}
@@ -521,7 +567,7 @@ function VaultWorkspace({
               onNew={() => runCommand('new')}
               emptyLabel={currentFilter.empty}
               emptyDescription={currentFilter.description}
-              loading={loading}
+              loading={filter === 'trash' ? trashLoading : loading}
               error={currentListError}
             />
             <footer className="list-footer">

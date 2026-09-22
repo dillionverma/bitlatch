@@ -30,6 +30,12 @@ export interface LoginChallenge {
 export type ChallengeAnswer = { code: string } | { method: TwoStepMethod } | { cancel: true };
 
 export interface VaultState {
+  /** Monotonic state version; duplicate or late IPC replies can be ignored. */
+  revision: number;
+  /** Changes only when active items change. */
+  itemsRevision: number;
+  /** Trash is fetched only when opened. */
+  trashLoaded: boolean;
   status: VaultStatus;
   email: string;
   server: string;

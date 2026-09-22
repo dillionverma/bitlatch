@@ -18,6 +18,10 @@ Private MVP · macOS Apple Silicon · Chrome / Aside
 
 This is a **password MVP**. Passkeys are the next major integration. Logins and secure notes can be edited, and items can be moved to the trash and restored, though never deleted permanently; shared/protected items are restricted, other item types and passkey-bearing items are read-only, and passkey operations, enterprise features, and system-wide autofill are not implemented. See [security boundaries](SECURITY.md).
 
+## Local design build
+
+Version 0.2.0 combines the native Mac redesign with the latest main performance work. The local build is installed at `~/Applications/Latch.app`. This is a local preview, not a published release.
+
 ## Install and use
 
 1. Install the official Bitwarden CLI: `brew install bitwarden-cli`. Latch discovers Homebrew and common Nix installations. A custom absolute path can be supplied through `LATCH_BW_PATH` when launching from a terminal.
