@@ -36,6 +36,18 @@ export const desktopRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('confirm'), action: z.enum(['discard', 'trash']) }).strict(),
   z
     .object({
+      type: z.literal('itemMenu'),
+      id,
+      position: z
+        .object({
+          x: z.number().int().min(0).max(100_000),
+          y: z.number().int().min(0).max(100_000),
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
       type: z.literal('login'),
       input: z
         .object({

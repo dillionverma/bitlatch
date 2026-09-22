@@ -210,7 +210,7 @@ export function Detail({
           >
             {item.type === 1 && (
               <>
-                <div className="task-credential">
+                <div className="task-credential" data-credential="username">
                   <div>
                     <p id="detail-username-label" className="text-xs text-muted-foreground">
                       Username
@@ -238,7 +238,7 @@ export function Detail({
                   </Button>
                 </div>
                 <Separator />
-                <div className="task-credential">
+                <div className="task-credential" data-credential="password">
                   <div>
                     <p id="detail-password-label" className="text-xs text-muted-foreground">
                       Password

@@ -1,8 +1,10 @@
 import { dialog, Menu, type BrowserWindow, type MenuItemConstructorOptions } from 'electron';
-import type { NativeConfirmation } from '../shared/types';
+import type { ItemDetail, ItemMenuAction, MenuPosition, NativeConfirmation } from '../shared/types';
 
 export function installNativeInteractions(window: BrowserWindow) {
   let confirmation: AbortController | undefined;
+  let dismissMenu: (() => void) | undefined;
+  const cancelMenu = () => dismissMenu?.();
   window.webContents.on('context-menu', (_event, params) => {
     if (!params.isEditable && !params.selectionText) return;
     const { editFlags } = params;
@@ -19,13 +21,74 @@ export function installNativeInteractions(window: BrowserWindow) {
           { role: 'selectAll', enabled: editFlags.canSelectAll },
         ]
       : [{ role: 'copy', enabled: editFlags.canCopy }];
-    Menu.buildFromTemplate(template).popup({ window, frame: params.frame ?? undefined });
+    cancelMenu();
+    const menu = Menu.buildFromTemplate(template);
+    const dismiss = () => {
+      if (dismissMenu === dismiss) dismissMenu = undefined;
+      if (!window.isDestroyed()) menu.closePopup(window);
+    };
+    dismissMenu = dismiss;
+    menu.popup({
+      window,
+      frame: params.frame ?? undefined,
+      callback: () => {
+        if (dismissMenu === dismiss) dismissMenu = undefined;
+      },
+    });
   });
   const cancelConfirmation = () => confirmation?.abort();
   window.on('hide', cancelConfirmation);
   window.once('closed', cancelConfirmation);
+  window.on('hide', cancelMenu);
+  window.once('closed', cancelMenu);
+  window.webContents.on('did-start-navigation', cancelMenu);
   return {
     cancelConfirmation,
+    cancelMenu,
+    itemMenu(item: ItemDetail, position: MenuPosition): Promise<ItemMenuAction | null> {
+      cancelMenu();
+      if (confirmation || window.isDestroyed() || !window.isVisible()) return Promise.resolve(null);
+      return new Promise((resolve) => {
+        let action: ItemMenuAction | null = null;
+        const entry = (
+          label: string,
+          value: ItemMenuAction,
+          enabled = true,
+        ): MenuItemConstructorOptions => ({
+          label,
+          enabled,
+          click: () => {
+            action = value;
+          },
+        });
+        const template: MenuItemConstructorOptions[] = [];
+        if (item.type === 1) {
+          template.push(entry('Copy Username', 'copyUsername', !!item.username));
+          template.push(entry('Copy Password', 'copyPassword', !!item.password));
+          template.push({ type: 'separator' });
+        }
+        template.push(entry('Edit', 'edit', item.editable));
+        if (item.restorable) template.push(entry('Restore to Vault', 'restore'));
+        else template.push(entry('Move to Trash…', 'trash', item.deletable));
+        const menu = Menu.buildFromTemplate(template);
+        const dismiss = () => {
+          if (dismissMenu === dismiss) dismissMenu = undefined;
+          resolve(null);
+          if (!window.isDestroyed()) menu.closePopup(window);
+        };
+        dismissMenu = dismiss;
+        const [width = 1, height = 1] = window.getContentSize();
+        menu.popup({
+          window,
+          x: Math.min(position.x, width - 1),
+          y: Math.min(position.y, height - 1),
+          callback: () => {
+            if (dismissMenu === dismiss) dismissMenu = undefined;
+            resolve(action);
+          },
+        });
+      });
+    },
     async confirm(action: NativeConfirmation) {
       if (confirmation || window.isDestroyed() || !window.isVisible()) return false;
       const controller = new AbortController();

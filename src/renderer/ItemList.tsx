@@ -14,7 +14,7 @@ import {
   MagnifyingGlass as Search,
   Star,
 } from '@phosphor-icons/react';
-import type { ItemSummary } from '../shared/types';
+import type { ItemSummary, MenuPosition } from '../shared/types';
 import { ItemIcon, displayWebsite, typeName } from './items';
 import { VAULT_LIST_OVERSCAN, VAULT_ROW_HEIGHT } from './metrics';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,7 @@ export function ItemList({
   header,
   selectedId,
   onSelect,
+  onItemMenu,
   query,
   onNew,
   emptyLabel,
@@ -51,6 +52,7 @@ export function ItemList({
   header: ReactNode;
   selectedId: string;
   onSelect: (item: ItemSummary) => void;
+  onItemMenu: (item: ItemSummary, position: MenuPosition) => void;
   query: string;
   onNew: () => void;
   emptyLabel?: string;
@@ -127,6 +129,19 @@ export function ItemList({
         onKeyDown={(event) => {
           if (event.metaKey || event.ctrlKey || event.altKey || event.nativeEvent.isComposing)
             return;
+          if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+            const item = items[activeIndex];
+            if (!item) return;
+            event.preventDefault();
+            virtualizer.scrollToIndex(activeIndex, { align: 'auto' });
+            const bounds = document.getElementById(optionId(item.id))?.getBoundingClientRect();
+            if (bounds)
+              onItemMenu(item, {
+                x: Math.max(0, Math.round(bounds.left + 20)),
+                y: Math.max(0, Math.min(window.innerHeight - 1, Math.round(bounds.bottom))),
+              });
+            return;
+          }
           const page = Math.max(
             1,
             Math.floor(
@@ -189,6 +204,14 @@ export function ItemList({
                   onClick={() => {
                     listRef.current?.focus({ preventScroll: true });
                     onSelect(item);
+                  }}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    listRef.current?.focus({ preventScroll: true });
+                    onItemMenu(item, {
+                      x: Math.round(event.clientX),
+                      y: Math.round(event.clientY),
+                    });
                   }}
                 >
                   <ItemIcon item={item} />

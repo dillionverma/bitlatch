@@ -173,6 +173,7 @@ void app
     });
     window.once('ready-to-show', () => window.show());
     vault.on('state', (state) => {
+      nativeInteractions.cancelMenu();
       if (state.status !== 'unlocked') {
         nativeInteractions.cancelConfirmation();
         void clearCopiedSecret().catch(() => undefined);
@@ -218,6 +219,12 @@ void app
 
 async function handleRequest(request: DesktopRequest): Promise<unknown> {
   switch (request.type) {
+    case 'itemMenu': {
+      if (vault.snapshot().status !== 'unlocked') return null;
+      const epoch = mutationEpoch;
+      const action = await nativeInteractions.itemMenu(vault.detail(request.id), request.position);
+      return epoch === mutationEpoch && vault.snapshot().status === 'unlocked' ? action : null;
+    }
     case 'confirm': {
       if (vault.snapshot().status !== 'unlocked') return false;
       const epoch = mutationEpoch;

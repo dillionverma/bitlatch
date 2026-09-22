@@ -16,7 +16,7 @@ import {
   User as UserRound,
   X,
 } from '@phosphor-icons/react';
-import type { ItemDetail, ItemSummary, VaultState } from '../shared/types';
+import type { ItemDetail, ItemSummary, MenuPosition, VaultState } from '../shared/types';
 import { Auth } from './Auth';
 import { Editor } from './Editor';
 import { Settings } from './Settings';
@@ -388,6 +388,7 @@ function VaultWorkspace({
       if (response.ok) {
         setSelected(response.value);
         setDetailStatus('ready');
+        return response.value;
       } else {
         setDetailStatus('error');
         setDetailError('Could not load this item. Try again.');
@@ -396,6 +397,77 @@ function VaultWorkspace({
       if (!alive.current || version !== selectionVersion.current) return;
       setDetailStatus('error');
       setDetailError('Could not load this item. Try again.');
+    }
+  }
+
+  const menuWorking = useRef(false);
+  async function showItemMenu(item: ItemSummary, position: MenuPosition) {
+    if (!alive.current || menuWorking.current || editor || settings || hasModal()) return;
+    menuWorking.current = true;
+    let pending: ReturnType<Notifier['show']> | undefined;
+    try {
+      // Select before opening the menu so both the highlight and Edit target
+      // follow the clicked row, even when a different detail request is pending.
+      const detail = await select(item);
+      if (!detail || !alive.current || hasModal()) return;
+      const version = selectionVersion.current;
+      const current = () => alive.current && version === selectionVersion.current;
+      const result = await window.latch.itemMenu(item.id, position);
+      if (!current() || hasModal()) return;
+      if (!result.ok) {
+        notify.show('error', result.error);
+        return;
+      }
+      const action = result.value;
+      if (!action) return;
+      if (action === 'edit') {
+        if (detail.editable && !hasModal()) setEditor('edit');
+        return;
+      }
+      if (action === 'copyUsername' || action === 'copyPassword') {
+        const field = action === 'copyUsername' ? 'username' : 'password';
+        const copied = await window.latch.copy(item.id, field);
+        if (current())
+          notify.show(
+            copied.ok ? 'done' : 'error',
+            copied.ok ? `${field === 'username' ? 'Username' : 'Password'} copied` : copied.error,
+          );
+        return;
+      }
+      if (action === 'trash') {
+        const confirmation = await window.latch.confirm('trash');
+        if (!current()) return;
+        if (!confirmation.ok) {
+          notify.show('error', confirmation.error);
+          return;
+        }
+        if (!confirmation.value) return;
+      }
+      const restore = action === 'restore';
+      pending = notify.show('pending', restore ? 'Restoring…' : 'Moving to Trash…');
+      const changed = await (restore
+        ? window.latch.restore(item.id)
+        : window.latch.remove(item.id));
+      if (!alive.current) return;
+      notify.settle(
+        pending,
+        changed.ok ? 'done' : 'error',
+        changed.ok ? (restore ? 'Restored to your vault' : 'Moved to Trash') : changed.error,
+      );
+      // State publication can already have cleared or refreshed the selection.
+      if (changed.ok && current()) {
+        selectionVersion.current++;
+        setSelected(null);
+        setSelectedId('');
+        setDetailStatus('unselected');
+      }
+    } catch {
+      if (alive.current) {
+        if (pending) notify.settle(pending, 'error', 'Could not update the item.');
+        else notify.show('error', 'Could not open the item menu. Try again.');
+      }
+    } finally {
+      menuWorking.current = false;
     }
   }
 
@@ -511,6 +583,7 @@ function VaultWorkspace({
           </aside>
           <section className="item-list" aria-label={currentFilter.label}>
             <ItemList
+              onItemMenu={(item, position) => void showItemMenu(item, position)}
               header={
                 <>
                   <header className="workspace-list-toolbar">
@@ -597,6 +670,19 @@ function VaultWorkspace({
             className="detail-pane"
             aria-label="Item details"
             aria-busy={activeDetail === 'loading'}
+            onContextMenu={(event) => {
+              if (!selected || !selectionVisible) return;
+              const target = event.target as HTMLElement;
+              if (target.closest('input, textarea, [contenteditable="true"]')) return;
+              // Selected notes and URLs retain standard text Copy. Credentials
+              // always use the timed clipboard API, including revealed passwords.
+              if (!target.closest('[data-credential]') && window.getSelection()?.toString()) return;
+              event.preventDefault();
+              void showItemMenu(selected, {
+                x: Math.round(event.clientX),
+                y: Math.round(event.clientY),
+              });
+            }}
           >
             {selected && selectionVisible ? (
               <Detail

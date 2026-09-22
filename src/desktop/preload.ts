@@ -6,6 +6,7 @@ const request = (message: DesktopRequest) => ipcRenderer.invoke('latch:request',
 
 const api: LatchApi = {
   confirm: (action) => request({ type: 'confirm', action }),
+  itemMenu: (id, position) => request({ type: 'itemMenu', id, position }),
   state: () => request({ type: 'state' }),
   login: (input) => request({ type: 'login', input }),
   answerChallenge: (answer) => request({ type: 'challenge', answer }),

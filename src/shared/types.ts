@@ -1,6 +1,8 @@
 export type WindowMaterial = 'glass' | 'vibrancy' | 'solid';
 export type WindowCommand = 'search' | 'new' | 'settings';
 export type NativeConfirmation = 'discard' | 'trash';
+export type ItemMenuAction = 'copyUsername' | 'copyPassword' | 'edit' | 'trash' | 'restore';
+export type MenuPosition = { x: number; y: number };
 export const windowColorTokens = [
   'background',
   'foreground',
@@ -143,6 +145,7 @@ export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
 export interface LatchApi {
   confirm(action: NativeConfirmation): Promise<Result<boolean>>;
+  itemMenu(id: string, position: MenuPosition): Promise<Result<ItemMenuAction | null>>;
   state(): Promise<Result<VaultState>>;
   login(input: LoginInput): Promise<Result<VaultState>>;
   answerChallenge(answer: ChallengeAnswer): Promise<Result<void>>;
