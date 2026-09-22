@@ -5,7 +5,6 @@ import {
   globalShortcut,
   ipcMain,
   Menu,
-  nativeTheme,
   powerMonitor,
   session,
   shell,
@@ -13,10 +12,14 @@ import {
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readFile, mkdir } from 'node:fs/promises';
+import { prepareWindowAppearance } from './window-appearance';
+import type { WindowCommand } from '../shared/types';
 import { localEngine } from './engine';
 import { Vault, generatePassword } from './vault';
+import { touchIdSessionStore } from './biometrics';
 import { BrowserBridge } from './browser-bridge';
 import { desktopRequestSchema, safely, UserError } from '../shared/protocol';
+import type { CliPort } from './cli';
 import type { DesktopRequest } from '../shared/protocol';
 
 process.umask(0o077);
@@ -25,7 +28,9 @@ if (process.env.LATCH_DATA_DIR) app.setPath('userData', process.env.LATCH_DATA_D
 if (!app.requestSingleInstanceLock()) app.quit();
 
 let window: BrowserWindow;
+let appearance: ReturnType<typeof prepareWindowAppearance>;
 let vault: Vault;
+let cli: CliPort | undefined;
 let bridge: BrowserBridge;
 let busy = false;
 let copiedValue = '';
@@ -34,6 +39,8 @@ let clipboardQueue: Promise<void> = Promise.resolve();
 let isQuitting = false;
 let lastUnlockAt = Date.now();
 let setupError: string | undefined;
+/** Resolves once the vault knows whether an account is already signed in. */
+let examined: Promise<unknown> = Promise.resolve();
 const rendererPath = join(__dirname, '../renderer/index.html');
 const rendererUrl = pathToFileURL(rendererPath).href;
 const extensionPath = app.isPackaged
@@ -58,11 +65,14 @@ void app
     await mkdir(app.getPath('userData'), { recursive: true, mode: 0o700 });
     const engine = await localEngine({
       dataDir: join(app.getPath('userData'), 'bitwarden'),
-      appPath: app.getAppPath(),
-      packaged: app.isPackaged,
     });
     setupError = engine.setupError;
-    vault = new Vault(engine.cli);
+    cli = engine.cli;
+    const sessions = touchIdSessionStore(app.getPath('userData'));
+    await sessions.load();
+    vault = new Vault(engine.cli, sessions);
+    // Started before the window loads so the first state it asks for is real.
+    examined = setupError ? Promise.resolve() : vault.initialize();
     const manifest = JSON.parse(await readFile(join(__dirname, 'extension.json'), 'utf8')) as {
       extensionId: string;
     };
@@ -78,6 +88,11 @@ void app
         }
         if (request.type === 'status') return vault.snapshot().status;
         if (request.type === 'matches') return vault.matches(request.url);
+        if (request.type === 'capture')
+          return vault.capture(request.url, request.username, request.password);
+        if (request.type === 'pendingCapture') return vault.pendingCapture(request.url);
+        if (request.type === 'commitCapture') return vault.commitCapture(request.url);
+        if (request.type === 'dismissCapture') return vault.dismissCapture();
         return vault.fill(request.id, request.url);
       },
     });
@@ -86,7 +101,19 @@ void app
       callback(false),
     );
     session.defaultSession.setPermissionCheckHandler(() => false);
+    const requestedMaterial = process.env.LATCH_MATERIAL;
+    appearance = prepareWindowAppearance({
+      // Glass remains an explicit developer opt-in until the native matrix passes.
+      allowGlass: requestedMaterial === 'glass',
+      override:
+        requestedMaterial === 'vibrancy' || requestedMaterial === 'unavailable'
+          ? requestedMaterial
+          : requestedMaterial === 'glass'
+            ? 'glass'
+            : 'solid',
+    });
     window = new BrowserWindow({
+      ...appearance.windowOptions,
       width: 1080,
       height: 720,
       minWidth: 820,
@@ -94,7 +121,8 @@ void app
       title: 'Latch',
       titleBarStyle: 'hiddenInset',
       trafficLightPosition: { x: 18, y: 19 },
-      backgroundColor: nativeTheme.shouldUseDarkColors ? '#191919' : '#faf9f7',
+      // An inactive-window click must only activate, never reveal or copy a secret.
+      acceptFirstMouse: false,
       show: false,
       webPreferences: {
         preload: join(__dirname, 'preload.cjs'),
@@ -105,6 +133,11 @@ void app
         webSecurity: true,
       },
     });
+    appearance.attach(window);
+    const unsubscribeAppearance = appearance.subscribe((snapshot) => {
+      if (!window.isDestroyed()) window.webContents.send('latch:appearance', snapshot);
+    });
+    window.once('closed', unsubscribeAppearance);
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event) => event.preventDefault());
     window.on('close', (event) => {
@@ -122,6 +155,7 @@ void app
     ipcMain.handle('latch:request', (event, raw: unknown) =>
       safely(async () => {
         if (
+          event.sender !== window.webContents ||
           event.senderFrame !== window.webContents.mainFrame ||
           event.senderFrame.url !== rendererUrl
         )
@@ -144,7 +178,7 @@ void app
         lockVault();
     }, 10_000).unref();
     await window.loadFile(rendererPath);
-    if (!setupError) await vault.initialize();
+    await examined;
   })
   .catch(() => {
     // Deliberately omit raw engine errors: they can contain vault data.
@@ -154,12 +188,21 @@ void app
 
 async function handleRequest(request: DesktopRequest): Promise<unknown> {
   switch (request.type) {
+    case 'appearance':
+      return appearance.snapshot();
     case 'state':
+      // Answering before the vault has looked would flash the sign-in screen.
+      await examined.catch(() => undefined);
       return { ...vault.snapshot(), ...(setupError ? { setupError } : {}) };
     case 'lock':
       return vault.lock();
+    case 'challenge':
+      // Feeds a sign-in that is already in progress, so it bypasses the busy gate.
+      return vault.answerChallenge(request.answer);
     case 'items':
       return vault.items();
+    case 'trash':
+      return vault.trash();
     case 'detail':
       return vault.detail(request.id);
     case 'generate':
@@ -192,7 +235,21 @@ async function handleRequest(request: DesktopRequest): Promise<unknown> {
 }
 
 async function mutateVault(
-  request: Extract<DesktopRequest, { type: 'login' | 'unlock' | 'logout' | 'sync' | 'save' }>,
+  request: Extract<
+    DesktopRequest,
+    {
+      type:
+        | 'login'
+        | 'unlock'
+        | 'logout'
+        | 'sync'
+        | 'save'
+        | 'delete'
+        | 'restore'
+        | 'biometricUnlock'
+        | 'setBiometrics';
+    }
+  >,
 ) {
   if (busy) throw new UserError('Please wait for the current vault operation to finish.');
   busy = true;
@@ -202,12 +259,20 @@ async function mutateVault(
         return await vault.login(request.input);
       case 'unlock':
         return await vault.unlock(request.password);
+      case 'biometricUnlock':
+        return await vault.unlockWithBiometrics();
+      case 'setBiometrics':
+        return await vault.setBiometrics(request.enabled);
       case 'logout':
         return await vault.logout();
       case 'sync':
         return await vault.sync();
       case 'save':
         return await vault.save(request.draft);
+      case 'delete':
+        return await vault.remove(request.id);
+      case 'restore':
+        return await vault.restore(request.id);
     }
   } finally {
     busy = false;
@@ -231,6 +296,11 @@ function lockVault() {
     void vault.lock().catch(() => undefined);
 }
 
+function sendCommand(command: WindowCommand) {
+  showWindow();
+  if (!window.isDestroyed()) window.webContents.send('latch:command', command);
+}
+
 function installMenu() {
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
@@ -238,6 +308,7 @@ function installMenu() {
         label: 'Latch',
         submenu: [
           { role: 'about' },
+          { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => sendCommand('settings') },
           { type: 'separator' },
           { label: 'Lock vault', accelerator: 'CmdOrCtrl+L', click: lockVault },
           { type: 'separator' },
@@ -248,6 +319,12 @@ function installMenu() {
           { role: 'quit' },
         ],
       },
+      {
+        label: 'File',
+        submenu: [
+          { label: 'New Login', accelerator: 'CmdOrCtrl+N', click: () => sendCommand('new') },
+        ],
+      },
       { role: 'editMenu' },
       {
         label: 'View',
@@ -256,8 +333,7 @@ function installMenu() {
             label: 'Search vault',
             accelerator: 'CmdOrCtrl+K',
             click: () => {
-              showWindow();
-              window.webContents.send('latch:focus-search');
+              sendCommand('search');
             },
           },
           { role: 'togglefullscreen' },
@@ -273,7 +349,8 @@ app.on('before-quit', (event) => {
   event.preventDefault();
   isQuitting = true;
   globalShortcut.unregisterAll();
-  void Promise.allSettled([vault?.lock(), bridge?.stop(), clearCopiedSecret()]).finally(() =>
-    app.quit(),
-  );
+  void Promise.allSettled([vault?.lock(), bridge?.stop(), clearCopiedSecret()])
+    // The vault server holds an unlocked vault, so it goes last and always.
+    .then(() => cli?.stop?.())
+    .finally(() => app.quit());
 });

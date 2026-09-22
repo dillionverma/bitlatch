@@ -1,0 +1,262 @@
+/* Task geometry only. Supplied controls and shared tokens own color and type. */
+.task-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 460px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.task-header {
+  position: relative;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding: 20px 52px 16px 20px;
+}
+.task-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+.task-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.task-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 20px;
+  padding: 4px 20px 20px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.task-footer {
+  flex: 0 0 auto;
+  flex-direction: row;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 20px;
+}
+.task-label-actions,
+.task-actions,
+.task-inline-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.task-label-actions {
+  justify-content: space-between;
+}
+.task-notes {
+  min-height: 80px;
+  resize: vertical;
+}
+.task-notes[data-note='true'] {
+  min-height: 180px;
+}
+.task-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.task-setup-steps {
+  list-style: decimal;
+  padding-left: 20px;
+  margin: 0;
+}
+.task-setup-steps > li {
+  padding-left: 4px;
+}
+.task-setup-steps > li + li {
+  margin-top: 16px;
+}
+.task-setup-steps p {
+  margin-block: 4px 8px;
+  overflow-wrap: anywhere;
+}
+.task-setting-row {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+.task-setting-row p {
+  margin: 0;
+}
+
+.task-auth {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  padding: 52px 24px 24px;
+}
+.task-auth-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.task-auth-panel {
+  display: flex;
+  flex-direction: column;
+  width: 360px;
+  max-width: 100%;
+  min-height: 0;
+  margin: auto;
+}
+.task-auth-header {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 4px 20px;
+}
+.task-auth-header p {
+  overflow-wrap: anywhere;
+}
+.task-auth-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.task-auth-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 4px;
+  overscroll-behavior: contain;
+}
+.task-auth-actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 4px 4px;
+}
+.task-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.task-methods > button {
+  justify-content: space-between;
+}
+
+.task-detail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+.task-detail-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 0 0 52px;
+  padding: 0 16px;
+  -webkit-app-region: drag;
+}
+.task-detail-toolbar > * {
+  -webkit-app-region: no-drag;
+}
+.task-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 24px 24px;
+}
+.task-item-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.task-item-identity > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.task-item-identity h2 {
+  margin: 0;
+}
+.task-item-identity p {
+  margin-top: 4px;
+}
+.task-credentials {
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+.task-credential {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+}
+.task-credential > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.task-credential .field-value {
+  margin-top: 4px;
+  user-select: text;
+  overflow-wrap: anywhere;
+}
+.task-credential > button,
+.task-credential > .task-actions {
+  flex-shrink: 0;
+}
+.task-notes-display {
+  margin: 0;
+}
+.task-notes-display h3 {
+  margin: 0 0 8px;
+}
+.task-notes-display p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.task-detail-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding-top: 16px;
+}
+.task-detail-footer small {
+  margin: 0;
+}
+@media (max-width: 950px) {
+  .task-detail-body {
+    padding: 16px;
+  }
+}
+@media (max-height: 550px) {
+  .task-auth {
+    padding: 24px 16px 12px;
+  }
+  .task-auth-brand {
+    margin-bottom: 12px;
+  }
+  .task-auth-header {
+    flex: 0 0 auto;
+    padding-bottom: 12px;
+  }
+  .task-header {
+    padding-top: 16px;
+    padding-bottom: 12px;
+  }
+}

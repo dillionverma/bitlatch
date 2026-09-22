@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import {
+  AlertCircle,
   FileText,
   Fingerprint,
   FolderKey,
@@ -10,8 +11,8 @@ import {
   RefreshCw,
   Search,
   Settings2,
-  ShieldCheck,
   Star,
+  Trash2,
   UserRound,
   X,
 } from 'lucide-react';
@@ -21,7 +22,29 @@ import { Editor } from './Editor';
 import { Settings } from './Settings';
 import { Mark } from './Mark';
 import { Detail } from './Detail';
-import { ItemIcon, displayWebsite, typeName } from './items';
+import { ItemList } from './ItemList';
+import { Toasts, useToasts, type Notifier } from './Toasts';
+import { Button } from '@/components/ui/button';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '@/components/ui/input-group';
+import { Kbd } from '@/components/ui/kbd';
+import { Separator } from '@/components/ui/separator';
+import { Spinner } from '@/components/ui/spinner';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import './workspace.css';
+import { useWindowAppearance } from './useWindowAppearance';
 
 const initialState: VaultState = {
   status: 'signed-out',
@@ -29,365 +52,615 @@ const initialState: VaultState = {
   server: 'https://vault.bitwarden.com',
   lastSync: null,
   itemCount: 0,
+  trashCount: 0,
+  biometrics: 'unsupported',
+  biometricsOn: false,
 };
-type Filter = 'all' | 'favorites' | 'logins' | 'notes' | 'passkeys';
+type Filter = 'all' | 'favorites' | 'logins' | 'notes' | 'passkeys' | 'trash';
+type DetailStatus = 'unselected' | 'loading' | 'restricted' | 'error' | 'ready';
 const filters = [
-  { id: 'all', label: 'All items', icon: FolderKey },
-  { id: 'favorites', label: 'Favorites', icon: Star },
-  { id: 'logins', label: 'Logins', icon: KeyRound },
-  { id: 'notes', label: 'Secure notes', icon: FileText },
-  { id: 'passkeys', label: 'Passkeys', icon: Fingerprint },
+  { id: 'all', label: 'All items', icon: FolderKey, empty: undefined, description: undefined },
+  {
+    id: 'favorites',
+    label: 'Favorites',
+    icon: Star,
+    empty: 'No favorites',
+    description: 'Mark an item as a favorite to find it here.',
+  },
+  {
+    id: 'logins',
+    label: 'Logins',
+    icon: KeyRound,
+    empty: 'No logins',
+    description: 'Use New login to add one.',
+  },
+  {
+    id: 'notes',
+    label: 'Secure notes',
+    icon: FileText,
+    empty: 'No secure notes',
+    description: 'Secure notes from Bitwarden appear here.',
+  },
+  {
+    id: 'passkeys',
+    label: 'Passkeys',
+    icon: Fingerprint,
+    empty: 'No saved passkeys',
+    description: 'Passkey items appear here as read-only.',
+  },
+  {
+    id: 'trash',
+    label: 'Trash',
+    icon: Trash2,
+    empty: 'Trash is empty',
+    description: 'Items moved to Trash can be restored.',
+  },
 ] as const;
 
-export function App() {
-  const [state, setState] = useState(initialState);
-  const stateRef = useRef(state);
-  const [ready, setReady] = useState(false);
-  const [items, setItems] = useState<ItemSummary[]>([]);
-  const [selected, setSelected] = useState<ItemDetail | null>(null);
-  const [selectedId, setSelectedId] = useState('');
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
-  const [editor, setEditor] = useState<'new' | 'edit' | null>(null);
-  const [settings, setSettings] = useState(false);
-  const [notice, setNotice] = useState('');
-  const [syncing, setSyncing] = useState(false);
-  const selectionVersion = useRef(0);
-  const searchInput = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
+function indexItems(items: ItemSummary[]) {
+  return items.map((item) => ({
+    item,
+    haystack: `${item.name} ${item.username} ${item.website}`.toLowerCase(),
+  }));
+}
 
+/** Include task-owned and portalled dialogs, not only App's modal state. */
+function hasModal() {
+  return !!document.querySelector(
+    '[role="dialog"]:not([data-state="closed"]), [role="alertdialog"]:not([data-state="closed"])',
+  );
+}
+
+export function App() {
+  useWindowAppearance();
+  const [state, setState] = useState(initialState);
+  const [ready, setReady] = useState(false);
+  const stateRef = useRef(state);
+  const stateVersion = useRef(0);
+  const locking = useRef(false);
   const receiveState = useCallback((next: VaultState) => {
+    if (locking.current && next.status === 'unlocked') return;
+    stateVersion.current++;
     stateRef.current = next;
-    setState(next);
-    setReady(true);
-    if (next.status !== 'unlocked') {
-      selectionVersion.current++;
-      setItems([]);
-      setSelected(null);
-      setSelectedId('');
-      setEditor(null);
-      setQuery('');
-      setNotice('');
-      setSettings(false);
-    } else {
-      void window.latch.items().then((response) => {
-        if (response.ok && stateRef.current.status === 'unlocked') setItems(response.value);
-      });
-    }
+    // External lock events must remove the entire workspace and its portals
+    // before returning to the event loop, without an exit-animation interval.
+    flushSync(() => {
+      setState(next);
+      setReady(true);
+    });
   }, []);
 
   useEffect(() => {
+    let active = true;
     const unsubscribe = window.latch.onState(receiveState);
-    void window.latch.state().then((response) => {
-      if (response.ok) receiveState(response.value);
-    });
-    return unsubscribe;
+    const version = stateVersion.current;
+    void window.latch
+      .state()
+      .then((response) => {
+        if (!active || version !== stateVersion.current) return;
+        receiveState(
+          response.ok
+            ? response.value
+            : {
+                ...initialState,
+                setupError: 'Could not connect to Latch. Reopen the app to try again.',
+              },
+        );
+      })
+      .catch(() => {
+        if (active && version === stateVersion.current)
+          receiveState({
+            ...initialState,
+            setupError: 'Could not connect to Latch. Reopen the app to try again.',
+          });
+      });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, [receiveState]);
 
-  useEffect(
-    () =>
-      window.latch.onFocusSearch(() => {
-        searchInput.current?.focus();
-        searchInput.current?.select();
-      }),
-    [],
-  );
+  const lock = useCallback(() => {
+    if (stateRef.current.status !== 'unlocked' || locking.current) return;
+    locking.current = true;
+    receiveState({ ...stateRef.current, status: 'locked', itemCount: 0, trashCount: 0 });
+    void window.latch
+      .lock()
+      .then((response) => {
+        if (response.ok && response.value.status !== 'unlocked') receiveState(response.value);
+      })
+      .catch(() => {
+        // Keep the renderer locked if the bridge fails. Never restore old data.
+      })
+      .finally(() => {
+        locking.current = false;
+      });
+  }, [receiveState]);
 
   useEffect(() => {
-    function keyboard(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+    const keyboard = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'l') {
         event.preventDefault();
-        searchInput.current?.focus();
-        searchInput.current?.select();
+        event.stopImmediatePropagation();
+        lock();
       }
-      if (
-        (event.metaKey || event.ctrlKey) &&
-        event.key.toLowerCase() === 'n' &&
-        stateRef.current.status === 'unlocked'
-      ) {
-        event.preventDefault();
-        setEditor('new');
-      }
-    }
-    addEventListener('keydown', keyboard);
-    return () => removeEventListener('keydown', keyboard);
-  }, []);
-
-  const visible = useMemo(() => {
-    const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-    return items.filter((item) => {
-      if (filter === 'favorites' && !item.favorite) return false;
-      if (filter === 'logins' && item.type !== 1) return false;
-      if (filter === 'notes' && item.type !== 2) return false;
-      if (filter === 'passkeys' && !item.hasPasskey) return false;
-      const haystack = `${item.name} ${item.username} ${item.website}`.toLowerCase();
-      return terms.every((term) => haystack.includes(term));
-    });
-  }, [items, query, filter]);
-
-  const virtualizer = useVirtualizer({
-    count: visible.length,
-    getScrollElement: () => listRef.current,
-    estimateSize: () => 66,
-    overscan: 8,
-    getItemKey: (index) => visible[index]!.id,
-  });
-
-  async function select(item: ItemSummary) {
-    const version = ++selectionVersion.current;
-    setSelectedId(item.id);
-    setSelected(null);
-    setNotice('');
-    if (item.restricted) {
-      setNotice('This shared or protected item is available in the official Bitwarden client.');
-      return;
-    }
-    const response = await window.latch.detail(item.id);
-    if (version !== selectionVersion.current || stateRef.current.status !== 'unlocked') return;
-    if (response.ok) setSelected(response.value);
-    else setNotice(response.error);
-  }
-
-  async function sync() {
-    setSyncing(true);
-    setNotice('');
-    const response = await window.latch.sync();
-    setSyncing(false);
-    if (response.ok) receiveState(response.value);
-    else setNotice(response.error);
-  }
+    };
+    addEventListener('keydown', keyboard, true);
+    return () => removeEventListener('keydown', keyboard, true);
+  }, [lock]);
 
   if (!ready)
     return (
-      <div className="boot">
+      <div className="boot" role="status">
         <Mark size={30} />
         <span>Latch</span>
       </div>
     );
   if (state.status !== 'unlocked')
     return <Auth key={state.status + state.email} state={state} onState={receiveState} />;
+  // All vault state, virtualizers, task portals and notifications have exactly
+  // this lifetime. A later unlock mounts a fresh workspace and fresh guards.
+  return <VaultWorkspace state={state} onState={receiveState} onLock={lock} />;
+}
 
-  const label = filters.find((entry) => entry.id === filter)!.label;
+function VaultWorkspace({
+  state,
+  onState,
+  onLock,
+}: {
+  state: VaultState;
+  onState: (state: VaultState) => void;
+  onLock: () => void;
+}) {
+  const [items, setItems] = useState<ItemSummary[]>([]);
+  const [trashed, setTrashed] = useState<ItemSummary[]>([]);
+  const [selected, setSelected] = useState<ItemDetail | null>(null);
+  const [selectedId, setSelectedId] = useState('');
+  const [detailStatus, setDetailStatus] = useState<DetailStatus>('unselected');
+  const [detailError, setDetailError] = useState('');
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<Filter>('all');
+  const [editor, setEditor] = useState<'new' | 'edit' | null>(null);
+  const [settings, setSettings] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState({ all: '', trash: '' });
+  const alive = useRef(true);
+  const selectionVersion = useRef(0);
+  const listVersion = useRef(0);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const newButton = useRef<HTMLButtonElement>(null);
+  const settingsButton = useRef<HTMLButtonElement>(null);
+  const { toasts, show, settle, dismiss } = useToasts();
+  const notify = useMemo<Notifier>(
+    () => ({
+      show: (kind, message) => (alive.current ? show(kind, message) : -1),
+      settle: (id, kind, message) => {
+        if (alive.current) settle(id, kind, message);
+      },
+    }),
+    [show, settle],
+  );
+
+  useLayoutEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      selectionVersion.current++;
+      listVersion.current++;
+    };
+  }, []);
+
+  useEffect(() => {
+    const version = ++listVersion.current;
+    setLoading(true);
+    void Promise.all([window.latch.items(), window.latch.trash()])
+      .then(([listed, binned]) => {
+        if (!alive.current || version !== listVersion.current) return;
+        if (listed.ok) setItems(listed.value);
+        if (binned.ok) setTrashed(binned.value);
+        setListError({
+          all: listed.ok ? '' : 'Could not load vault items. Try Sync vault.',
+          trash: binned.ok ? '' : 'Could not load Trash. Try Sync vault.',
+        });
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!alive.current || version !== listVersion.current) return;
+        setListError({
+          all: 'Could not load vault items. Try Sync vault.',
+          trash: 'Could not load Trash. Try Sync vault.',
+        });
+        setLoading(false);
+      });
+  }, [state]);
+
+  const commands = useRef({ editor, settings });
+  commands.current = { editor, settings };
+  const runCommand = useCallback((command: 'search' | 'new' | 'settings') => {
+    if (!alive.current || commands.current.editor || commands.current.settings || hasModal())
+      return;
+    if (command === 'search') {
+      searchInput.current?.focus();
+      searchInput.current?.select();
+    }
+    if (command === 'new') {
+      newButton.current?.focus();
+      setEditor('new');
+    }
+    if (command === 'settings') {
+      settingsButton.current?.focus();
+      setSettings(true);
+    }
+  }, []);
+
+  useEffect(() => window.latch.onCommand(runCommand), [runCommand]);
+  useEffect(() => {
+    const keyboard = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.isComposing) return;
+      const command = ({ k: 'search', n: 'new', ',': 'settings' } as const)[
+        event.key.toLowerCase() as 'k' | 'n' | ','
+      ];
+      if (!command) return;
+      event.preventDefault();
+      if (!event.repeat) runCommand(command);
+    };
+    addEventListener('keydown', keyboard);
+    return () => removeEventListener('keydown', keyboard);
+  }, [runCommand]);
+
+  const indexed = useMemo(() => indexItems(items), [items]);
+  const indexedTrash = useMemo(() => indexItems(trashed), [trashed]);
+  const visible = useMemo(() => {
+    const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    const source = filter === 'trash' ? indexedTrash : indexed;
+    return source
+      .filter(({ item, haystack }) => {
+        if (filter === 'favorites' && !item.favorite) return false;
+        if (filter === 'logins' && item.type !== 1) return false;
+        if (filter === 'notes' && item.type !== 2) return false;
+        if (filter === 'passkeys' && !item.hasPasskey) return false;
+        return terms.every((term) => haystack.includes(term));
+      })
+      .map(({ item }) => item);
+  }, [indexed, indexedTrash, query, filter]);
+  const selectionVisible = !!selectedId && visible.some((item) => item.id === selectedId);
+
+  useLayoutEffect(() => {
+    if (!selectedId || selectionVisible) return;
+    selectionVersion.current++;
+    setSelectedId('');
+    setSelected(null);
+    setDetailStatus('unselected');
+    setDetailError('');
+  }, [selectedId, selectionVisible]);
+
+  async function select(item: ItemSummary) {
+    if (!alive.current) return;
+    const version = ++selectionVersion.current;
+    setSelectedId(item.id);
+    setSelected(null);
+    setDetailError('');
+    if (item.restricted) {
+      setDetailStatus('restricted');
+      return;
+    }
+    setDetailStatus('loading');
+    try {
+      const response = await window.latch.detail(item.id);
+      if (!alive.current || version !== selectionVersion.current) return;
+      if (response.ok) {
+        setSelected(response.value);
+        setDetailStatus('ready');
+      } else {
+        setDetailStatus('error');
+        setDetailError('Could not load this item. Try again.');
+      }
+    } catch {
+      if (!alive.current || version !== selectionVersion.current) return;
+      setDetailStatus('error');
+      setDetailError('Could not load this item. Try again.');
+    }
+  }
+
+  async function setBiometrics(enabled: boolean) {
+    if (!alive.current) return;
+    const pending = notify.show(
+      'pending',
+      enabled ? 'Setting up Touch ID…' : 'Turning off Touch ID…',
+    );
+    try {
+      const result = await window.latch.setBiometrics(enabled);
+      if (!alive.current) return;
+      if (result.ok) {
+        notify.settle(pending, 'done', enabled ? 'Touch ID is on' : 'Touch ID is off');
+        onState(result.value);
+      } else notify.settle(pending, 'error', 'Could not change Touch ID. Try again.');
+    } catch {
+      notify.settle(pending, 'error', 'Could not change Touch ID. Try again.');
+    }
+  }
+
+  async function sync() {
+    if (syncing || !alive.current) return;
+    setSyncing(true);
+    const pending = notify.show('pending', 'Syncing with Bitwarden…');
+    try {
+      const response = await window.latch.sync();
+      if (!alive.current) return;
+      setSyncing(false);
+      if (response.ok) {
+        notify.settle(pending, 'done', 'Vault up to date');
+        onState(response.value);
+      } else
+        notify.settle(pending, 'error', 'Could not sync. Check your connection and try again.');
+    } catch {
+      if (!alive.current) return;
+      setSyncing(false);
+      notify.settle(pending, 'error', 'Could not sync. Check your connection and try again.');
+    }
+  }
+
+  const currentFilter = filters.find((entry) => entry.id === filter)!;
+  const activeDetail = selectionVisible ? detailStatus : 'unselected';
+  const currentListError = filter === 'trash' ? listError.trash : listError.all;
   return (
-    <div className="app">
-      <header className="titlebar">
-        <div className="wordmark">
-          <Mark size={17} />
-          <strong>Latch</strong>
-        </div>
-        <div className="search">
-          <Search size={14} />
-          <input
-            ref={searchInput}
-            aria-label="Search vault"
-            placeholder="Search your vault"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <kbd>⌘ K</kbd>
-          {query && (
-            <button className="icon-button" aria-label="Clear search" onClick={() => setQuery('')}>
-              <X size={12} />
-            </button>
-          )}
-        </div>
-        <button className="new-button" onClick={() => setEditor('new')}>
-          <Plus size={14} /> New login
-        </button>
-      </header>
-      <main className="workspace">
-        <aside className="sidebar">
-          <div className="vault-label">
-            <span className="vault-avatar">
-              <UserRound size={15} />
-            </span>
-            <div>
-              <strong>Personal vault</strong>
-              <small>Bitwarden</small>
+    <TooltipProvider>
+      <div className="app vault-app">
+        <main className="workspace" aria-label="Personal vault">
+          <aside className="sidebar">
+            <div className="workspace-titlebar" aria-hidden="true" />
+            <div className="vault-label">
+              <span className="vault-avatar">
+                <UserRound size={16} />
+              </span>
+              <div>
+                <strong>Personal vault</strong>
+                <small title={state.email}>{state.email || 'Bitwarden'}</small>
+              </div>
             </div>
-          </div>
-          <span className="section-label">LIBRARY</span>
-          <nav aria-label="Vault filters">
-            {filters.map(({ id, label: title, icon: Icon }) => (
-              <button
-                key={id}
-                className={filter === id ? 'nav-item active' : 'nav-item'}
-                onClick={() => setFilter(id)}
+            <nav aria-label="Vault filters">
+              {filters.map(({ id, label, icon: Icon }) => (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  key={id}
+                  className={`nav-item ${filter === id ? 'active' : ''}`}
+                  aria-pressed={filter === id}
+                  onClick={() => setFilter(id)}
+                >
+                  <Icon size={16} />
+                  <span>{label}</span>
+                  {id === 'all' && <small>{items.length.toLocaleString()}</small>}
+                  {id === 'trash' && trashed.length > 0 && (
+                    <small>{trashed.length.toLocaleString()}</small>
+                  )}
+                </Button>
+              ))}
+            </nav>
+            <div className="sidebar-bottom">
+              <Separator />
+              <Button
+                ref={settingsButton}
+                type="button"
+                variant="ghost"
+                className="nav-item"
+                onClick={() => runCommand('settings')}
               >
-                <Icon size={14} strokeWidth={1.6} />
-                <span>{title}</span>
-                {id === 'all' && <small>{items.length}</small>}
-              </button>
-            ))}
-          </nav>
-          <div className="sidebar-bottom">
-            <div className="quiet-tip">
-              <ShieldCheck size={16} strokeWidth={1.4} />
-              <span>
-                A little less friction.
-                <br />
-                <small>Your vault stays yours.</small>
-              </span>
+                <Settings2 size={16} />
+                <span>Settings</span>
+              </Button>
+              <Button type="button" variant="ghost" className="nav-item" onClick={onLock}>
+                <LockKeyhole size={16} />
+                <span>Lock vault</span>
+                <Kbd>⌘L</Kbd>
+              </Button>
             </div>
-            <button className="nav-item" onClick={() => setSettings(true)}>
-              <Settings2 size={14} /> <span>Browser & settings</span>
-            </button>
-            <button className="nav-item" onClick={() => void window.latch.lock()}>
-              <LockKeyhole size={14} /> <span>Lock vault</span>
-              <kbd>⌘ L</kbd>
-            </button>
-            <div className="account">
-              <span className="status-dot" />
-              <span title={state.email}>{state.email}</span>
-            </div>
-          </div>
-        </aside>
-        <section className="item-list">
-          <header className="list-heading">
-            <div>
-              <h1>{query ? 'Search results' : label}</h1>
-              <span>
-                {visible.length} {visible.length === 1 ? 'item' : 'items'}
-              </span>
-            </div>
-            <button
-              className={`icon-button ${syncing ? 'spinning' : ''}`}
-              aria-label="Sync vault"
-              onClick={() => void sync()}
-              disabled={syncing}
-            >
-              <RefreshCw size={14} />
-            </button>
-          </header>
-          <div
-            className="list-scroll"
-            ref={listRef}
-            role="listbox"
-            aria-label="Vault items"
-            tabIndex={0}
-            onKeyDown={(event) => {
-              if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
-              event.preventDefault();
-              const current = visible.findIndex((item) => item.id === selectedId);
-              const next = Math.max(
-                0,
-                Math.min(visible.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)),
-              );
-              if (visible[next]) {
-                void select(visible[next]!);
-                virtualizer.scrollToIndex(next);
-              }
-            }}
-          >
-            {visible.length ? (
-              <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
-                {virtualizer.getVirtualItems().map((row) => {
-                  const item = visible[row.index]!;
-                  return (
-                    <button
-                      key={item.id}
-                      role="option"
-                      aria-selected={item.id === selectedId}
-                      className={`item-row ${item.id === selectedId ? 'selected' : ''}`}
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        height: row.size,
-                        transform: `translateY(${row.start}px)`,
-                      }}
-                      onClick={() => void select(item)}
-                    >
-                      <ItemIcon item={item} />
-                      <span className="item-text">
-                        <strong>{item.name}</strong>
-                        <small>
-                          {item.username || displayWebsite(item.website) || typeName(item.type)}
-                        </small>
-                      </span>
-                      {item.favorite && <Star size={10} className="row-star" fill="currentColor" />}
-                      {item.hasPasskey && <Fingerprint size={13} className="muted" />}
-                      {item.restricted && <LockKeyhole size={12} className="muted" />}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="list-empty">
-                <Search size={22} strokeWidth={1.3} />
-                <strong>{query ? 'Nothing found' : 'A clean slate'}</strong>
-                <p>{query ? 'Try a name, email, or website.' : 'Your items will appear here.'}</p>
-                {!query && (
-                  <button className="text-action" onClick={() => setEditor('new')}>
-                    Add your first login <Plus size={12} />
-                  </button>
-                )}
-              </div>
+          </aside>
+          <section className="item-list" aria-label={currentFilter.label}>
+            <header className="workspace-list-toolbar">
+              <InputGroup>
+                <InputGroupAddon>
+                  <Search size={16} />
+                </InputGroupAddon>
+                <InputGroupInput
+                  ref={searchInput}
+                  aria-label="Search vault"
+                  placeholder="Search vault"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+                <InputGroupAddon align="inline-end">
+                  <Kbd>⌘K</Kbd>
+                  <InputGroupButton
+                    size="icon-xs"
+                    aria-label="Clear search"
+                    className={query ? '' : 'invisible'}
+                    tabIndex={query ? 0 : -1}
+                    onClick={() => {
+                      setQuery('');
+                      searchInput.current?.focus();
+                    }}
+                  >
+                    <X size={14} />
+                  </InputGroupButton>
+                </InputGroupAddon>
+              </InputGroup>
+            </header>
+            <header className="list-heading">
+              <h1>{query ? 'Search results' : currentFilter.label}</h1>
+              <span>{visible.length.toLocaleString()}</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Sync vault"
+                    aria-busy={syncing}
+                    disabled={syncing}
+                    onClick={() => void sync()}
+                  >
+                    {syncing ? <Spinner /> : <RefreshCw size={14} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Sync vault</TooltipContent>
+              </Tooltip>
+            </header>
+            {currentListError && visible.length > 0 && (
+              <Alert variant="destructive" className="workspace-list-error">
+                <AlertCircle />
+                <AlertDescription>{currentListError}</AlertDescription>
+              </Alert>
             )}
-          </div>
-          <footer className="list-footer">
-            <span className="status-dot" />
-            <span>
-              {syncing
-                ? 'Syncing with Bitwarden…'
-                : state.lastSync
-                  ? 'Synced with Bitwarden'
-                  : 'Vault ready'}
-            </span>
-            <span className="version">0.1</span>
-          </footer>
-        </section>
-        <section className="detail-pane">
-          {notice && (
-            <div className="notice" role="status">
-              {notice}
-              <button
-                className="icon-button"
-                aria-label="Dismiss notice"
-                onClick={() => setNotice('')}
+            <ItemList
+              items={visible}
+              selectedId={selectionVisible ? selectedId : ''}
+              onSelect={(item) => void select(item)}
+              query={query}
+              onNew={() => runCommand('new')}
+              emptyLabel={currentFilter.empty}
+              emptyDescription={currentFilter.description}
+              loading={loading}
+              error={currentListError}
+            />
+            <footer className="list-footer">
+              <Button
+                ref={newButton}
+                type="button"
+                variant="ghost"
+                className="workspace-new"
+                onClick={() => runCommand('new')}
               >
-                <X size={12} />
-              </button>
-            </div>
-          )}
-          {selected ? (
-            <Detail key={selected.id} item={selected} onEdit={() => setEditor('edit')} />
-          ) : (
-            <div className="detail-empty">
-              <div className="empty-emblem">
-                <Mark size={39} />
-              </div>
-              <h2>{selectedId ? 'Protected by your vault.' : 'Everything in its place.'}</h2>
-              <p>
-                {selectedId
-                  ? 'Select another item to view its details.'
-                  : 'Choose an item, or search for what you need.'}
-              </p>
-              <div className="shortcut-hints">
-                <span>
-                  <kbd>⌘ K</kbd> Search
-                </span>
-                <span>
-                  <kbd>⌘ N</kbd> New login
-                </span>
-              </div>
-            </div>
-          )}
-        </section>
-      </main>
-      {editor && (
-        <Editor
-          item={editor === 'edit' ? selected : null}
-          onClose={() => setEditor(null)}
-          onSaved={(item) => {
-            setEditor(null);
-            setSelected(item);
-            setSelectedId(item.id);
-          }}
-        />
-      )}
-      {settings && <Settings onClose={() => setSettings(false)} />}
-    </div>
+                <Plus size={16} />
+                New login<Kbd>⌘N</Kbd>
+              </Button>
+            </footer>
+          </section>
+          <section
+            className="detail-pane"
+            aria-label="Item details"
+            aria-busy={activeDetail === 'loading'}
+          >
+            {selected && selectionVisible ? (
+              <Detail
+                key={selected.id}
+                item={selected}
+                onEdit={() => {
+                  if (!hasModal()) setEditor('edit');
+                }}
+                onGone={() => {
+                  if (!alive.current) return;
+                  selectionVersion.current++;
+                  setSelected(null);
+                  setSelectedId('');
+                  setDetailStatus('unselected');
+                }}
+                notify={notify}
+              />
+            ) : (
+              <Empty className="workspace-detail-empty" role="status">
+                <EmptyHeader>
+                  <EmptyMedia>
+                    {activeDetail === 'loading' ? (
+                      <Spinner />
+                    ) : activeDetail === 'restricted' ? (
+                      <LockKeyhole size={24} />
+                    ) : activeDetail === 'error' ? (
+                      <AlertCircle size={24} />
+                    ) : (
+                      <Mark size={28} />
+                    )}
+                  </EmptyMedia>
+                  <EmptyTitle>
+                    {activeDetail === 'loading'
+                      ? 'Loading item…'
+                      : activeDetail === 'restricted'
+                        ? 'Open this item in Bitwarden'
+                        : activeDetail === 'error'
+                          ? 'Could not load item'
+                          : query && !visible.length
+                            ? 'No matching items'
+                            : 'Select an item'}
+                  </EmptyTitle>
+                  <EmptyDescription>
+                    {activeDetail === 'loading'
+                      ? 'Reading item details.'
+                      : activeDetail === 'restricted'
+                        ? 'Shared and protected items are available in the official Bitwarden client.'
+                        : activeDetail === 'error'
+                          ? detailError
+                          : query && !visible.length
+                            ? 'Change or clear your search to see more items.'
+                            : 'Choose an item to view its details.'}
+                  </EmptyDescription>
+                </EmptyHeader>
+                {activeDetail === 'error' && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      const item = visible.find((entry) => entry.id === selectedId);
+                      if (item) void select(item);
+                    }}
+                  >
+                    Try again
+                  </Button>
+                )}
+                {query && !visible.length && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setQuery('');
+                      searchInput.current?.focus();
+                    }}
+                  >
+                    Clear search
+                  </Button>
+                )}
+              </Empty>
+            )}
+          </section>
+        </main>
+        {editor && (
+          <Editor
+            item={editor === 'edit' ? selected : null}
+            onClose={() => {
+              if (alive.current) setEditor(null);
+            }}
+            onSaved={(item) => {
+              if (!alive.current) return;
+              selectionVersion.current++;
+              setEditor(null);
+              // Keep summaries secret-free, including the newly created item while
+              // its broadcast list refresh is still in flight.
+              const { id, name, username, website, type, favorite, hasPasskey, restricted } = item;
+              setItems((current) => [
+                ...current.filter((entry) => entry.id !== id),
+                { id, name, username, website, type, favorite, hasPasskey, restricted },
+              ]);
+              setQuery('');
+              setFilter('all');
+              setSelected(item);
+              setSelectedId(item.id);
+              setDetailStatus('ready');
+            }}
+            notify={notify}
+          />
+        )}
+        {settings && (
+          <Settings
+            onClose={() => {
+              if (alive.current) setSettings(false);
+            }}
+            biometrics={state.biometrics}
+            biometricsOn={state.biometricsOn}
+            onBiometrics={setBiometrics}
+          />
+        )}
+        <Toasts toasts={toasts} onDismiss={dismiss} />
+      </div>
+    </TooltipProvider>
   );
 }

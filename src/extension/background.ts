@@ -1,4 +1,10 @@
-import type { BrowserMatches, FillCredential, Result, VaultStatus } from '../shared/types';
+import type {
+  BrowserMatches,
+  CaptureOffer,
+  FillCredential,
+  Result,
+  VaultStatus,
+} from '../shared/types';
 
 const HOST = 'app.latch.vault';
 let port: chrome.runtime.Port | undefined;
@@ -69,12 +75,31 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, respond) => {
       sender.id === chrome.runtime.id && sender.url === chrome.runtime.getURL('popup.html');
     if (type === 'open' && (isPopup || senderUrl(sender)))
       return native<VaultStatus>({ type: 'open' });
-    if (type === 'status' && isPopup) return native<VaultStatus>({ type: 'status' });
+    // Status contains only the lock state. Content callers still require the
+    // same trusted same-origin sender metadata as matches and fills.
+    if (type === 'status' && (isPopup || senderUrl(sender)))
+      return native<VaultStatus>({ type: 'status' });
     const url = senderUrl(sender);
     if (!url) return { ok: false, error: 'Autofill is unavailable in this frame.' };
     if (type === 'matches') return native<BrowserMatches>({ type, url });
     if (type === 'fill' && 'id' in message && typeof message.id === 'string')
       return native<FillCredential>({ type, url, id: message.id });
+    if (
+      type === 'capture' &&
+      'username' in message &&
+      typeof message.username === 'string' &&
+      'password' in message &&
+      typeof message.password === 'string'
+    )
+      return native<CaptureOffer>({
+        type,
+        url,
+        username: message.username,
+        password: message.password,
+      });
+    if (type === 'pendingCapture' || type === 'commitCapture')
+      return native<CaptureOffer>({ type, url });
+    if (type === 'dismissCapture') return native<CaptureOffer>({ type });
     return { ok: false, error: 'Unsupported request.' };
   })()
     .then(respond)
