@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type MouseEvent } from 'react';
 
 export function useDialogFocus() {
   const ref = useRef<HTMLElement>(null);
@@ -32,4 +32,23 @@ export function useDialogFocus() {
     };
   }, []);
   return ref;
+}
+
+/**
+ * Closes a dialog when its backdrop is clicked. The press and the release both
+ * have to land on the backdrop, so selecting text inside the dialog and
+ * releasing outside it does not throw the dialog away.
+ */
+export function useBackdropDismiss(onClose: () => void, enabled = true) {
+  const armed = useRef(false);
+  return {
+    onMouseDown(event: MouseEvent<HTMLElement>) {
+      armed.current = event.target === event.currentTarget;
+    },
+    onClick(event: MouseEvent<HTMLElement>) {
+      const onBackdrop = armed.current && event.target === event.currentTarget;
+      armed.current = false;
+      if (enabled && onBackdrop) onClose();
+    },
+  };
 }

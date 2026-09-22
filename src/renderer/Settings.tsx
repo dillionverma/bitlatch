@@ -1,9 +1,21 @@
 import { useState } from 'react';
-import { ArrowUpRight, Check, Globe2, X } from 'lucide-react';
-import { useDialogFocus } from './useDialogFocus';
+import { ArrowUpRight, Check, Fingerprint, Globe2, X } from 'lucide-react';
+import { useBackdropDismiss, useDialogFocus } from './useDialogFocus';
+import type { VaultState } from '../shared/types';
 
-export function Settings({ onClose }: { onClose: () => void }) {
+export function Settings({
+  onClose,
+  biometrics,
+  biometricsOn,
+  onBiometrics,
+}: {
+  onClose: () => void;
+  biometrics: VaultState['biometrics'];
+  biometricsOn: boolean;
+  onBiometrics: (enabled: boolean) => void;
+}) {
   const dialogRef = useDialogFocus();
+  const backdrop = useBackdropDismiss(onClose);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState('');
   async function install() {
@@ -14,6 +26,8 @@ export function Settings({ onClose }: { onClose: () => void }) {
   return (
     <div
       className="editor-overlay"
+      role="presentation"
+      {...backdrop}
       onKeyDown={(event) => {
         if (event.key === 'Escape') onClose();
       }}
@@ -75,12 +89,37 @@ export function Settings({ onClose }: { onClose: () => void }) {
             {error}
           </p>
         )}
+        {biometrics !== 'unsupported' && (
+          <div className="setting-row">
+            <span className="setting-icon">
+              <Fingerprint size={17} strokeWidth={1.5} />
+            </span>
+            <div>
+              <strong>Unlock with Touch ID</strong>
+              <p>
+                {biometrics === 'unavailable'
+                  ? 'macOS is not offering Touch ID right now. On a MacBook this usually means the lid is closed; open it, or use a keyboard with Touch ID.'
+                  : 'Keeps this vault’s key on this Mac so Touch ID can reopen it. Your master password still opens it, and signing out forgets the key.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={biometricsOn}
+              aria-label="Unlock with Touch ID"
+              disabled={biometrics !== 'ready'}
+              className={`switch ${biometricsOn ? 'on' : ''}`}
+              onClick={() => onBiometrics(!biometricsOn)}
+            >
+              <span />
+            </button>
+          </div>
+        )}
         <div className="preview-note">
           <strong>A small first release.</strong>
           <p>
-            Password filling, search, and personal logins are ready to try. Passkeys, Touch ID, and
-            automatic save prompts are still to come. Use the official client for shared and
-            protected items.
+            Password filling, search, and personal logins are ready to try. Passkeys and automatic
+            save prompts are still to come. Use the official client for shared and protected items.
           </p>
         </div>
       </section>

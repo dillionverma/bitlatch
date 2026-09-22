@@ -1,9 +1,11 @@
 import { build } from 'esbuild';
 import { build as viteBuild } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import { mkdir, readFile, writeFile, copyFile, rm } from 'node:fs/promises';
 import { generateKeyPairSync, createHash } from 'node:crypto';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
+import { createRequire } from 'node:module';
 
 const root = resolve(import.meta.dirname, '..');
 await rm(resolve(root, 'dist'), { recursive: true, force: true });
@@ -20,21 +22,58 @@ const bundledPackages = [
   'zod',
   'tldts',
   'tldts-core',
+  'radix-ui',
+  'class-variance-authority',
+  'clsx',
+  'tailwind-merge',
+  'sonner',
+  'tailwindcss',
+  'tw-animate-css',
 ];
-const notices = [];
-for (const name of bundledPackages) {
-  const directory = resolve(root, 'node_modules', name);
-  const info = JSON.parse(await readFile(resolve(directory, 'package.json'), 'utf8'));
-  let license;
-  for (const filename of ['LICENSE', 'LICENSE.md', 'LICENSE.txt']) {
+// Include runtime dependency notices transitively, including nested package versions.
+const notices = [await readFile(resolve(root, 'licenses/shadcn-ui-LICENSE.txt'), 'utf8')];
+const visited = new Set();
+async function addNotice(name, from = root) {
+  const require = createRequire(join(from, 'package.json'));
+  let directory;
+  // Resolve package roots without requiring a JS entry (CSS-only packages have none).
+  for (const modules of require.resolve.paths(name) ?? []) {
     try {
-      license = await readFile(resolve(directory, filename), 'utf8');
+      const candidate = join(modules, name);
+      const info = JSON.parse(await readFile(join(candidate, 'package.json'), 'utf8'));
+      if (info.name === name) {
+        directory = candidate;
+        break;
+      }
+    } catch {}
+  }
+  if (!directory) throw new Error(`Cannot locate notice for ${name}`);
+  if (visited.has(directory)) return;
+  visited.add(directory);
+  const info = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'));
+  let license;
+  for (const filename of [
+    'LICENSE',
+    'LICENSE.md',
+    'LICENSE.txt',
+    'LICENSE-MIT',
+    'license',
+    'license.md',
+  ]) {
+    try {
+      license = await readFile(join(directory, filename), 'utf8');
       break;
     } catch {}
   }
+  if (!license && name === 'react-remove-scroll-bar') {
+    license = await readFile(resolve(root, 'licenses/react-remove-scroll-bar-LICENSE.txt'), 'utf8');
+  }
   if (!license) throw new Error(`Missing license notice for ${name}`);
   notices.push(`${name} ${info.version}\n${'='.repeat(60)}\n${license}`);
+  for (const dependency of Object.keys(info.dependencies ?? {}))
+    await addNotice(dependency, directory);
 }
+for (const name of bundledPackages) await addNotice(name);
 await writeFile(resolve(root, 'dist/THIRD_PARTY_NOTICES.txt'), notices.join('\n\n'));
 
 let identity;
@@ -79,13 +118,30 @@ await build({
   platform: 'browser',
   target: 'chrome120',
   format: 'iife',
+  // CSS imports in content.ts become strings for its closed shadow root.
+  loader: { '.css': 'text' },
   outdir: 'dist/extension',
   minify: true,
   sourcemap: false,
   logLevel: 'info',
 });
-for (const file of ['popup.html', 'popup.css'])
-  await copyFile(resolve(root, `src/extension/${file}`), resolve(root, `dist/extension/${file}`));
+await copyFile(
+  resolve(root, 'src/extension/popup.html'),
+  resolve(root, 'dist/extension/popup.html'),
+);
+// Bundle static tokens and popup styles; imports must resolve before extension packaging.
+await build({
+  stdin: {
+    contents: '@import "./src/shared/theme.css";\n@import "./src/extension/popup.css";',
+    resolveDir: root,
+    loader: 'css',
+  },
+  bundle: true,
+  outfile: 'dist/extension/popup.css',
+  minify: true,
+  target: 'chrome120',
+  logLevel: 'info',
+});
 await writeFile(
   resolve(root, 'dist/extension/manifest.json'),
   JSON.stringify(
@@ -119,7 +175,8 @@ await writeFile(
 await viteBuild({
   root: resolve(root, 'src/renderer'),
   base: './',
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
+  resolve: { alias: { '@': resolve(root, 'src/renderer') } },
   build: {
     outDir: resolve(root, 'dist/renderer'),
     emptyOutDir: false,

@@ -13,7 +13,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "types": ["node", "chrome", "vite/client"]
+    "types": ["node", "chrome", "vite/client"],
+    "paths": {
+      "@/*": ["./src/renderer/*"]
+    }
   },
-  "include": ["src", "tests", "*.ts"]
+  "include": ["src", "*.ts"]
 }

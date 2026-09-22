@@ -5,21 +5,51 @@ export interface CipherUri {
   match?: number | null;
 }
 
+/** A web address Latch is willing to store on an item. */
 export function webUrl(input: string): URL | null {
   try {
     const url = new URL(input);
     if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) return null;
-    if (url.protocol === 'http:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))
-      return null;
     return url;
   } catch {
     return null;
   }
 }
 
+/**
+ * A web address Latch is willing to hand a credential to. Plain HTTP puts the
+ * password on the wire, so it is only filled where the traffic stays on this
+ * machine or the local network, which is also where a certificate is not
+ * possible. Routers and other local devices live here; the open internet does
+ * not. Saving an address is not restricted this way, only filling one.
+ */
+export function fillableUrl(input: string): URL | null {
+  const url = webUrl(input);
+  if (!url) return null;
+  return url.protocol === 'https:' || isLocalHost(url.hostname) ? url : null;
+}
+
+function isLocalHost(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (host === 'localhost' || host.endsWith('.localhost')) return true;
+  if (host === '::1') return true;
+  // Names handed out by mDNS on the local network, such as a printer or a NAS.
+  if (host.endsWith('.local')) return true;
+  const parts = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (!parts || parts.slice(1).some((part) => Number(part) > 255)) return false;
+  const [first, second] = [Number(parts[1]), Number(parts[2])];
+  return (
+    first === 127 || // loopback
+    first === 10 || // 10.0.0.0/8
+    (first === 172 && second >= 16 && second <= 31) || // 172.16.0.0/12
+    (first === 192 && second === 168) || // 192.168.0.0/16
+    (first === 169 && second === 254) // link-local
+  );
+}
+
 export function matchesUri(entry: CipherUri, target: string): boolean {
   if (!entry.uri || entry.match === 5 || entry.match === 4) return false;
-  const destination = webUrl(target);
+  const destination = fillableUrl(target);
   const saved = webUrl(entry.uri.includes('://') ? entry.uri : `https://${entry.uri}`);
   if (!destination || !saved || saved.protocol !== destination.protocol) return false;
   if (entry.match === 3) return saved.href === destination.href;

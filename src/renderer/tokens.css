@@ -1,63 +1,97 @@
-:root {
-  color-scheme: light dark;
-  --base: #faf9f7;
-  --sidebar: #f0efeb;
-  --list: #f7f6f3;
-  --raised: #fffefd;
-  --input: #fffefd;
-  --text: #30332c;
-  --muted: #6d7467;
-  --faint: #737a6c;
-  --border: #e7e7df;
-  --hover: #ebece5;
-  --accent: #7d8e5c;
-  --accent-strong: #61713f;
-  --accent-faint: #7d8e5c14;
-  --on-accent: #fff;
-  --selection: #e9eedf;
-  --star: #b2a06a;
-  --error: #a35849;
-  --error-bg: #f8ece7;
-  --tone-0: #eeefe9;
-  --tone-0-ink: #5b6252;
-  --tone-1: #e8ecf1;
-  --tone-1-ink: #5e7085;
-  --tone-2: #f2ece5;
-  --tone-2-ink: #9b8061;
-  --tone-3: #ece9ef;
-  --tone-3-ink: #867590;
-  --tone-4: #e7eee8;
-  --tone-4-ink: #6e8977;
+/* Nova uses state aliases; match Radix data-state/data-orientation attributes. */
+@custom-variant data-open (&[data-state="open"]);
+@custom-variant data-closed (&[data-state="closed"]);
+@custom-variant data-checked (&[data-state="checked"]);
+@custom-variant data-unchecked (&[data-state="unchecked"]);
+@custom-variant data-disabled (&[data-disabled]);
+@custom-variant data-horizontal (&[data-orientation="horizontal"]);
+@custom-variant data-vertical (&[data-orientation="vertical"]);
+
+/* Tailwind keeps its default media-based dark variant. Root remains 16px. */
+@theme inline {
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-code);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-surface: var(--destructive-surface);
+  --color-destructive-hover: var(--destructive-hover);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-selection: var(--selection);
+  --color-selection-inactive: var(--selection-inactive);
+  --color-window: var(--window);
+  --color-switch-thumb: var(--switch-thumb);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: 4px;
+  --radius-md: var(--radius-control);
+  --radius-lg: var(--radius-group);
+  --radius-xl: var(--radius-overlay);
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 13px;
+  --text-sm--line-height: 18px;
+  --text-base: 13px;
+  --text-base--line-height: 18px;
+  --text-caption: 11px;
+  --text-caption--line-height: 15px;
+  --text-title: 20px;
+  --text-title--line-height: 26px;
 }
-@media (prefers-color-scheme: dark) {
+
+:root {
+  --sidebar-width: 196px;
+  --list-width: 304px;
+  --toolbar-height: 52px;
+  /* Temporary compatibility names. Semantic --muted/--input/--accent are not aliases. */
+  --base: var(--window);
+  --list: var(--background);
+  --raised: var(--popover);
+  --text: var(--foreground);
+  --faint: var(--muted-foreground);
+  --hover: var(--accent);
+  --accent-strong: var(--primary);
+  --accent-faint: var(--selection);
+  --on-accent: var(--primary-foreground);
+  --star: var(--primary);
+  --error: var(--destructive);
+  --error-bg: var(--destructive-surface);
+  --tone-0: var(--muted);
+  --tone-0-ink: var(--muted-foreground);
+  --tone-1: var(--muted);
+  --tone-1-ink: var(--muted-foreground);
+  --tone-2: var(--muted);
+  --tone-2-ink: var(--muted-foreground);
+  --tone-3: var(--muted);
+  --tone-3-ink: var(--muted-foreground);
+  --tone-4: var(--selection);
+  --tone-4-ink: var(--primary);
+}
+
+@media (max-width: 950px) {
   :root {
-    --base: #1c1d1a;
-    --sidebar: #171815;
-    --list: #1a1b18;
-    --raised: #22231f;
-    --input: #232420;
-    --text: #e1e4da;
-    --muted: #949b88;
-    --faint: #8e9781;
-    --border: #2b3026;
-    --hover: #282c24;
-    --accent: #9dad7d;
-    --accent-strong: #b6c897;
-    --accent-faint: #9dad7d13;
-    --on-accent: #1b2212;
-    --selection: #2b3420;
-    --star: #b5a06a;
-    --error: #ddac95;
-    --error-bg: #352821;
-    --tone-0: #2b2e25;
-    --tone-0-ink: #b4c39e;
-    --tone-1: #252d36;
-    --tone-1-ink: #95a9bf;
-    --tone-2: #342d25;
-    --tone-2-ink: #c0a07a;
-    --tone-3: #2d2932;
-    --tone-3-ink: #b3a0c0;
-    --tone-4: #26332a;
-    --tone-4-ink: #9abd9f;
+    --sidebar-width: 180px;
+    --list-width: 280px;
   }
 }

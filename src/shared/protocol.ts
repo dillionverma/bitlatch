@@ -1,6 +1,21 @@
 import { z } from 'zod';
 
 const boundedText = z.string().max(16_384);
+const twoStepMethod = z.enum(['authenticator', 'yubikey', 'email']);
+const challengeAnswer = z.union([
+  z
+    .object({
+      code: z
+        .string()
+        .trim()
+        .min(1)
+        .max(128)
+        .regex(/^[^\r\n]+$/, 'A code fits on one line.'),
+    })
+    .strict(),
+  z.object({ method: twoStepMethod }).strict(),
+  z.object({ cancel: z.literal(true) }).strict(),
+]);
 const id = z.string().uuid();
 const loginDraft = z
   .object({
@@ -31,13 +46,19 @@ export const desktopRequestSchema = z.discriminatedUnion('type', [
         .strict(),
     })
     .strict(),
+  z.object({ type: z.literal('challenge'), answer: challengeAnswer }).strict(),
   z.object({ type: z.literal('unlock'), password: z.string().min(1).max(1_024) }).strict(),
+  z.object({ type: z.literal('biometricUnlock') }).strict(),
+  z.object({ type: z.literal('setBiometrics'), enabled: z.boolean() }).strict(),
   z.object({ type: z.literal('lock') }).strict(),
   z.object({ type: z.literal('logout') }).strict(),
   z.object({ type: z.literal('sync') }).strict(),
   z.object({ type: z.literal('items') }).strict(),
+  z.object({ type: z.literal('trash') }).strict(),
   z.object({ type: z.literal('detail'), id }).strict(),
   z.object({ type: z.literal('save'), draft: loginDraft }).strict(),
+  z.object({ type: z.literal('delete'), id }).strict(),
+  z.object({ type: z.literal('restore'), id }).strict(),
   z.object({ type: z.literal('copy'), id, field: z.enum(['username', 'password']) }).strict(),
   z.object({ type: z.literal('generate') }).strict(),
   z.object({ type: z.literal('installBrowser') }).strict(),
@@ -49,6 +70,17 @@ export const browserRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('open') }).strict(),
   z.object({ type: z.literal('matches'), url: z.string().max(4_096) }).strict(),
   z.object({ type: z.literal('fill'), url: z.string().max(4_096), id }).strict(),
+  z
+    .object({
+      type: z.literal('capture'),
+      url: z.string().max(4_096),
+      username: boundedText,
+      password: boundedText,
+    })
+    .strict(),
+  z.object({ type: z.literal('pendingCapture'), url: z.string().max(4_096) }).strict(),
+  z.object({ type: z.literal('commitCapture'), url: z.string().max(4_096) }).strict(),
+  z.object({ type: z.literal('dismissCapture') }).strict(),
 ]);
 
 export type DesktopRequest = z.infer<typeof desktopRequestSchema>;

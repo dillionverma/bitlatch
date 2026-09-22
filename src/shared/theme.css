@@ -1,0 +1,89 @@
+/* Canonical static tokens: desktop, extension popup and closed shadow root.
+   No reset, Tailwind directives, remote assets or page-dependent variables. */
+:root,
+:host {
+  color-scheme: light dark;
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  --font-code: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius: 6px;
+  --radius-control: 6px;
+  --radius-group: 8px;
+  --radius-overlay: 12px;
+  --control-height: 32px;
+  --control-compact: 28px;
+  --control-auth: 36px;
+  --motion-feedback: 120ms;
+  --motion-overlay: 180ms;
+  --window: #f5f5f7;
+  --sidebar: #eeeef0;
+  --background: #ffffff;
+  --foreground: #202024;
+  --card: #f7f7f8;
+  --card-foreground: #202024;
+  --popover: #ffffff;
+  --popover-foreground: #202024;
+  --primary: #365c45;
+  --primary-foreground: #ffffff;
+  --primary-hover: #2f513d;
+  --secondary: #f7f7f8;
+  --secondary-foreground: #202024;
+  --muted: #f7f7f8;
+  --muted-foreground: #626269;
+  --accent: #e8e8eb;
+  --accent-foreground: #202024;
+  --destructive: #a32622;
+  --destructive-surface: #fff0ee;
+  --destructive-hover: #ffe4e0;
+  --border: #dadadd;
+  --input: #86868e;
+  --ring: #0067c0;
+  --selection: #e1ebe5;
+  --selection-inactive: #e5e5e8;
+  --switch-thumb: #ffffff;
+  --sidebar-foreground: #202024;
+  --sidebar-primary: #365c45;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e8e8eb;
+  --sidebar-accent-foreground: #202024;
+  --sidebar-border: #dadadd;
+  --sidebar-ring: #0067c0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root,
+  :host {
+    --window: #202023;
+    --sidebar: #252528;
+    --background: #1c1c1f;
+    --foreground: #f2f2f4;
+    --card: #28282c;
+    --card-foreground: #f2f2f4;
+    --popover: #303034;
+    --popover-foreground: #f2f2f4;
+    --primary: #a4c9ad;
+    --primary-foreground: #15251c;
+    --primary-hover: #b4d5bc;
+    --secondary: #28282c;
+    --secondary-foreground: #f2f2f4;
+    --muted: #28282c;
+    --muted-foreground: #ababb3;
+    --accent: #35353b;
+    --accent-foreground: #f2f2f4;
+    --destructive: #ffb4ab;
+    --destructive-surface: #432926;
+    --destructive-hover: #54312c;
+    --border: #414147;
+    --input: #83838d;
+    --ring: #78b7ff;
+    --selection: #35463b;
+    --selection-inactive: #38383d;
+    --switch-thumb: #1c1c1f;
+    --sidebar-foreground: #f2f2f4;
+    --sidebar-primary: #a4c9ad;
+    --sidebar-primary-foreground: #15251c;
+    --sidebar-accent: #35353b;
+    --sidebar-accent-foreground: #f2f2f4;
+    --sidebar-border: #414147;
+    --sidebar-ring: #78b7ff;
+  }
+}

@@ -1,12 +1,27 @@
-import type { BrowserMatches, FillCredential, Result } from '../shared/types';
+import type { BrowserMatches, CaptureOffer, FillCredential, Result } from '../shared/types';
 
 (() => {
   if (!['https:', 'http:'].includes(location.protocol)) return;
-  if (
-    location.protocol === 'http:' &&
-    !['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)
-  )
-    return;
+  // Mirrors the Mac app's rule for plain HTTP: loopback and the local network,
+  // where a certificate is not possible. The app re-checks before releasing
+  // anything, so this only decides whether to put UI on the page.
+  if (location.protocol === 'http:' && !isLocalHost(location.hostname)) return;
+
+  function isLocalHost(hostname: string) {
+    const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    if (host === 'localhost' || host.endsWith('.localhost') || host === '::1') return true;
+    if (host.endsWith('.local')) return true;
+    const parts = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+    if (!parts || parts.slice(1).some((part) => Number(part) > 255)) return false;
+    const [first, second] = [Number(parts[1]), Number(parts[2])];
+    return (
+      first === 127 ||
+      first === 10 ||
+      (first === 172 && second >= 16 && second <= 31) ||
+      (first === 192 && second === 168) ||
+      (first === 169 && second === 254)
+    );
+  }
   if (window !== window.top) {
     try {
       if (window.top?.location.origin !== location.origin) return;
@@ -29,6 +44,12 @@ import type { BrowserMatches, FillCredential, Result } from '../shared/types';
     .brand{display:flex;align-items:center;justify-content:space-between;padding:7px 8px 8px;color:#767a70;font-size:10px;letter-spacing:.05em;text-transform:uppercase}
     .row{display:flex;align-items:center;gap:10px;width:100%;border:0;border-radius:6px;text-align:left;padding:10px 8px;background:transparent;color:inherit;min-height:44px}
     .row:hover,.row:focus-visible{background:#e9efdf;outline:none}.initial{display:grid;place-items:center;background:#7c905b18;border:1px solid #7c905b28;width:28px;height:28px;border-radius:7px;color:#61713e;font-weight:600}.text{flex:1;min-width:0}.name,.sub{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.name{font-size:12px;font-weight:550}.sub{font-size:11px;color:#7d8078;margin-top:3px}.hint{font-size:11px;color:#8b9083;padding:8px}.foot{border-top:1px solid #0001;margin:4px -5px -5px;padding:7px 13px;color:#868b7d;font-size:10px;display:flex;justify-content:space-between}.action{font-size:11px;color:inherit;background:none;border:0;padding:0}.error{color:#a75340;white-space:normal;padding:9px;line-height:1.4}
+    .save{position:fixed;right:16px;bottom:16px;display:none;width:300px;padding:13px 14px;background:#fcfbf9;color:#272a24;border:1px solid #0002;border-radius:11px;box-shadow:0 10px 34px #0003;pointer-events:auto;font:12px -apple-system,BlinkMacSystemFont,sans-serif}
+    .save-title{font-size:12.5px;font-weight:600;margin:7px 0 3px}.save-sub{font-size:11px;color:#7d8078;line-height:1.45;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .save-actions{display:flex;gap:7px;justify-content:flex-end;margin-top:12px}
+    .save-actions button{border-radius:7px;padding:7px 13px;font-size:11.5px;font-weight:550;border:1px solid #0002;background:#f2f1ec;color:#272a24}
+    .save-actions .go{background:#7c905b;border-color:transparent;color:#fff}
+    @media(prefers-color-scheme:dark){.save{background:#252622;color:#e7e8e1;border-color:#ffffff20}.save-sub{color:#92988a}.save-actions button{background:#33352f;border-color:#ffffff20;color:#e7e8e1}.save-actions .go{background:#8ea468;color:#1b1c19;border-color:transparent}}
     @media(prefers-color-scheme:dark){.trigger{background:#292b27;color:#d2dac7;border-color:#ffffff25}.trigger:hover{background:#3c4234}.panel{background:#252622;color:#e7e8e1;border-color:#ffffff20;box-shadow:0 8px 32px #0005}.row:hover,.row:focus-visible{background:#343a2c}.sub,.hint{color:#92988a}.initial{color:#b5c894}.foot{border-color:#ffffff15}}
   `;
   const trigger = document.createElement('button');
@@ -42,7 +63,11 @@ import type { BrowserMatches, FillCredential, Result } from '../shared/types';
   panel.className = 'panel';
   panel.setAttribute('role', 'dialog');
   panel.setAttribute('aria-label', 'Latch logins');
-  shadow.append(style, trigger, panel);
+  const savePanel = document.createElement('div');
+  savePanel.className = 'save';
+  savePanel.setAttribute('role', 'dialog');
+  savePanel.setAttribute('aria-label', 'Save this login to Latch');
+  shadow.append(style, trigger, panel, savePanel);
   document.documentElement.append(host);
 
   let active: HTMLInputElement | null = null;
@@ -263,6 +288,99 @@ import type { BrowserMatches, FillCredential, Result } from '../shared/types';
     await fill(matches.value.items[0]!.id);
   }
 
+  /** The credentials a submitted form is carrying, if it looks like a sign-in. */
+  function readForm(form: HTMLFormElement) {
+    const passwords = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="password"]'))
+      .filter((input) => input.value)
+      // A change-password form ends with the new one, which is what to keep.
+      .slice(-1);
+    const password = passwords[0]?.value ?? '';
+    if (!password) return undefined;
+    const texts = Array.from(form.querySelectorAll<HTMLInputElement>('input')).filter(
+      (input) => ['text', 'email', 'tel'].includes(input.type) && input.value,
+    );
+    const username =
+      texts.find((input) => /username|email/.test(input.autocomplete))?.value ??
+      texts
+        .filter(
+          (input) =>
+            passwords[0] &&
+            Boolean(input.compareDocumentPosition(passwords[0]) & Node.DOCUMENT_POSITION_FOLLOWING),
+        )
+        .at(-1)?.value ??
+      texts.at(-1)?.value ??
+      '';
+    return { username, password };
+  }
+
+  function hideSave() {
+    savePanel.style.display = 'none';
+    savePanel.replaceChildren();
+  }
+
+  function showSave(offer: CaptureOffer) {
+    if (offer.action === 'none') return hideSave();
+    const update = offer.action === 'update';
+    const title = element(
+      'div',
+      'save-title',
+      update ? 'Update this password in Latch?' : 'Save this login to Latch?',
+    );
+    const sub = element(
+      'div',
+      'save-sub',
+      update
+        ? `${offer.name ?? location.hostname} already exists`
+        : (offer.name ?? location.hostname),
+    );
+    const brand = element('div', 'brand');
+    brand.append(element('span', '', 'Latch'), element('span', '', location.hostname));
+    const actions = element('div', 'save-actions');
+    const no = element('button', '', 'Not now');
+    no.type = 'button';
+    no.addEventListener('click', (event) => {
+      if (!event.isTrusted) return;
+      hideSave();
+      void send({ type: 'dismissCapture' });
+    });
+    const yes = element('button', 'go', update ? 'Update' : 'Save');
+    yes.type = 'button';
+    yes.addEventListener('click', (event) => {
+      if (!event.isTrusted) return;
+      yes.disabled = true;
+      yes.textContent = 'Saving…';
+      void (async () => {
+        const result = await send<CaptureOffer>({ type: 'commitCapture' });
+        if (!result.ok) {
+          yes.disabled = false;
+          yes.textContent = update ? 'Update' : 'Save';
+          sub.textContent = result.error;
+          return;
+        }
+        title.textContent = update ? 'Password updated.' : 'Saved to Latch.';
+        sub.textContent = offer.name ?? location.hostname;
+        actions.remove();
+        setTimeout(hideSave, 1_800);
+      })();
+    });
+    actions.append(no, yes);
+    savePanel.replaceChildren(brand, title, sub, actions);
+    savePanel.style.display = 'block';
+  }
+
+  async function captureSubmit(form: HTMLFormElement) {
+    const credentials = readForm(form);
+    if (!credentials) return;
+    const offer = await send<CaptureOffer>({ type: 'capture', ...credentials });
+    // The page usually navigates away here; the prompt is picked up on load.
+    if (offer.ok) showSave(offer.value);
+  }
+
+  async function resumeSave() {
+    const offer = await send<CaptureOffer>({ type: 'pendingCapture' });
+    if (offer.ok) showSave(offer.value);
+  }
+
   function scan() {
     scanScheduled = false;
     if (!host.isConnected) document.documentElement.append(host);
@@ -282,6 +400,14 @@ import type { BrowserMatches, FillCredential, Result } from '../shared/types';
     }
   }
 
+  document.addEventListener(
+    'submit',
+    (event) => {
+      if (event.isTrusted && event.target instanceof HTMLFormElement)
+        void captureSubmit(event.target);
+    },
+    true,
+  );
   document.addEventListener('focusin', (event) => {
     if (suppressNextFocus) {
       suppressNextFocus = false;
@@ -359,4 +485,6 @@ import type { BrowserMatches, FillCredential, Result } from '../shared/types';
     setTimeout(scan, 160);
   }).observe(document.documentElement, { childList: true, subtree: true });
   scan();
+  // A sign-in that navigated away leaves its offer waiting on the Mac app.
+  void resumeSave();
 })();

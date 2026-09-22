@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   FileText,
   Fingerprint,
@@ -12,6 +11,7 @@ import {
   Settings2,
   ShieldCheck,
   Star,
+  Trash2,
   UserRound,
   X,
 } from 'lucide-react';
@@ -21,7 +21,8 @@ import { Editor } from './Editor';
 import { Settings } from './Settings';
 import { Mark } from './Mark';
 import { Detail } from './Detail';
-import { ItemIcon, displayWebsite, typeName } from './items';
+import { ItemList } from './ItemList';
+import { Toasts, useToasts } from './Toasts';
 
 const initialState: VaultState = {
   status: 'signed-out',
@@ -29,21 +30,37 @@ const initialState: VaultState = {
   server: 'https://vault.bitwarden.com',
   lastSync: null,
   itemCount: 0,
+  trashCount: 0,
+  biometrics: 'unsupported',
+  biometricsOn: false,
 };
-type Filter = 'all' | 'favorites' | 'logins' | 'notes' | 'passkeys';
+type Filter = 'all' | 'favorites' | 'logins' | 'notes' | 'passkeys' | 'trash';
 const filters = [
   { id: 'all', label: 'All items', icon: FolderKey },
   { id: 'favorites', label: 'Favorites', icon: Star },
   { id: 'logins', label: 'Logins', icon: KeyRound },
   { id: 'notes', label: 'Secure notes', icon: FileText },
   { id: 'passkeys', label: 'Passkeys', icon: Fingerprint },
+  { id: 'trash', label: 'Trash', icon: Trash2 },
 ] as const;
+
+/**
+ * Pairs each item with the text it is searched by. Built once per list rather
+ * than per keystroke, which is what a long vault feels.
+ */
+function indexItems(items: ItemSummary[]) {
+  return items.map((item) => ({
+    item,
+    haystack: `${item.name} ${item.username} ${item.website}`.toLowerCase(),
+  }));
+}
 
 export function App() {
   const [state, setState] = useState(initialState);
   const stateRef = useRef(state);
   const [ready, setReady] = useState(false);
   const [items, setItems] = useState<ItemSummary[]>([]);
+  const [trashed, setTrashed] = useState<ItemSummary[]>([]);
   const [selected, setSelected] = useState<ItemDetail | null>(null);
   const [selectedId, setSelectedId] = useState('');
   const [query, setQuery] = useState('');
@@ -53,8 +70,10 @@ export function App() {
   const [notice, setNotice] = useState('');
   const [syncing, setSyncing] = useState(false);
   const selectionVersion = useRef(0);
+  const listVersion = useRef(0);
   const searchInput = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
+  const { toasts, show, settle, dismiss } = useToasts();
+  const notify = useMemo(() => ({ show, settle }), [show, settle]);
 
   const receiveState = useCallback((next: VaultState) => {
     stateRef.current = next;
@@ -63,6 +82,7 @@ export function App() {
     if (next.status !== 'unlocked') {
       selectionVersion.current++;
       setItems([]);
+      setTrashed([]);
       setSelected(null);
       setSelectedId('');
       setEditor(null);
@@ -70,8 +90,13 @@ export function App() {
       setNotice('');
       setSettings(false);
     } else {
-      void window.latch.items().then((response) => {
-        if (response.ok && stateRef.current.status === 'unlocked') setItems(response.value);
+      // Both lists come from one snapshot, and a slower earlier fetch is
+      // dropped rather than allowed to overwrite a newer one.
+      const version = ++listVersion.current;
+      void Promise.all([window.latch.items(), window.latch.trash()]).then(([listed, binned]) => {
+        if (version !== listVersion.current || stateRef.current.status !== 'unlocked') return;
+        if (listed.ok) setItems(listed.value);
+        if (binned.ok) setTrashed(binned.value);
       });
     }
   }, []);
@@ -113,25 +138,22 @@ export function App() {
     return () => removeEventListener('keydown', keyboard);
   }, []);
 
+  const indexed = useMemo(() => indexItems(items), [items]);
+  const indexedTrash = useMemo(() => indexItems(trashed), [trashed]);
+
   const visible = useMemo(() => {
     const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-    return items.filter((item) => {
-      if (filter === 'favorites' && !item.favorite) return false;
-      if (filter === 'logins' && item.type !== 1) return false;
-      if (filter === 'notes' && item.type !== 2) return false;
-      if (filter === 'passkeys' && !item.hasPasskey) return false;
-      const haystack = `${item.name} ${item.username} ${item.website}`.toLowerCase();
-      return terms.every((term) => haystack.includes(term));
-    });
-  }, [items, query, filter]);
-
-  const virtualizer = useVirtualizer({
-    count: visible.length,
-    getScrollElement: () => listRef.current,
-    estimateSize: () => 66,
-    overscan: 8,
-    getItemKey: (index) => visible[index]!.id,
-  });
+    const source = filter === 'trash' ? indexedTrash : indexed;
+    return source
+      .filter(({ item, haystack }) => {
+        if (filter === 'favorites' && !item.favorite) return false;
+        if (filter === 'logins' && item.type !== 1) return false;
+        if (filter === 'notes' && item.type !== 2) return false;
+        if (filter === 'passkeys' && !item.hasPasskey) return false;
+        return terms.every((term) => haystack.includes(term));
+      })
+      .map(({ item }) => item);
+  }, [indexed, indexedTrash, query, filter]);
 
   async function select(item: ItemSummary) {
     const version = ++selectionVersion.current;
@@ -148,13 +170,28 @@ export function App() {
     else setNotice(response.error);
   }
 
+  async function setBiometrics(enabled: boolean) {
+    const pending = show('pending', enabled ? 'Setting up Touch ID…' : 'Turning off Touch ID…');
+    const result = await window.latch.setBiometrics(enabled);
+    if (result.ok) {
+      settle(pending, 'done', enabled ? 'Touch ID is on' : 'Touch ID is off');
+      receiveState(result.value);
+    } else settle(pending, 'error', result.error);
+  }
+
   async function sync() {
     setSyncing(true);
     setNotice('');
+    const pending = show('pending', 'Syncing with Bitwarden…');
     const response = await window.latch.sync();
     setSyncing(false);
-    if (response.ok) receiveState(response.value);
-    else setNotice(response.error);
+    if (response.ok) {
+      settle(pending, 'done', 'Vault up to date');
+      receiveState(response.value);
+    } else {
+      settle(pending, 'error', response.error);
+      setNotice(response.error);
+    }
   }
 
   if (!ready)
@@ -217,6 +254,7 @@ export function App() {
                 <Icon size={14} strokeWidth={1.6} />
                 <span>{title}</span>
                 {id === 'all' && <small>{items.length}</small>}
+                {id === 'trash' && trashed.length > 0 && <small>{trashed.length}</small>}
               </button>
             ))}
           </nav>
@@ -259,73 +297,14 @@ export function App() {
               <RefreshCw size={14} />
             </button>
           </header>
-          <div
-            className="list-scroll"
-            ref={listRef}
-            role="listbox"
-            aria-label="Vault items"
-            tabIndex={0}
-            onKeyDown={(event) => {
-              if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
-              event.preventDefault();
-              const current = visible.findIndex((item) => item.id === selectedId);
-              const next = Math.max(
-                0,
-                Math.min(visible.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)),
-              );
-              if (visible[next]) {
-                void select(visible[next]!);
-                virtualizer.scrollToIndex(next);
-              }
-            }}
-          >
-            {visible.length ? (
-              <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
-                {virtualizer.getVirtualItems().map((row) => {
-                  const item = visible[row.index]!;
-                  return (
-                    <button
-                      key={item.id}
-                      role="option"
-                      aria-selected={item.id === selectedId}
-                      className={`item-row ${item.id === selectedId ? 'selected' : ''}`}
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        height: row.size,
-                        transform: `translateY(${row.start}px)`,
-                      }}
-                      onClick={() => void select(item)}
-                    >
-                      <ItemIcon item={item} />
-                      <span className="item-text">
-                        <strong>{item.name}</strong>
-                        <small>
-                          {item.username || displayWebsite(item.website) || typeName(item.type)}
-                        </small>
-                      </span>
-                      {item.favorite && <Star size={10} className="row-star" fill="currentColor" />}
-                      {item.hasPasskey && <Fingerprint size={13} className="muted" />}
-                      {item.restricted && <LockKeyhole size={12} className="muted" />}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="list-empty">
-                <Search size={22} strokeWidth={1.3} />
-                <strong>{query ? 'Nothing found' : 'A clean slate'}</strong>
-                <p>{query ? 'Try a name, email, or website.' : 'Your items will appear here.'}</p>
-                {!query && (
-                  <button className="text-action" onClick={() => setEditor('new')}>
-                    Add your first login <Plus size={12} />
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+          <ItemList
+            items={visible}
+            selectedId={selectedId}
+            onSelect={(item) => void select(item)}
+            query={query}
+            onNew={() => setEditor('new')}
+            emptyLabel={filter === 'trash' ? 'The trash is empty' : undefined}
+          />
           <footer className="list-footer">
             <span className="status-dot" />
             <span>
@@ -352,7 +331,16 @@ export function App() {
             </div>
           )}
           {selected ? (
-            <Detail key={selected.id} item={selected} onEdit={() => setEditor('edit')} />
+            <Detail
+              key={selected.id}
+              item={selected}
+              onEdit={() => setEditor('edit')}
+              onGone={() => {
+                setSelected(null);
+                setSelectedId('');
+              }}
+              notify={notify}
+            />
           ) : (
             <div className="detail-empty">
               <div className="empty-emblem">
@@ -385,9 +373,18 @@ export function App() {
             setSelected(item);
             setSelectedId(item.id);
           }}
+          notify={notify}
         />
       )}
-      {settings && <Settings onClose={() => setSettings(false)} />}
+      {settings && (
+        <Settings
+          onClose={() => setSettings(false)}
+          biometrics={state.biometrics}
+          biometricsOn={state.biometricsOn}
+          onBiometrics={(enabled) => void setBiometrics(enabled)}
+        />
+      )}
+      <Toasts toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 }
