@@ -5,7 +5,6 @@ import {
   globalShortcut,
   ipcMain,
   Menu,
-  nativeTheme,
   powerMonitor,
   session,
   shell,
@@ -13,6 +12,8 @@ import {
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readFile, mkdir } from 'node:fs/promises';
+import { prepareWindowAppearance } from './window-appearance';
+import type { WindowCommand } from '../shared/types';
 import { localEngine } from './engine';
 import { Vault, generatePassword } from './vault';
 import { touchIdSessionStore } from './biometrics';
@@ -28,6 +29,7 @@ if (process.env.LATCH_DATA_DIR) app.setPath('userData', process.env.LATCH_DATA_D
 if (!app.requestSingleInstanceLock()) app.quit();
 
 let window: BrowserWindow;
+let appearance: ReturnType<typeof prepareWindowAppearance>;
 let vault: Vault;
 let cli: CliPort | undefined;
 let bridge: BrowserBridge;
@@ -66,8 +68,6 @@ void app
     await mkdir(app.getPath('userData'), { recursive: true, mode: 0o700 });
     const engine = await localEngine({
       dataDir: join(app.getPath('userData'), 'bitwarden'),
-      appPath: app.getAppPath(),
-      packaged: app.isPackaged,
     });
     setupError = engine.setupError;
     cli = engine.cli;
@@ -116,7 +116,19 @@ void app
       callback(false),
     );
     session.defaultSession.setPermissionCheckHandler(() => false);
+    const requestedMaterial = process.env.LATCH_MATERIAL;
+    appearance = prepareWindowAppearance({
+      // Glass remains an explicit developer opt-in until the native matrix passes.
+      allowGlass: requestedMaterial === 'glass',
+      override:
+        requestedMaterial === 'vibrancy' || requestedMaterial === 'unavailable'
+          ? requestedMaterial
+          : requestedMaterial === 'glass'
+            ? 'glass'
+            : 'solid',
+    });
     window = new BrowserWindow({
+      ...appearance.windowOptions,
       width: 1080,
       height: 720,
       minWidth: 820,
@@ -124,7 +136,8 @@ void app
       title: 'Latch',
       titleBarStyle: 'hiddenInset',
       trafficLightPosition: { x: 18, y: 19 },
-      backgroundColor: nativeTheme.shouldUseDarkColors ? '#191919' : '#faf9f7',
+      // An inactive-window click must only activate, never reveal or copy a secret.
+      acceptFirstMouse: false,
       show: false,
       webPreferences: {
         preload: join(__dirname, 'preload.cjs'),
@@ -135,6 +148,11 @@ void app
         webSecurity: true,
       },
     });
+    appearance.attach(window);
+    const unsubscribeAppearance = appearance.subscribe((snapshot) => {
+      if (!window.isDestroyed()) window.webContents.send('latch:appearance', snapshot);
+    });
+    window.once('closed', unsubscribeAppearance);
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event) => event.preventDefault());
     window.on('close', (event) => {
@@ -152,6 +170,7 @@ void app
     ipcMain.handle('latch:request', (event, raw: unknown) =>
       safely(async () => {
         if (
+          event.sender !== window.webContents ||
           event.senderFrame !== window.webContents.mainFrame ||
           event.senderFrame.url !== rendererUrl
         )
@@ -184,6 +203,8 @@ void app
 
 async function handleRequest(request: DesktopRequest): Promise<unknown> {
   switch (request.type) {
+    case 'appearance':
+      return appearance.snapshot();
     case 'state':
       if (!hasAccountHint) await examined;
       return { ...vault.snapshot(), ...(setupError ? { setupError } : {}) };
@@ -295,6 +316,11 @@ function lockVault() {
     void vault.lock().catch(() => undefined);
 }
 
+function sendCommand(command: WindowCommand) {
+  showWindow();
+  if (!window.isDestroyed()) window.webContents.send('latch:command', command);
+}
+
 function installMenu() {
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
@@ -302,6 +328,7 @@ function installMenu() {
         label: 'Latch',
         submenu: [
           { role: 'about' },
+          { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => sendCommand('settings') },
           { type: 'separator' },
           { label: 'Lock vault', accelerator: 'CmdOrCtrl+L', click: lockVault },
           { type: 'separator' },
@@ -312,6 +339,12 @@ function installMenu() {
           { role: 'quit' },
         ],
       },
+      {
+        label: 'File',
+        submenu: [
+          { label: 'New Login', accelerator: 'CmdOrCtrl+N', click: () => sendCommand('new') },
+        ],
+      },
       { role: 'editMenu' },
       {
         label: 'View',
@@ -320,8 +353,7 @@ function installMenu() {
             label: 'Search vault',
             accelerator: 'CmdOrCtrl+K',
             click: () => {
-              showWindow();
-              window.webContents.send('latch:focus-search');
+              sendCommand('search');
             },
           },
           { role: 'togglefullscreen' },

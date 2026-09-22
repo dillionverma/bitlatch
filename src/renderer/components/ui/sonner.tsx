@@ -38,6 +38,9 @@ function Toaster({ className, style, toastOptions, ...props }: ToasterProps) {
         classNames: {
           ...toastOptions?.classNames,
           toast: cn('toast', toastOptions?.classNames?.toast),
+          closeButton: cn('toast-close', toastOptions?.classNames?.closeButton),
+          actionButton: cn('toast-action', toastOptions?.classNames?.actionButton),
+          cancelButton: cn('toast-action', toastOptions?.classNames?.cancelButton),
         },
       }}
       {...props}

@@ -13,6 +13,8 @@ await mkdir(resolve(root, 'dist/desktop'), { recursive: true });
 await mkdir(resolve(root, 'dist/extension'), { recursive: true });
 
 const bundledPackages = [
+  'electron-liquid-glass',
+  'node-gyp-build',
   'react',
   'react-dom',
   'scheduler',
@@ -104,7 +106,7 @@ await build({
   format: 'cjs',
   outdir: 'dist/desktop',
   outExtension: { '.js': '.cjs' },
-  external: ['electron'],
+  external: ['electron', 'electron-liquid-glass'],
   sourcemap: false,
   logLevel: 'info',
 });

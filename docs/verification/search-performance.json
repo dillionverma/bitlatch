@@ -1,11 +1,19 @@
 {
-  "date": "2026-09-21T23:51:52.964Z",
-  "hardware": "Apple M5 Max",
-  "browser": "153.0.8010.12",
-  "dataset": "10,000 synthetic summaries; production renderer bundle; test IPC adapter",
-  "samples": 20,
-  "visibleRows": 17,
-  "searchP50Ms": 15.8,
-  "searchP95Ms": 16,
-  "excludes": "Unlock, sync, real IPC, and network; typing to matching DOM update and next animation frame"
+  "items": 10000,
+  "samplesMs": [
+    3.0999999940395355, 7.0999999940395355, 7.5999999940395355, 7.899999991059303,
+    7.9000000059604645, 8.099999994039536, 8.199999988079071, 8.200000002980232, 8.200000002980232,
+    8.299999997019768, 8.299999997019768, 8.299999997019768, 8.299999997019768, 8.299999997019768,
+    8.299999997019768, 8.299999997019768, 8.300000011920929, 8.400000005960464, 8.400000005960464,
+    8.5, 9.299999997019768, 9.299999997019768, 9.300000011920929, 10.5
+  ],
+  "p50Ms": 8.299999997019768,
+  "p95Ms": 9.300000011920929,
+  "scope": "synthetic renderer input to matching DOM and next animation frame; no engine/IPC/network",
+  "date": "2026-09-21",
+  "rowsInitial": 19,
+  "rowsScrolled": 28,
+  "rowHeight": 56,
+  "method": "Manual synthetic runtime observation; not an automated test",
+  "comparison": "Workspace packet comparable run: 17.2 ms before, 17.5 ms after. Final 9.3 ms uses a different frame cadence; not a speedup claim."
 }

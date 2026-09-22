@@ -1,19 +1,28 @@
-@layer theme, base, legacy, components, utilities;
+@layer theme, base, components, utilities;
 @import 'tailwindcss' source(none);
 @import 'tw-animate-css';
 @import '../shared/theme.css';
 @import './tokens.css';
-@import './legacy.css' layer(legacy);
 @source "./";
 
 @layer base {
   * {
     border-color: var(--border);
   }
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+  }
   html {
     font-size: 16px;
   }
   body {
+    background: var(--window);
+    color: var(--foreground);
+    -webkit-font-smoothing: antialiased;
     font-family: var(--font-ui);
     font-size: 13px;
     line-height: 18px;
@@ -21,8 +30,11 @@
 }
 
 @layer components {
-  /* Plain legacy search retains a visible ring while InputGroup is adopted. */
-  .search:focus-within {
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  [tabindex]:focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
@@ -36,6 +48,25 @@
   }
 }
 
+/* Sonner injects unlayered CSS. Use its supported classNames to keep these
+   shared recipes above vendor rules without changing the toast lifecycle. */
+.toaster[data-sonner-toaster] .toast .toast-close {
+  width: 28px;
+  height: 28px;
+  cursor: default;
+}
+.toaster[data-sonner-toaster] .toast .toast-action {
+  min-width: 24px;
+  min-height: 28px;
+  cursor: default;
+}
+.toaster[data-sonner-toaster] .toast:focus-visible,
+.toaster[data-sonner-toaster] .toast .toast-close:focus-visible,
+.toaster[data-sonner-toaster] .toast .toast-action:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
 /* Accessibility overrides are deliberately unlayered. No exit animation retains secrets. */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -45,9 +76,51 @@
     transition: none;
     scroll-behavior: auto;
   }
+  .toaster[data-sonner-toaster] .toast,
+  .toaster[data-sonner-toaster] .toast * {
+    animation: none;
+    transition: none;
+  }
 }
 @media (prefers-contrast: more) {
   :root {
     --border: var(--input);
+  }
+}
+
+/* Opaque by default, including first paint, auth, credentials and every portal.
+   Only the navigation region can reveal a successfully attached native view. */
+.boot {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--window);
+}
+.task-auth {
+  background: var(--window);
+}
+html:is([data-material='glass'], [data-material='vibrancy']):has(.vault-app) body,
+html:is([data-material='glass'], [data-material='vibrancy']) .vault-app,
+html:is([data-material='glass'], [data-material='vibrancy']) .vault-app .sidebar {
+  background: transparent;
+}
+html[data-high-contrast='true'] {
+  --border: var(--input);
+}
+html[data-reduced-motion='true'] *,
+html[data-reduced-motion='true'] *::before,
+html[data-reduced-motion='true'] *::after {
+  animation: none;
+  transition: none;
+  scroll-behavior: auto;
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  html:is([data-material]) .vault-app {
+    background: var(--window);
+  }
+  html:is([data-material]) .vault-app .sidebar {
+    background: var(--sidebar);
   }
 }

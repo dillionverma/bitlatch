@@ -1,64 +1,74 @@
-# MVP verification
+# Design verification — September 21, 2026
 
-Tested on September 15–16, 2026, on an **Apple M5 Max**, macOS **26.6.2**.
+The six-stage design is implemented. Release acceptance remains incomplete. Solid appearance is the default; native glass is developer opt-in. No automated tests were added, restored, or run. The owner's no-test instruction supersedes the original plan's test commands.
 
-## Environments
+## Current checks
 
-| Component                                         | Tested version                                            |
-| ------------------------------------------------- | --------------------------------------------------------- |
-| Latch                                             | 0.1.0, production renderer and packaged arm64 application |
-| Electron                                          | 44.4.1                                                    |
-| Official CLI, development fixture                 | 2026.8.0                                                  |
-| Official CLI, separately installed / packaged app | 2026.7.0                                                  |
-| Chrome for Testing                                | 153.0.8010.12                                             |
-| Aside                                             | 1.0.914.1, isolated test browser profile                  |
-| Local test vault                                  | Vaultwarden 1.37.3, pinned container digest               |
+On macOS **27.0 build 26A428**, arm64, Electron **44.4.1**, electron-liquid-glass **1.1.1**:
 
-No personal vault or production Cloud account was used. The actual installed Aside executable was driven with a separate temporary profile. Native messaging installation is redirected to a disposable root with `LATCH_BROWSER_ROOT`; tests never replace the user's installed Latch bridge.
+- `npm run check`: passed strict type checking and production build.
+- `npm run format:check`: passed after formatting the two updated evidence documents.
+- `npm run package`: passed; output is `release/mac-arm64/Latch.app`.
+- ASAR inspection: addon loader stays external; arm64 N-API binary is unpacked at `app.asar.unpacked/node_modules/electron-liquid-glass/prebuilds/darwin-arm64/node.napi.armv8.node`. Notices are included. No Bitwarden npm CLI or automated test runtime is packaged. Packaged extension JS/CSS byte-match `dist`.
+- Signing is skipped by `identity: null`. `codesign --verify --deep --strict` fails (inherited signature has no sealed resources). This local package is **not distribution-signed or notarized**. The older private release has a separate signing history.
 
-## Checks
+[Integration logs and observations](/Users/dillion/.bb/thread-storage/thr_nncmrbxxry/design/integration/final) · [Delivery report](/Users/dillion/.bb/thread-storage/thr_nncmrbxxry/design/DELIVERY.md)
 
-- TypeScript strict checking, unused-code checking, and production build.
-- 26 focused tests: safe site matching, private-domain boundaries, HTTPS/port checks, locked access, protected/shared item rejection, unknown-field preservation, stale writes, passkey edit restriction, pending unlock/lock races, CLI cancellation and Unicode output, validated IPC, native pairing authentication, owner-only socket/config permissions, and the two-step sign-in conversation with the CLI (code, method list, new-device, unknown questions, rejected codes, cancel, and lock).
-- Actual Electron UI: sign in, create a favorite login, reveal/copy, edit notes, preserve through server sync, lock, reject a wrong password, unlock offline, quit/restart, unlock the cached vault again.
-- Personal API-key sign-in followed by master-password unlock; possession of the API key does not bypass password unlock.
-- Authenticator-app two-step login against the local vault: the real CLI's code prompt is answered from the app, a wrong code is rejected in place, the right one opens the vault, and the master password is absent from the CLI cache.
-- Actual browser extension in Chrome for Testing and Aside: native host connection, inline account selection, filling both fields, successful server-validated login, per-site page-load filling without submission, and mismatched-origin rejection.
-- A vault with many items keeps showing them: rows stay inside the scroll viewport when fresh, after scrolling, after a sync, and after a lock/unlock. This last one regressed once, because a virtualizer that outlived its scroll element kept the old scroll position and drew every row out of sight, leaving a correct item count above an empty list.
-- A secure note created by another client opens, edits without offering login fields, and survives a reload from the server. Deleting asks first, then moves the item to the trash and it stays gone after a sync. The trash can be browsed, a trashed item cannot be edited, and restoring returns it to the vault. A dialog closes on a backdrop click and not on an inside one.
-- Signing in on a real page with a password the vault has never seen offers to save it, the offer survives the navigation the sign-in causes, and accepting it from the page writes the login into the vault with the typed username.
-- Touch ID unlock is covered against a stand-in for the Keychain, since the biometric prompt itself cannot be automated: the CLI is deliberately left unlocked while it is on, locked as usual while it is off, a refused prompt changes nothing, a key that no longer opens the vault is thrown away, and signing out forgets it.
-- Lock removes match results, clears copied credentials, and rejects further secret access. The on-disk CLI cache is checked for absence of the synthetic login and master passwords in plaintext.
-- Local ad-hoc code-signature verification of the packaged application. No Developer ID notarization claim.
-- Installed application smoke test: launches signed out, discovers the separately installed official CLI, and registers the native browser bridge.
-- [GitHub Actions](https://github.com/dillionverma/latch/actions/runs/35050528081) independently passed a clean dependency install, formatting, strict type checking, all 18 focused tests, and the production build on macOS with Node 22.
-- `npm audit`: zero reported vulnerabilities in the repository dependency tree at verification time. This does not audit the separately installed CLI or replace a security audit.
+## Screens and interaction
 
-## Performance
+Fresh manual inspection loaded the production renderer with a disposable in-memory adapter. It did not authenticate or exercise production vault operations. Passwords remained masked or empty in captures.
 
-The production React renderer was loaded with **10,000 synthetic summaries** behind a test IPC adapter. Only **17 rows** were mounted. Twenty searches measured approximately **16 ms p95** from the input event to matching DOM output and the next animation frame on this machine.
+| Viewport   | Light                                                             | Dark                                                             |
+| ---------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
+| 1080 × 720 | [Workspace](screenshots/design-2026-09-21/desktop-light-1080.png) | [Workspace](screenshots/design-2026-09-21/desktop-dark-1080.png) |
+| 820 × 550  | [Workspace](screenshots/design-2026-09-21/desktop-light-820.png)  | [Workspace](screenshots/design-2026-09-21/desktop-dark-820.png)  |
 
-[Raw benchmark record](verification/search-performance.json).
+[Settings](screenshots/design-2026-09-21/settings-light-1080.png) · [Dirty discard](screenshots/design-2026-09-21/dirty-discard-light.png) · [Locked](screenshots/design-2026-09-21/locked-light-1080.png) · [Editor at 200% zoom](screenshots/design-2026-09-21/editor-light-200pct.png)
 
-This is a renderer measurement. It excludes real IPC, decryption, server sync, and network time. No universal latency or memory guarantee is made.
+Observed: 56 px rows; mounted active descendant after long scroll and End; modal focus stays inside; New/Search commands do not escape an open task; dirty Escape focuses Keep editing; lock removes workspace, dialogs, field values and notifications; a deferred generation completion cannot restore them. The zoomed editor keeps its footer visible and scrolls its body. Workspace zoom uses horizontal scrolling to preserve its minimum pane widths.
 
-Vault reads and writes were measured separately against the disposable local Vaultwarden, comparing the warm `bw serve` process against a one-shot CLI run for the same command. Medians on this machine: a vault read **3149 ms to 1 ms**, and saving a new login **3275 ms to 118 ms**. In the running app, saving an edit went from **1804 ms to 205 ms** once the full sync was dropped from the edit path, since Bitwarden checks the revision on the write itself.
+The task packet supplies 42 synthetic captures, including auth/challenge, long content, notes, read-only, trash, errors, notifications and both themes. The browser packet supplies 50 synthetic popup/picker/save captures. These are UI observations, not proof of real authentication, saving, clipboard operations or native filling.
 
-Unlocking was profiled separately against a 400-item account, because it is the wait felt most often. It cost **3643 ms**, split between a one-shot `bw unlock` and the vault server starting afterwards: two CLI starts back to back, each paying process startup and WASM initialisation. Letting the already-starting server perform the unlock itself removed one of them, taking it to **1219 ms**. First sign-in is unchanged at roughly six seconds, dominated by `bw login` authenticating over the network, which cannot be served by a vault server that has to be signed in already. A real Bitwarden server adds its own network time to both. Signing in, unlocking, locking and signing out still start a CLI and are unchanged.
+[Task observations](/Users/dillion/.bb/thread-storage/thr_nncmrbxxry/design/tasks-manual.md) · [Task gallery](/Users/dillion/.bb/thread-storage/thr_nncmrbxxry/design/tasks-gallery) · [Browser observations](/Users/dillion/.bb/thread-storage/thr_nncmrbxxry/design/browser/final/observations.json)
 
-The extension content script is approximately **9 KB minified**; it has no React runtime. Screenshots are real test runs using disposable credentials:
+## Native shell
 
-- [Mac, light](screenshots/desktop-light.png)
-- [Mac, dark](screenshots/desktop-dark.png)
-- [Chrome inline picker](screenshots/inline-chromium.png)
-- [Aside inline picker](screenshots/inline-aside.png)
+The actual packaged app loaded the arm64 addon through public `addView`. A host-version gate was corrected: Electron reports `27.0.0`, while `sw_vers` reports `27.0`. The gate accepts these equivalent forms only; it does not claim other macOS support.
 
-## What these tests do not prove
+A synthetic CLI plus an in-memory IPC adapter supplied synthetic rows to the unmodified packaged renderer/preload. Appearance snapshots still came from the real native controller. Native captures used Electron desktopCapturer window sources, not Chromium capturePage:
 
-The end-to-end tests drive a visible window, so a keystroke typed on the machine while they run lands in the app under test. That produced sign-in failures with a field a character or two off, which read like product bugs and were not; the sign-in helper now re-checks what it typed before submitting.
+- [Light at 1080 × 720](screenshots/design-2026-09-21/native-glass-light-1080.png)
+- [Dark at 820 × 550](screenshots/design-2026-09-21/native-glass-dark-820.png)
+- [Opaque Settings](screenshots/design-2026-09-21/native-settings-dark-820.png)
 
-Cloud US/EU accounts, CAPTCHA policies, email and YubiKey two-step methods, new-device verification, Argon2 account settings, organization policies, and a broad set of real-world websites still need a compatibility matrix. The method list and the emailed code were additionally checked once by hand against the real CLI and an SMTP-enabled local Vaultwarden; YubiKey and new-device prompts are covered by emulated CLI prompts only. Passkeys and Touch ID are not implemented. The browser extension is loaded unpacked; there is no store approval. This prototype has not received an independent security review.
+Native resize, fullscreen entry/exit, hide/show, renderer reload, and app-local light/dark changes completed. Settings opened through the native menu; New/Search stayed gated behind it. The unavailable-addon override launched solid; the vibrancy override launched with Electron vibrancy. Explicit `acceptFirstMouse: false` preserves activation-only clicks; real inactive-window reveal/copy was not exercised.
 
-## Maintainability review
+The captured light glass sidebar appears flat gray and its secondary text is weak. The captures do not prove correct desktop blur/refraction or acceptable material contrast. **Keep solid as the default.** Real Reduce Transparency, Increase Contrast and Reduce Motion toggles; drag/double-click; Spaces; multi-display; sleep/wake; VoiceOver; sustained GPU/scroll performance; and macOS 26 remain unverified. Renderer-injected accessibility flags did produce opaque surfaces and stronger borders; that is not an OS-settings pass.
 
-Self-review: **8/10 for this bounded MVP**, not a security rating. The CLI, vault lifecycle, browser bridge, validation, renderer, and tests have distinct modules; secrets do not flow through generic command APIs. To improve further, split the remaining application view and inline detector/picker as those grow, add real-site regression fixtures, and replace the CLI process dependency with a proven, distributable upstream engine before expanding functionality.
+## Browser and account limits
+
+Chrome is absent from `/Applications/Google Chrome.app`. Aside is installed. A fresh local synthetic page displayed the current picker, but the user's installed older Latch extension overlaid it. The page was closed without a fill attempt. Real Chrome/Aside fill, Save/Update persistence and native bridge races remain unverified.
+
+The browser protocol remains request/response based. Visible offers clear on the next lock/status response, normally a one-second poll plus bridge latency. Instant push clearing, lock/unlock between polls and exact identity of replacement offers with the same metadata are not guaranteed. Backend lock and origin checks remain authoritative.
+
+**Isolation issue:** the first packaged run supplied a new Latch data directory, yet the discovered Nix CLI reported an existing locked account. Its cause is unresolved. The account-identity capture was removed. No unlock or vault-item read was performed. Later checks explicitly used a synthetic CLI. Do not assume this installed CLI respects the requested data directory until separately investigated. No production authentication/crypto or trust-policy code was changed in this integration packet.
+
+Cloud US/EU/self-hosted authentication, real save/sync/offline flows, Touch ID, OS clipboard expiry and real browser filling have no fresh end-to-end result. Touch ID and save/update prompts are implemented; their design-pass verification is limited to synthetic UI. See [security limits](../SECURITY.md).
+
+## Performance and size
+
+With 10,000 synthetic summaries, **19 rows** mounted initially and **28** after a long scroll with the active row retained. End selected item 10,000 with a mounted active descendant. Both counts remain below 40.
+
+The workspace packet's comparable search samples were **17.2 ms before / 17.5 ms after p95** (+1.7%). Final integration measured **9.3 ms p95** over 24 input-to-matching-DOM/next-frame samples. Its frame cadence differs, so it is not a speedup claim. All are below 250 ms. Measurements exclude IPC, decryption, sync and network. [Current samples](verification/search-performance.json).
+
+| Asset          | Supplied baseline |        Final |  Change |
+| -------------- | ----------------: | -----------: | ------: |
+| Renderer JS    |         282.13 kB |   460.319 kB |  +63.2% |
+| Renderer CSS   |          18.16 kB |    55.683 kB | +206.6% |
+| Content script |      12,383 bytes | 20,457 bytes |  +65.2% |
+
+Renderer growth includes Radix controls, Sonner and generated utility CSS. The content script includes shared tokens and geometry/lifecycle handling; it has no React runtime or remote assets. The app occupies **297,348 KiB** by `du -sk`; ASAR is **2,121,512 bytes**. No comparable app-size baseline or cold-start benchmark exists, so no before/after claim is made.
+
+## Historical evidence
+
+[September 15–16 verification](verification/historical-2026-09-16.md), [earlier benchmark](verification/historical-search-performance.json), and [v0.1.0 release notes](releases/v0.1.0.md) describe older snapshots only. Their automated test counts are historical. Current verification uses type checking, production builds, packaging and manual synthetic inspection.

@@ -1,8 +1,18 @@
-import { useLayoutEffect, useRef } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
-import { Fingerprint, LockKeyhole, Plus, Search, Star } from 'lucide-react';
+import { useCallback, useId, useRef } from 'react';
+import { defaultRangeExtractor, useVirtualizer, type Range } from '@tanstack/react-virtual';
+import { Fingerprint, LockKeyhole, Search, Star } from 'lucide-react';
 import type { ItemSummary } from '../shared/types';
 import { ItemIcon, displayWebsite, typeName } from './items';
+import { VAULT_LIST_OVERSCAN, VAULT_ROW_HEIGHT } from './metrics';
+import { Button } from '@/components/ui/button';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
+import { Spinner } from '@/components/ui/spinner';
 
 /**
  * The scrolling vault list.
@@ -19,9 +29,9 @@ export function ItemList({
   query,
   onNew,
   emptyLabel,
+  emptyDescription,
   loading = false,
-  error,
-  onRetry,
+  error = '',
 }: {
   items: ItemSummary[];
   selectedId: string;
@@ -29,22 +39,40 @@ export function ItemList({
   query: string;
   onNew: () => void;
   emptyLabel?: string;
+  emptyDescription?: string;
   loading?: boolean;
   error?: string;
-  onRetry?: () => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
+  const listId = useId();
+  const activeIndex = items.findIndex((item) => item.id === selectedId);
+  const optionId = (id: string) => `${listId}-item-${id}`;
+  // Selection changes must not invalidate all 10,000 row measurements.
+  const getItemKey = useCallback((index: number) => items[index]!.id, [items]);
+  // Keep at most one extra option mounted when wheel scrolling moves the
+  // selected row out of view. The active descendant must exist in the DOM.
+  const rangeExtractor = useCallback(
+    (range: Range) => {
+      const indices = defaultRangeExtractor(range);
+      if (activeIndex >= 0 && !indices.includes(activeIndex)) {
+        indices.push(activeIndex);
+        indices.sort((a, b) => a - b);
+      }
+      return indices;
+    },
+    [activeIndex],
+  );
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => listRef.current,
-    estimateSize: () => 66,
-    overscan: 8,
-    getItemKey: (index) => items[index]!.id,
+    estimateSize: () => VAULT_ROW_HEIGHT,
+    overscan: VAULT_LIST_OVERSCAN,
+    rangeExtractor,
+    getItemKey,
   });
 
-  useLayoutEffect(() => {
-    virtualizer.scrollToOffset(0);
-  }, [query, virtualizer]);
+  const rows = virtualizer.getVirtualItems();
+  const activeMounted = activeIndex >= 0 && rows.some((row) => row.index === activeIndex);
 
   return (
     <div
@@ -53,84 +81,120 @@ export function ItemList({
       role="listbox"
       aria-label="Vault items"
       aria-busy={loading}
+      aria-activedescendant={activeMounted ? optionId(selectedId) : undefined}
       tabIndex={0}
       onKeyDown={(event) => {
-        if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
-        event.preventDefault();
-        const current = items.findIndex((item) => item.id === selectedId);
-        const next = Math.max(
-          0,
-          Math.min(items.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)),
+        if (event.metaKey || event.ctrlKey || event.altKey || event.nativeEvent.isComposing) return;
+        const page = Math.max(
+          1,
+          Math.floor((listRef.current?.clientHeight ?? VAULT_ROW_HEIGHT) / VAULT_ROW_HEIGHT),
         );
-        if (items[next]) {
-          onSelect(items[next]!);
-          virtualizer.scrollToIndex(next);
+        let next: number;
+        switch (event.key) {
+          case 'ArrowDown':
+            next = activeIndex < 0 ? 0 : activeIndex + 1;
+            break;
+          case 'ArrowUp':
+            next = activeIndex < 0 ? items.length - 1 : activeIndex - 1;
+            break;
+          case 'Home':
+            next = 0;
+            break;
+          case 'End':
+            next = items.length - 1;
+            break;
+          case 'PageDown':
+            next = activeIndex < 0 ? 0 : activeIndex + page;
+            break;
+          case 'PageUp':
+            next = activeIndex < 0 ? 0 : activeIndex - page;
+            break;
+          default:
+            return;
         }
+        event.preventDefault();
+        next = Math.max(0, Math.min(items.length - 1, next));
+        const item = items[next];
+        if (!item) return;
+        if (item.id !== selectedId) onSelect(item);
+        virtualizer.scrollToIndex(next, { align: 'auto' });
       }}
     >
-      {error ? (
-        <div className="list-empty" role="alert">
-          <strong>Could not load items</strong>
-          <p>{error}</p>
-          <button className="text-action" onClick={onRetry}>
-            Try again
-          </button>
-        </div>
-      ) : loading && !items.length ? (
-        <div className="list-empty" role="status">
-          Loading items…
-        </div>
-      ) : items.length ? (
+      {items.length ? (
         <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
-          {virtualizer.getVirtualItems().map((row) => {
+          {rows.map((row) => {
             const item = items[row.index]!;
             return (
-              <button
+              <div
+                id={optionId(item.id)}
                 key={item.id}
                 role="option"
                 aria-selected={item.id === selectedId}
+                aria-posinset={row.index + 1}
+                aria-setsize={items.length}
                 className={`item-row ${item.id === selectedId ? 'selected' : ''}`}
                 style={{
                   position: 'absolute',
                   top: 0,
                   left: 0,
                   width: '100%',
-                  height: row.size,
+                  height: VAULT_ROW_HEIGHT,
                   transform: `translateY(${row.start}px)`,
                 }}
-                onClick={() => onSelect(item)}
+                onClick={() => {
+                  listRef.current?.focus({ preventScroll: true });
+                  onSelect(item);
+                }}
               >
                 <ItemIcon item={item} />
                 <span className="item-text">
-                  <strong>{item.name}</strong>
+                  <strong>{item.name || 'Untitled item'}</strong>
                   <small>
                     {item.username || displayWebsite(item.website) || typeName(item.type)}
                   </small>
                 </span>
-                {item.favorite && <Star size={10} className="row-star" fill="currentColor" />}
-                {item.hasPasskey && <Fingerprint size={13} className="muted" />}
-                {item.restricted && <LockKeyhole size={12} className="muted" />}
-              </button>
+                {item.favorite && <Star size={12} className="row-star" aria-label="Favorite" />}
+                {item.hasPasskey && (
+                  <Fingerprint size={14} className="muted" aria-label="Has a passkey" />
+                )}
+                {item.restricted && (
+                  <LockKeyhole size={14} className="muted" aria-label="Restricted" />
+                )}
+              </div>
             );
           })}
         </div>
       ) : (
-        <div className="list-empty">
-          <Search size={22} strokeWidth={1.3} />
-          <strong>{query ? 'Nothing found' : (emptyLabel ?? 'A clean slate')}</strong>
-          <p>
-            {query
-              ? 'Try a name, email, or website.'
-              : emptyLabel
-                ? 'Items you delete are kept here by Bitwarden.'
-                : 'Your items will appear here.'}
-          </p>
-          {!query && !emptyLabel && (
-            <button className="text-action" onClick={onNew}>
-              Add your first login <Plus size={12} />
-            </button>
+        <Empty className="list-empty" role="status">
+          <EmptyHeader>
+            <EmptyMedia>{loading ? <Spinner /> : <Search size={22} />}</EmptyMedia>
+            <EmptyTitle>
+              {loading
+                ? 'Loading items…'
+                : error
+                  ? 'Could not load items'
+                  : query
+                    ? 'No results'
+                    : (emptyLabel ?? 'No items yet')}
+            </EmptyTitle>
+            <EmptyDescription>
+              {loading
+                ? 'Reading your vault.'
+                : error ||
+                  (query
+                    ? 'Try a name, email, or website.'
+                    : (emptyDescription ??
+                      (emptyLabel
+                        ? 'Items you move to Trash are kept here by Bitwarden.'
+                        : 'Add a login to get started.')))}
+            </EmptyDescription>
+          </EmptyHeader>
+          {!loading && !error && !query && !emptyLabel && (
+            <Button type="button" variant="outline" onClick={onNew}>
+              Add your first login
+            </Button>
           )}
-        </div>
+        </Empty>
       )}
     </div>
   );

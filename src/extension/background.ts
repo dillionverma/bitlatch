@@ -75,7 +75,10 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, respond) => {
       sender.id === chrome.runtime.id && sender.url === chrome.runtime.getURL('popup.html');
     if (type === 'open' && (isPopup || senderUrl(sender)))
       return native<VaultStatus>({ type: 'open' });
-    if (type === 'status' && isPopup) return native<VaultStatus>({ type: 'status' });
+    // Status contains only the lock state. Content callers still require the
+    // same trusted same-origin sender metadata as matches and fills.
+    if (type === 'status' && (isPopup || senderUrl(sender)))
+      return native<VaultStatus>({ type: 'status' });
     const url = senderUrl(sender);
     if (!url) return { ok: false, error: 'Autofill is unavailable in this frame.' };
     if (type === 'matches') return native<BrowserMatches>({ type, url });

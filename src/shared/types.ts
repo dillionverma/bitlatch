@@ -1,3 +1,15 @@
+export type WindowMaterial = 'glass' | 'vibrancy' | 'solid';
+export type WindowCommand = 'search' | 'new' | 'settings';
+export type WindowAppearance = Readonly<{
+  revision: number;
+  material: WindowMaterial;
+  active: boolean;
+  dark: boolean;
+  reducedTransparency: boolean;
+  highContrast: boolean;
+  reducedMotion: boolean;
+}>;
+
 export type VaultStatus = 'signed-out' | 'locked' | 'unlocked';
 
 /** Two-step login methods the Bitwarden CLI can complete. Security keys over WebAuthn and Duo cannot be used here. */
@@ -120,7 +132,9 @@ export interface LatchApi {
   installBrowser(): Promise<Result<string>>;
   openExtensionFolder(): Promise<Result<void>>;
   onState(listener: (state: VaultState) => void): () => void;
-  onFocusSearch(listener: () => void): () => void;
+  appearance(): Promise<Result<WindowAppearance>>;
+  onAppearance(listener: (appearance: WindowAppearance) => void): () => void;
+  onCommand(listener: (command: WindowCommand) => void): () => void;
 }
 
 declare global {

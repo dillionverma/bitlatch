@@ -1,115 +1,135 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertCircle, Check, RefreshCw, X } from 'lucide-react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { toast, useSonner } from 'sonner';
+import { Toaster } from '@/components/ui/sonner';
 
 export type ToastKind = 'pending' | 'done' | 'error';
-
 export interface Toast {
   id: number;
   kind: ToastKind;
   message: string;
 }
-
-/** Starts a message for an action in progress, then gives it its outcome. */
 export interface Notifier {
   show(kind: ToastKind, message: string): number;
   settle(id: number, kind: ToastKind, message: string): void;
 }
 
-const LINGER_MS = 3_200;
-const MAX_VISIBLE = 3;
+// Sonner retains history. Never pass arbitrary IPC errors or item names to it.
+const messages = new Set([
+  'Saving…',
+  'Saved to Bitwarden',
+  'Could not save.',
+  'Restoring…',
+  'Restored to your vault',
+  'Moving to Trash…',
+  'Moved to Trash',
+  'Could not update the item.',
+  'Setting up Touch ID…',
+  'Turning off Touch ID…',
+  'Touch ID is on',
+  'Touch ID is off',
+  'Could not change Touch ID. Try again.',
+  'Syncing with Bitwarden…',
+  'Vault up to date',
+  'Could not sync. Check your connection and try again.',
+]);
+const fallback = {
+  pending: 'Working…',
+  done: 'Done',
+  error: 'Could not complete the action. Try again.',
+};
+let nextId = 0;
+const toasterId = 'latch-vault';
 
-/**
- * Transient messages for actions that finish out of sight, such as a save that
- * closes its editor. A pending message stays until its action settles, so a
- * slow save is never silent.
- */
+function publish(id: number, kind: ToastKind, message: string, forget: () => void) {
+  const title = messages.has(message) ? message : fallback[kind];
+  const options = {
+    id,
+    toasterId,
+    duration: kind === 'done' ? 3200 : Infinity,
+    dismissible: true,
+    onDismiss: forget,
+    onAutoClose: forget,
+  };
+  if (kind === 'pending') toast.loading(title, options);
+  else if (kind === 'done') toast.success(title, options);
+  else toast.error(title, options);
+}
+
+/** Sonner owns the queue and timers. This adapter owns only the vault lifetime. */
 export function useToasts() {
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const nextId = useRef(0);
-  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
-
-  useEffect(() => {
-    const pending = timers.current;
+  const { toasts: sonnerToasts } = useSonner();
+  const epoch = useRef(0);
+  const alive = useRef(false);
+  const owned = useRef(new Map<number, { epoch: number; pending: boolean }>());
+  useLayoutEffect(() => {
+    alive.current = true;
+    const invalidate = () => {
+      alive.current = false;
+      epoch.current++;
+      for (const id of owned.current.keys()) toast.dismiss(id);
+      owned.current.clear();
+    };
+    const unsubscribe = window.latch.onState((state) => {
+      if (state.status !== 'unlocked') invalidate();
+    });
     return () => {
-      for (const timer of pending.values()) clearTimeout(timer);
-      pending.clear();
+      invalidate();
+      unsubscribe();
     };
   }, []);
 
   const dismiss = useCallback((id: number) => {
-    clearTimeout(timers.current.get(id));
-    timers.current.delete(id);
-    setToasts((current) => current.filter((toast) => toast.id !== id));
+    owned.current.delete(id);
+    toast.dismiss(id);
   }, []);
-
-  const fade = useCallback(
-    (id: number) => {
-      clearTimeout(timers.current.get(id));
-      timers.current.set(
-        id,
-        setTimeout(() => dismiss(id), LINGER_MS),
-      );
-    },
-    [dismiss],
-  );
-
-  const show = useCallback(
-    (kind: ToastKind, message: string) => {
-      const id = nextId.current++;
-      setToasts((current) => [...current, { id, kind, message }].slice(-MAX_VISIBLE));
-      if (kind !== 'pending') fade(id);
-      return id;
-    },
-    [fade],
-  );
-
-  const settle = useCallback(
-    (id: number, kind: ToastKind, message: string) => {
-      setToasts((current) =>
-        current.map((toast) => (toast.id === id ? { ...toast, kind, message } : toast)),
-      );
-      fade(id);
-    },
-    [fade],
-  );
-
+  const show = useCallback((kind: ToastKind, message: string) => {
+    if (!alive.current) return -1;
+    const id = ++nextId;
+    owned.current.set(id, { epoch: epoch.current, pending: kind === 'pending' });
+    publish(id, kind, message, () => owned.current.delete(id));
+    return id;
+  }, []);
+  const settle = useCallback((id: number, kind: ToastKind, message: string) => {
+    const record = owned.current.get(id);
+    if (!alive.current || !record?.pending || record.epoch !== epoch.current) return;
+    // A dismissed pending notification must never reappear.
+    if (!toast.getToasts().some((entry) => entry.id === id)) {
+      owned.current.delete(id);
+      return;
+    }
+    record.pending = kind === 'pending';
+    publish(id, kind, message, () => owned.current.delete(id));
+  }, []);
+  const toasts: Toast[] = sonnerToasts.flatMap((entry) => {
+    if (typeof entry.id !== 'number' || !owned.current.has(entry.id)) return [];
+    return [
+      {
+        id: entry.id,
+        kind: entry.type === 'loading' ? 'pending' : entry.type === 'error' ? 'error' : 'done',
+        message: String(entry.title),
+      },
+    ];
+  });
   return { toasts, show, settle, dismiss };
 }
 
-export function Toasts({
-  toasts,
-  onDismiss,
-}: {
-  toasts: Toast[];
-  onDismiss: (id: number) => void;
-}) {
-  if (!toasts.length) return null;
-  return (
-    <div className="toasts" role="status" aria-live="polite">
-      {toasts.map((toast) => (
-        <div key={toast.id} className={`toast ${toast.kind}`}>
-          {toast.kind === 'pending' ? (
-            <span className="spinning">
-              <RefreshCw size={13} />
-            </span>
-          ) : toast.kind === 'done' ? (
-            <Check size={13} />
-          ) : (
-            <AlertCircle size={13} />
-          )}
-          <span>{toast.message}</span>
-          {toast.kind !== 'pending' && (
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Dismiss message"
-              onClick={() => onDismiss(toast.id)}
-            >
-              <X size={11} />
-            </button>
-          )}
-        </div>
-      ))}
-    </div>
+// Keep App's existing props. Toaster subscribes directly to Sonner and must
+// remain mounted even when the queue is empty.
+export function Toasts(_props: { toasts: Toast[]; onDismiss: (id: number) => void }) {
+  const [active, setActive] = useState(true);
+  useLayoutEffect(
+    () =>
+      window.latch.onState((state) => {
+        if (state.status !== 'unlocked') setActive(false);
+      }),
+    [],
   );
+  return active ? (
+    <Toaster
+      id={toasterId}
+      visibleToasts={3}
+      position="bottom-right"
+      toastOptions={{ closeButtonAriaLabel: 'Dismiss message' }}
+    />
+  ) : null;
 }

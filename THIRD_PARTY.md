@@ -28,3 +28,7 @@ The build emits `dist/THIRD_PARTY_NOTICES.txt`, included by the existing `dist/*
 `react-remove-scroll-bar@2.3.8` omits its license file from npm. Its upstream MIT notice is retained in `licenses/react-remove-scroll-bar-LICENSE.txt`, retrieved from [the upstream license](https://github.com/theKashey/react-remove-scroll-bar/blob/master/LICENSE) (Git blob `7c08c3990396ecefd90f99ff5d9a34f26f5b5616`). Dependency versions are pinned by `package-lock.json`.
 
 No Radix Themes, next-themes, remote fonts, Bitwarden npm bundle, or automated test runtime is shipped.
+
+## Optional native appearance
+
+`electron-liquid-glass` 1.1.1 and `node-gyp-build` 4.8.4 are pinned runtime dependencies. The addon is external to the main bundle; its arm64 N-API prebuild is unpacked under `app.asar.unpacked/node_modules/electron-liquid-glass/prebuilds/darwin-arm64/`. The build notice inventory includes the addon, loader and declared transitive dependencies. Only public `addView` is used. No unstable APIs are called. Glass is developer opt-in; solid is the default.

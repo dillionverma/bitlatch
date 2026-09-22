@@ -4,7 +4,7 @@
 
 Private MVP · macOS Apple Silicon · Chrome / Aside
 
-![Latch on macOS](docs/screenshots/desktop-light.png)
+![Latch on macOS](docs/screenshots/design-2026-09-21/desktop-light-1080.png)
 
 ## What works
 
@@ -16,14 +16,18 @@ Private MVP · macOS Apple Silicon · Chrome / Aside
 - Lock manually or on Mac lock/sleep/idle. Unlock an already-synced vault offline, including after restarting the app.
 - Copy/reveal selected fields. Copied credentials expire after 30 seconds, without clearing unrelated clipboard content.
 
-This is a **password MVP**. Passkeys are the next major integration. Logins and secure notes can be edited, and items can be moved to the trash and restored, though never deleted permanently; shared/protected items are restricted, other item types and passkey-bearing items are read-only, and enterprise features and system-wide autofill are not implemented. See [security boundaries](SECURITY.md).
+This is a **password MVP**. Passkeys are the next major integration. Logins and secure notes can be edited, and items can be moved to the trash and restored, though never deleted permanently; shared/protected items are restricted, other item types and passkey-bearing items are read-only, and passkey operations, enterprise features, and system-wide autofill are not implemented. See [security boundaries](SECURITY.md).
+
+## Local design build
+
+Version 0.2.0 combines the native Mac redesign with the latest main performance work. The local build is installed at `~/Applications/Latch.app`. This is a local preview, not a published release.
 
 ## Install and use
 
 1. Install the official Bitwarden CLI: `brew install bitwarden-cli`. Latch discovers Homebrew and common Nix installations. A custom absolute path can be supplied through `LATCH_BW_PATH` when launching from a terminal.
 2. Open **Latch.app** from the [private release](https://github.com/dillionverma/latch/releases/tag/v0.1.0). This preview is locally ad-hoc signed, not Developer ID notarized.
 3. Sign in with your email and master password. If your account uses two-step login with an authenticator app, YubiKey OTP, or email, or Bitwarden wants to verify a new device, Latch asks for the code. The Bitwarden CLI cannot complete WebAuthn security keys, Duo, or SSO; for those, expand **Personal API key sign-in**. Obtain the key in Bitwarden's web vault → Settings → Security → Keys. Enter it directly into the app.
-4. Open **Browser & settings → Connect browser**.
+4. Open **Settings → Browser → Connect browser**.
 5. In Chrome or Aside, open `chrome://extensions`, enable **Developer mode**, select **Load unpacked**, and choose the folder shown by **Show extension folder**.
 6. Open a login page and focus a field. Keep Latch running; closing its window leaves the process available.
 
@@ -31,9 +35,13 @@ If the official Bitwarden extension's password picker is also enabled, disable i
 
 Matching defaults to the saved website's exact host. To include sibling subdomains, set that login's URI match to **Base domain** in Bitwarden. Latch cannot read the other clients' global matching preferences.
 
-**Shortcuts:** `⌘K` search · `⌘N` new login · `⌘L` lock · `⌘⇧Space` show Latch (when available).
+**Shortcuts:** `⌘K` search · `⌘N` new login · `⌘,` settings · `⌘L` lock · `⌘⇧Space` show Latch (when available).
 
-Latch uses its own application data directory and Bitwarden CLI session. Your existing Bitwarden installation remains a separate client. Latch saves an account email/server hint for a fast lock screen. It saves an encrypted session key only when Touch ID is enabled. It does not save the master password or search index; upstream CLI authentication state and encrypted vault data remain on disk.
+Latch supplies its own application data directory to the Bitwarden CLI. The installed CLI must honor that path; the current design pass found an unresolved isolation issue with the discovered Nix CLI. See [verification limits](docs/verification.md#browser-and-account-limits) before using it with a real account. Latch does not save the master password or search index. Session keys stay in memory unless optional Touch ID is enabled; see its storage limits in SECURITY.md. Upstream CLI authentication state and encrypted vault data remain on disk.
+
+## Appearance
+
+The app follows system light/dark appearance. Credential panes and overlays are opaque. Solid navigation is the default. The packaged native addon is available only through the developer override `LATCH_MATERIAL=glass` on macOS 27.0; packaged native window captures are available, but desktop compositing, glass contrast and the full accessibility/lifecycle matrix remain unverified. `solid`, `vibrancy`, and `unavailable` select deterministic inspection paths. Reduce Transparency or Increase Contrast forces solid for that window until relaunch.
 
 ## Develop
 
@@ -56,9 +64,7 @@ The packaged application uses the separately installed official CLI. The npm CLI
 
 ## Verification
 
-See the [performance changes and measurements](docs/performance.md) for the CLI lifecycle update.
-
-Do not add or run automated tests. Use type checking, production builds, packaging, and manual UI checks with isolated synthetic data. Keep credentials out of logs and screenshots. Historical results in [verification](docs/verification.md) describe earlier snapshots and do not verify the current working tree.
+Do not add or run automated tests. Use type checking, production builds, packaging, and manual UI checks with isolated synthetic data. Keep credentials out of logs and screenshots. See [current verification and limits](docs/verification.md). Earlier evidence is kept separately and labeled historical.
 
 Manual checks should cover light/dark appearance, keyboard focus, lock clearing, dialogs, and browser filling on a disposable account. Record what was inspected and leave unverified behavior explicit.
 
@@ -71,6 +77,6 @@ src/renderer/    React desktop interface and design tokens
 src/shared/      Typed, validated messages and safe results
 ```
 
-React, TypeScript, Vite, Electron, TanStack Virtual. Small local state; no application framework inside web pages. The browser content script is approximately 9 KB minified. The full [original plan](docs/original-plan.md) covers later passkeys and feature parity.
+React, TypeScript, Vite, Electron, TanStack Virtual. Small local state; no application framework inside web pages. The browser content script is approximately 20 KiB minified, including shared theme CSS. The full [original plan](docs/original-plan.md) covers later passkeys and feature parity.
 
 Latch is independent and not affiliated with Bitwarden. Original source: [GPL-3.0-only](LICENSE).

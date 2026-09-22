@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { LatchApi, VaultState } from '../shared/types';
+import type { LatchApi, VaultState, WindowCommand, WindowAppearance } from '../shared/types';
 import type { DesktopRequest } from '../shared/protocol';
 
 const request = (message: DesktopRequest) => ipcRenderer.invoke('latch:request', message);
@@ -29,10 +29,18 @@ const api: LatchApi = {
     ipcRenderer.on('latch:state', handler);
     return () => ipcRenderer.removeListener('latch:state', handler);
   },
-  onFocusSearch: (listener) => {
-    const handler = () => listener();
-    ipcRenderer.on('latch:focus-search', handler);
-    return () => ipcRenderer.removeListener('latch:focus-search', handler);
+  appearance: () => request({ type: 'appearance' }),
+  onAppearance: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, value: WindowAppearance) => listener(value);
+    ipcRenderer.on('latch:appearance', handler);
+    return () => ipcRenderer.removeListener('latch:appearance', handler);
+  },
+  onCommand: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, command: WindowCommand) => {
+      if (command === 'search' || command === 'new' || command === 'settings') listener(command);
+    };
+    ipcRenderer.on('latch:command', handler);
+    return () => ipcRenderer.removeListener('latch:command', handler);
   },
 };
 

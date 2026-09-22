@@ -20,18 +20,7 @@ function engineCli(options: CliOptions): CliPort {
 
 export async function localEngine(options: {
   dataDir: string;
-  appPath: string;
-  packaged: boolean;
 }): Promise<{ cli: CliPort; setupError?: string }> {
-  if (!options.packaged && process.env.LATCH_TEST_BUNDLED_CLI === '1') {
-    return {
-      cli: engineCli({
-        dataDir: options.dataDir,
-        executable: process.execPath,
-        script: join(options.appPath, 'node_modules/@bitwarden/cli/build/bw.js'),
-      }),
-    };
-  }
   const candidates = [
     process.env.LATCH_BW_PATH,
     '/opt/homebrew/bin/bw',

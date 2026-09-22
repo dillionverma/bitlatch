@@ -6,11 +6,11 @@ export function ItemIcon({ item, large = false }: { item: ItemSummary; large?: b
     item.type === 2 ? FileText : item.type === 3 ? CreditCard : item.type === 4 ? UserRound : null;
   const tone = [...item.name].reduce((value, char) => value + char.charCodeAt(0), 0) % 5;
   return (
-    <span className={`item-icon tone-${tone} ${large ? 'large' : ''}`}>
+    <span aria-hidden="true" className={`item-icon tone-${tone} ${large ? 'large' : ''}`}>
       {Icon ? (
-        <Icon size={large ? 25 : 16} strokeWidth={1.5} />
+        <Icon size={large ? 20 : 16} strokeWidth={1.5} />
       ) : (
-        item.name.slice(0, 1).toUpperCase()
+        (Array.from(item.name.trim())[0] ?? '?').toUpperCase()
       )}
     </span>
   );
