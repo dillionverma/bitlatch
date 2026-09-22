@@ -1,0 +1,93 @@
+.vault-app {
+  position: relative;
+}
+.vault-app .workspace[data-settings-open='true'] {
+  visibility: hidden;
+}
+.settings-screen {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  min-width: 820px;
+  min-height: 550px;
+  overflow: hidden;
+}
+.settings-screen > * {
+  min-width: 0;
+  min-height: 0;
+}
+.settings-panel {
+  --background: var(--window);
+  background: var(--window);
+}
+.settings-toolbar {
+  justify-content: flex-start;
+  gap: 12px;
+}
+.settings-toolbar h1 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.settings-body {
+  padding-inline: clamp(24px, 5vw, 64px);
+  padding-bottom: 32px;
+}
+.settings-overview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px;
+  border-radius: 12px;
+  background: var(--card);
+  text-align: center;
+}
+.settings-section-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  margin-bottom: 4px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.settings-overview h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 600;
+}
+.settings-overview p {
+  max-width: 340px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted-foreground);
+}
+.settings-body .settings-group {
+  background: var(--card);
+  border-radius: 10px;
+}
+.settings-body .settings-row {
+  padding: 16px;
+}
+.settings-body .settings-row > button {
+  flex-shrink: 0;
+}
+.settings-body .settings-row p,
+.settings-body .settings-caption,
+.settings-body .settings-help {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .settings-overview,
+  .settings-body .settings-group {
+    background: color-mix(in srgb, var(--card), var(--foreground) 3%);
+  }
+}

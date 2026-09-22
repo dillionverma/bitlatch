@@ -453,7 +453,13 @@ function VaultWorkspace({
   return (
     <TooltipProvider>
       <div className="app vault-app">
-        <main className="workspace" aria-label="Personal vault">
+        <main
+          className="workspace"
+          aria-label="Personal vault"
+          data-settings-open={settings}
+          aria-hidden={settings || undefined}
+          inert={settings}
+        >
           <aside className="sidebar">
             <div className="workspace-titlebar" aria-hidden="true" />
             <div className="vault-label">
@@ -702,8 +708,11 @@ function VaultWorkspace({
         {settings && (
           <Settings
             onClose={() => {
-              if (alive.current) setSettings(false);
+              if (!alive.current) return;
+              flushSync(() => setSettings(false));
+              settingsButton.current?.focus({ preventScroll: true });
             }}
+            onLock={onLock}
             biometrics={state.biometrics}
             biometricsOn={state.biometricsOn}
             onBiometrics={setBiometrics}
