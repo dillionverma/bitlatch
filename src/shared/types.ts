@@ -1,5 +1,34 @@
 export type WindowMaterial = 'glass' | 'vibrancy' | 'solid';
 export type WindowCommand = 'search' | 'new' | 'settings';
+export type NativeConfirmation = 'discard' | 'trash';
+export const windowColorTokens = [
+  'background',
+  'foreground',
+  'window',
+  'card',
+  'card-foreground',
+  'popover',
+  'popover-foreground',
+  'primary',
+  'primary-foreground',
+  'secondary',
+  'secondary-foreground',
+  'muted',
+  'muted-foreground',
+  'border',
+  'input',
+  'ring',
+  'selection',
+  'selection-foreground',
+  'selection-inactive',
+  'sidebar',
+  'sidebar-foreground',
+  'sidebar-accent',
+  'sidebar-accent-foreground',
+  'sidebar-selection-inactive',
+  'sidebar-border',
+  'sidebar-ring',
+] as const;
 export type WindowAppearance = Readonly<{
   revision: number;
   material: WindowMaterial;
@@ -8,6 +37,7 @@ export type WindowAppearance = Readonly<{
   reducedTransparency: boolean;
   highContrast: boolean;
   reducedMotion: boolean;
+  colors?: Partial<Record<(typeof windowColorTokens)[number], string>>;
 }>;
 
 export type VaultStatus = 'signed-out' | 'locked' | 'unlocked';
@@ -112,6 +142,7 @@ export interface BrowserMatches {
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
 export interface LatchApi {
+  confirm(action: NativeConfirmation): Promise<Result<boolean>>;
   state(): Promise<Result<VaultState>>;
   login(input: LoginInput): Promise<Result<VaultState>>;
   answerChallenge(answer: ChallengeAnswer): Promise<Result<void>>;

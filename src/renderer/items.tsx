@@ -1,4 +1,4 @@
-import { CreditCard, FileText, UserRound } from 'lucide-react';
+import { CreditCard, FileText, User as UserRound } from '@phosphor-icons/react';
 import type { ItemSummary } from '../shared/types';
 
 export function ItemIcon({ item, large = false }: { item: ItemSummary; large?: boolean }) {
@@ -8,7 +8,7 @@ export function ItemIcon({ item, large = false }: { item: ItemSummary; large?: b
   return (
     <span aria-hidden="true" className={`item-icon tone-${tone} ${large ? 'large' : ''}`}>
       {Icon ? (
-        <Icon size={large ? 20 : 16} strokeWidth={1.5} />
+        <Icon size={large ? 20 : 16} weight="regular" />
       ) : (
         (Array.from(item.name.trim())[0] ?? '?').toUpperCase()
       )}

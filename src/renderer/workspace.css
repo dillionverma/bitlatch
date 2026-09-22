@@ -1,5 +1,4 @@
-/* Workspace geometry only. Shared colors and supplied control recipes live in
-   the foundation. Opaque content panes mask any native navigation material. */
+/* Workspace geometry. Shared colors and control recipes live in the foundation. */
 .vault-app {
   height: 100%;
   overflow: auto;
@@ -7,7 +6,7 @@
 }
 .vault-app .workspace {
   display: grid;
-  grid-template-columns: 196px 304px minmax(0, 1fr);
+  grid-template-columns: 188px 288px minmax(0, 1fr);
   width: 100%;
   height: 100%;
   min-width: 820px;
@@ -28,6 +27,9 @@
   overflow: auto;
 }
 .workspace-titlebar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   height: 52px;
   flex: 0 0 52px;
   -webkit-app-region: drag;
@@ -36,7 +38,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 8px 20px;
+  padding: 8px 8px 16px;
   margin: 0;
 }
 .vault-app .vault-label > div {
@@ -63,14 +65,14 @@
   width: 32px;
   height: 32px;
   flex-shrink: 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--background);
+  border: 0;
+  border-radius: 50%;
+  background: var(--secondary);
   color: var(--muted-foreground);
 }
 .vault-app .sidebar nav {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 .vault-app .nav-item {
   width: 100%;
@@ -83,7 +85,6 @@
   font-size: 13px;
   line-height: 18px;
   font-weight: 400;
-  color: var(--foreground);
   cursor: default;
 }
 .vault-app .nav-item > span {
@@ -97,13 +98,9 @@
   line-height: 15px;
   color: var(--muted-foreground);
 }
-.vault-app .nav-item.active {
-  background: var(--selection);
-  color: var(--foreground);
-  font-weight: 600;
-}
-.vault-app .nav-item.active::before {
-  content: none;
+.vault-app .nav-item[aria-pressed='true'] small {
+  color: inherit;
+  opacity: 0.8;
 }
 .vault-app .sidebar-bottom {
   display: grid;
@@ -121,6 +118,16 @@
   background: var(--background);
   border-right: 1px solid var(--border);
   overflow: hidden;
+}
+.list-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.list-header {
+  flex: 0 0 auto;
 }
 .workspace-list-toolbar {
   display: flex;
@@ -141,7 +148,6 @@
   height: 40px;
   min-height: 40px;
   padding: 0 12px;
-  border-bottom: 1px solid var(--border);
 }
 .vault-app .list-heading h1 {
   flex: 1;
@@ -164,14 +170,15 @@
   scroll-padding-block: 4px;
   outline-offset: -2px;
 }
-.vault-app .list-scroll:focus-visible {
+.vault-app .list-content:has(.list-scroll:focus-visible) {
   outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 .vault-app .item-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px;
+  padding: 6px 8px;
   margin: 0;
   border: 0;
   border-radius: 6px;
@@ -185,22 +192,16 @@
 }
 .vault-app .item-row.selected {
   background: var(--selection);
+  color: var(--selection-foreground);
+}
+.vault-app .item-row.selected :is(.item-text small, svg) {
+  color: inherit;
 }
 .vault-app .item-row:active {
   background: var(--selection);
 }
-.vault-app .item-row.selected::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 16px;
-  bottom: 16px;
-  width: 3px;
-  border-radius: 2px;
-  background: var(--primary);
-}
 .vault-app .list-scroll:focus-visible .item-row.selected {
-  box-shadow: inset 0 0 0 2px var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
 }
 .vault-app .item-text {
   flex: 1;
@@ -235,18 +236,19 @@
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--muted);
+  border: 0;
+  border-radius: 7px;
+  background: var(--card);
   color: var(--foreground);
   font-size: 14px;
   font-weight: 500;
   margin: 0;
 }
 .item-icon.large {
-  width: 40px;
-  height: 40px;
-  font-size: 20px;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-overlay);
+  font-size: 24px;
 }
 .vault-app .list-empty {
   min-height: 100%;
@@ -289,25 +291,58 @@
 .workspace-detail-empty {
   min-height: 100%;
   padding: 24px;
+  color: var(--muted-foreground);
 }
 .workspace-detail-empty [data-slot='empty-title'] {
-  font-size: 17px;
-  line-height: 22px;
+  font-size: 14px;
+  line-height: 20px;
 }
 .workspace-detail-empty [data-slot='empty-description'] {
   font-size: 13px;
   line-height: 18px;
   max-width: 320px;
 }
-[data-window-active='false'] .vault-app .item-row.selected,
-[data-window-active='false'] .vault-app .nav-item.active {
+[data-window-active='false'] .vault-app .item-row.selected {
   background: var(--selection-inactive);
+  color: var(--foreground);
 }
-[data-window-active='false'] .vault-app .item-row.selected::before {
-  background: var(--muted-foreground);
+[data-window-active='false'] .task-detail-toolbar {
+  color: var(--muted-foreground);
+}
+[data-window-active='false'] .vault-app .sidebar {
+  --sidebar-accent: var(--sidebar-selection-inactive);
+  --sidebar-accent-foreground: var(--sidebar-foreground);
+}
+@media (prefers-contrast: more) {
+  .vault-app .nav-item[aria-pressed='true'] {
+    outline: 1px solid currentColor;
+    outline-offset: -1px;
+  }
 }
 @media (max-width: 950px) {
   .vault-app .workspace {
     grid-template-columns: 180px 280px minmax(0, 1fr);
+  }
+}
+
+/* Enter only. Lock still unmounts the workspace synchronously. */
+.vault-app .workspace {
+  animation: workspace-enter 220ms ease-out both;
+}
+@keyframes workspace-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+html[data-reduced-motion='true'] .vault-app .workspace {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vault-app .workspace {
+    animation: none;
   }
 }

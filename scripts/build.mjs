@@ -1,7 +1,5 @@
 import { build } from 'esbuild';
 import { build as viteBuild } from 'vite';
-import react from '@vitejs/plugin-react';
-import tailwindcss from '@tailwindcss/vite';
 import { mkdir, readFile, writeFile, copyFile, rm } from 'node:fs/promises';
 import { generateKeyPairSync, createHash } from 'node:crypto';
 import { resolve, join } from 'node:path';
@@ -20,7 +18,8 @@ const bundledPackages = [
   'scheduler',
   '@tanstack/react-virtual',
   '@tanstack/virtual-core',
-  'lucide-react',
+  '@phosphor-icons/react',
+  'shadcn',
   'zod',
   'tldts',
   'tldts-core',
@@ -59,6 +58,7 @@ async function addNotice(name, from = root) {
     'LICENSE.md',
     'LICENSE.txt',
     'LICENSE-MIT',
+    'OFL.txt',
     'license',
     'license.md',
   ]) {
@@ -72,7 +72,8 @@ async function addNotice(name, from = root) {
   }
   if (!license) throw new Error(`Missing license notice for ${name}`);
   notices.push(`${name} ${info.version}\n${'='.repeat(60)}\n${license}`);
-  for (const dependency of Object.keys(info.dependencies ?? {}))
+  // Only shadcn's static CSS ships; its CLI dependencies do not.
+  for (const dependency of Object.keys(name === 'shadcn' ? {} : (info.dependencies ?? {})))
     await addNotice(dependency, directory);
 }
 for (const name of bundledPackages) await addNotice(name);
@@ -174,16 +175,5 @@ await writeFile(
     2,
   ) + '\n',
 );
-await viteBuild({
-  root: resolve(root, 'src/renderer'),
-  base: './',
-  plugins: [react(), tailwindcss()],
-  resolve: { alias: { '@': resolve(root, 'src/renderer') } },
-  build: {
-    outDir: resolve(root, 'dist/renderer'),
-    emptyOutDir: false,
-    target: 'chrome120',
-    sourcemap: false,
-  },
-});
+await viteBuild({ configFile: resolve(root, 'vite.config.mjs') });
 console.log(`Extension ID: ${identity.extensionId}`);

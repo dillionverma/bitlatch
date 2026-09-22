@@ -1,5 +1,11 @@
 import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
-import { Check, Eye, EyeOff, RefreshCw, X } from 'lucide-react';
+import {
+  Check,
+  Eye,
+  EyeSlash as EyeOff,
+  ArrowsClockwise as RefreshCw,
+  X,
+} from '@phosphor-icons/react';
 import type { ItemDetail, LoginDraft } from '../shared/types';
 import type { Notifier } from './Toasts';
 import { Button } from '@/components/ui/button';
@@ -22,16 +28,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from '@/components/ui/alert-dialog';
 import './tasks.css';
 
 export function Editor({
@@ -72,7 +68,6 @@ export function Editor({
   const epoch = useRef(0);
   const operation = useRef(false);
   const returnFocus = useRef(document.activeElement);
-  const discardReturn = useRef<Element | null>(null);
   const nameInput = useRef<HTMLInputElement>(null);
   useLayoutEffect(() => {
     alive.current = true;
@@ -92,12 +87,29 @@ export function Editor({
   const dirty = (Object.keys(draft) as (keyof LoginDraft)[]).some(
     (key) => draft[key] !== initial[key],
   );
-  function close() {
-    if (operation.current) return;
-    if (dirty) {
-      discardReturn.current = document.activeElement;
-      setDiscarding(true);
-    } else onClose();
+  async function close() {
+    if (operation.current || !alive.current) return;
+    if (!dirty) {
+      onClose();
+      return;
+    }
+    operation.current = true;
+    setDiscarding(true);
+    const request = ++epoch.current;
+    try {
+      const result = await window.latch.confirm('discard');
+      if (!alive.current || request !== epoch.current) return;
+      if (!result.ok) setError(result.error);
+      else if (result.value) onClose();
+    } catch {
+      if (alive.current && request === epoch.current)
+        setError('Could not show confirmation. Try again.');
+    } finally {
+      if (alive.current && request === epoch.current) {
+        operation.current = false;
+        setDiscarding(false);
+      }
+    }
   }
   function update<K extends keyof LoginDraft>(key: K, value: LoginDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -332,33 +344,6 @@ export function Editor({
             </Button>
           </DialogFooter>
         </form>
-        <AlertDialog open={discarding} onOpenChange={setDiscarding}>
-          <AlertDialogContent
-            onCloseAutoFocus={(event) => {
-              event.preventDefault();
-              if (!alive.current) return;
-              const target = discardReturn.current;
-              if (
-                target instanceof HTMLElement &&
-                target.isConnected &&
-                target.getClientRects().length
-              )
-                target.focus();
-              else nameInput.current?.focus();
-            }}
-          >
-            <AlertDialogHeader>
-              <AlertDialogTitle>Discard changes?</AlertDialogTitle>
-              <AlertDialogDescription>Your unsaved changes will be lost.</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Keep editing</AlertDialogCancel>
-              <AlertDialogAction variant="destructive" onClick={onClose}>
-                Discard changes
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

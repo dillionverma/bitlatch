@@ -1,21 +1,21 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import {
-  AlertCircle,
+  WarningCircle as AlertCircle,
   FileText,
   Fingerprint,
-  FolderKey,
-  KeyRound,
-  LockKeyhole,
+  Vault as FolderKey,
+  Key as KeyRound,
+  LockKey as LockKeyhole,
   Plus,
-  RefreshCw,
-  Search,
-  Settings2,
+  ArrowsClockwise as RefreshCw,
+  MagnifyingGlass as Search,
+  SlidersHorizontal as Settings2,
   Star,
-  Trash2,
-  UserRound,
+  Trash as Trash2,
+  User as UserRound,
   X,
-} from 'lucide-react';
+} from '@phosphor-icons/react';
 import type { ItemDetail, ItemSummary, VaultState } from '../shared/types';
 import { Auth } from './Auth';
 import { Editor } from './Editor';
@@ -469,7 +469,7 @@ function VaultWorkspace({
               {filters.map(({ id, label, icon: Icon }) => (
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="sidebar"
                   key={id}
                   className={`nav-item ${filter === id ? 'active' : ''}`}
                   aria-pressed={filter === id}
@@ -489,14 +489,14 @@ function VaultWorkspace({
               <Button
                 ref={settingsButton}
                 type="button"
-                variant="ghost"
+                variant="sidebar"
                 className="nav-item"
                 onClick={() => runCommand('settings')}
               >
                 <Settings2 size={16} />
                 <span>Settings</span>
               </Button>
-              <Button type="button" variant="ghost" className="nav-item" onClick={onLock}>
+              <Button type="button" variant="sidebar" className="nav-item" onClick={onLock}>
                 <LockKeyhole size={16} />
                 <span>Lock vault</span>
                 <Kbd>⌘L</Kbd>
@@ -504,62 +504,66 @@ function VaultWorkspace({
             </div>
           </aside>
           <section className="item-list" aria-label={currentFilter.label}>
-            <header className="workspace-list-toolbar">
-              <InputGroup>
-                <InputGroupAddon>
-                  <Search size={16} />
-                </InputGroupAddon>
-                <InputGroupInput
-                  ref={searchInput}
-                  aria-label="Search vault"
-                  placeholder="Search vault"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                />
-                <InputGroupAddon align="inline-end">
-                  <Kbd>⌘K</Kbd>
-                  <InputGroupButton
-                    size="icon-xs"
-                    aria-label="Clear search"
-                    className={query ? '' : 'invisible'}
-                    tabIndex={query ? 0 : -1}
-                    onClick={() => {
-                      setQuery('');
-                      searchInput.current?.focus();
-                    }}
-                  >
-                    <X size={14} />
-                  </InputGroupButton>
-                </InputGroupAddon>
-              </InputGroup>
-            </header>
-            <header className="list-heading">
-              <h1>{query ? 'Search results' : currentFilter.label}</h1>
-              <span>{visible.length.toLocaleString()}</span>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Sync vault"
-                    aria-busy={syncing}
-                    disabled={syncing}
-                    onClick={() => void sync()}
-                  >
-                    {syncing ? <Spinner /> : <RefreshCw size={14} />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Sync vault</TooltipContent>
-              </Tooltip>
-            </header>
-            {currentListError && visible.length > 0 && (
-              <Alert variant="destructive" className="workspace-list-error">
-                <AlertCircle />
-                <AlertDescription>{currentListError}</AlertDescription>
-              </Alert>
-            )}
             <ItemList
+              header={
+                <>
+                  <header className="workspace-list-toolbar">
+                    <InputGroup>
+                      <InputGroupAddon>
+                        <Search size={16} />
+                      </InputGroupAddon>
+                      <InputGroupInput
+                        ref={searchInput}
+                        aria-label="Search vault"
+                        placeholder="Search vault"
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                      />
+                      <InputGroupAddon align="inline-end">
+                        {!query && <Kbd>⌘K</Kbd>}
+                        {query && (
+                          <InputGroupButton
+                            size="icon-xs"
+                            aria-label="Clear search"
+                            onClick={() => {
+                              setQuery('');
+                              searchInput.current?.focus();
+                            }}
+                          >
+                            <X size={14} />
+                          </InputGroupButton>
+                        )}
+                      </InputGroupAddon>
+                    </InputGroup>
+                  </header>
+                  <header className="list-heading">
+                    <h1>{query ? 'Search results' : currentFilter.label}</h1>
+                    <span>{visible.length.toLocaleString()}</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="Sync vault"
+                          aria-busy={syncing}
+                          disabled={syncing}
+                          onClick={() => void sync()}
+                        >
+                          {syncing ? <Spinner /> : <RefreshCw size={14} />}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Sync vault</TooltipContent>
+                    </Tooltip>
+                  </header>
+                  {currentListError && visible.length > 0 && (
+                    <Alert variant="destructive" className="workspace-list-error">
+                      <AlertCircle />
+                      <AlertDescription>{currentListError}</AlertDescription>
+                    </Alert>
+                  )}
+                </>
+              }
               items={visible}
               selectedId={selectionVisible ? selectedId : ''}
               onSelect={(item) => void select(item)}

@@ -7,11 +7,12 @@ import {
 import { createRequire } from 'node:module';
 
 import type { WindowAppearance, WindowMaterial } from '../shared/types';
+import { systemColors } from './system-colors';
 type Addon = {
   addView(handle: Buffer, options?: { cornerRadius?: number; opaque?: boolean }): number;
 };
 export type AppearanceOptions = {
-  // Caller must opt in only for OS builds it has verified. Default stays solid.
+  // Enable only on OS builds with verified native loading and appearance updates.
   allowGlass?: boolean;
   override?: WindowMaterial | 'unavailable';
 };
@@ -22,7 +23,7 @@ export function prepareWindowAppearance(options: AppearanceOptions = {}) {
   let material: WindowMaterial = 'solid';
   let revision = 0;
   let attached = false;
-  let latchedSolid = false;
+  let observationFailed = false;
   let target: BrowserWindow | undefined;
   const listeners = new Set<(snapshot: WindowAppearance) => void>();
   const preferences = () => {
@@ -46,8 +47,9 @@ export function prepareWindowAppearance(options: AppearanceOptions = {}) {
     }
   };
   const initial = preferences();
-  const blocked = initial.reducedTransparency || initial.highContrast;
-  if (process.platform === 'darwin' && !blocked && options.override !== 'solid') {
+  if (process.platform === 'darwin' && options.override !== 'solid') {
+    // Electron's built-in material is the default and the optional addon's fallback.
+    material = 'vibrancy';
     if (options.override === 'vibrancy') material = 'vibrancy';
     else if (
       options.allowGlass &&
@@ -66,10 +68,15 @@ export function prepareWindowAppearance(options: AppearanceOptions = {}) {
       }
     }
   }
+  // Keep the native view alive behind an opaque surface while accessibility
+  // preferences require solid. This lets the same view return without reinsertion.
+  let availableMaterial = material;
+  if (initial.reducedTransparency || initial.highContrast) material = 'solid';
   const snapshot = (): WindowAppearance => ({
     revision,
     material,
     active: target?.isFocused() ?? false,
+    colors: systemColors(),
     ...preferences(),
   });
   const publish = () => {
@@ -79,28 +86,38 @@ export function prepareWindowAppearance(options: AppearanceOptions = {}) {
   };
   const refresh = () => {
     const state = preferences();
-    if (state.reducedTransparency || state.highContrast) latchedSolid = true;
-    if (latchedSolid) {
-      // There is no supported addon teardown. Renderer MUST mask every surface.
-      if (material === 'vibrancy' && target && !target.isDestroyed()) {
-        try {
-          target.setVibrancy(null);
-        } catch {
-          // The opaque native background and renderer still cover the effect.
-        }
+    const nextMaterial =
+      observationFailed || state.reducedTransparency || state.highContrast
+        ? 'solid'
+        : availableMaterial;
+    if (
+      availableMaterial === 'vibrancy' &&
+      nextMaterial !== material &&
+      target &&
+      !target.isDestroyed()
+    ) {
+      try {
+        target.setVibrancy(nextMaterial === 'vibrancy' ? 'sidebar' : null);
+      } catch {
+        availableMaterial = 'solid';
       }
-      material = 'solid';
     }
+    material = availableMaterial === 'solid' ? 'solid' : nextMaterial;
     if (target && !target.isDestroyed()) {
       target.setBackgroundColor(
-        material === 'solid' ? (state.dark ? '#202023' : '#F5F5F7') : '#00000000',
+        material === 'solid'
+          ? (systemColors()?.window?.slice(0, 7) ?? (state.dark ? '#202023' : '#F5F5F7'))
+          : '#00000000',
       );
     }
     publish();
   };
   const windowOptions: BrowserWindowConstructorOptions = {
-    transparent: material !== 'solid',
-    backgroundColor: material === 'solid' ? (initial.dark ? '#202023' : '#F5F5F7') : '#00000000',
+    transparent: availableMaterial !== 'solid',
+    backgroundColor:
+      material === 'solid'
+        ? (systemColors()?.window?.slice(0, 7) ?? (initial.dark ? '#202023' : '#F5F5F7'))
+        : '#00000000',
     ...(material === 'vibrancy' ? { vibrancy: 'sidebar', visualEffectState: 'followWindow' } : {}),
   };
   return {
@@ -116,15 +133,16 @@ export function prepareWindowAppearance(options: AppearanceOptions = {}) {
       if (attached) throw new Error('Appearance already attached');
       attached = true;
       target = win;
-      if (material === 'glass') {
+      if (availableMaterial === 'glass') {
         try {
           const id = addon?.addView(win.getNativeWindowHandle(), {
             cornerRadius: 0,
             opaque: false,
           });
-          if (typeof id !== 'number' || !Number.isInteger(id) || id < 0) material = 'solid';
+          if (typeof id !== 'number' || !Number.isInteger(id) || id < 0)
+            availableMaterial = 'solid';
         } catch {
-          material = 'solid';
+          availableMaterial = 'solid';
         }
       }
       nativeTheme.on('updated', refresh);
@@ -133,6 +151,7 @@ export function prepareWindowAppearance(options: AppearanceOptions = {}) {
       // Refresh accessibility state on return from app hiding too.
       win.on('show', refresh);
       let accessibilitySubscription: number | undefined;
+      const colorSubscriptions: number[] = [];
       if (process.platform === 'darwin') {
         try {
           accessibilitySubscription = systemPreferences.subscribeWorkspaceNotification(
@@ -140,11 +159,28 @@ export function prepareWindowAppearance(options: AppearanceOptions = {}) {
             refresh,
           );
         } catch {
-          latchedSolid = true;
+          observationFailed = true;
+        }
+        for (const notification of [
+          'AppleColorPreferencesChangedNotification',
+          'AppleAquaColorVariantChanged',
+        ]) {
+          try {
+            colorSubscriptions.push(systemPreferences.subscribeNotification(notification, refresh));
+          } catch {
+            // Focus and nativeTheme updates also refresh the palette.
+          }
         }
       }
       win.once('closed', () => {
         nativeTheme.removeListener('updated', refresh);
+        for (const id of colorSubscriptions) {
+          try {
+            systemPreferences.unsubscribeNotification(id);
+          } catch {
+            /* Already removed. */
+          }
+        }
         if (accessibilitySubscription !== undefined) {
           try {
             systemPreferences.unsubscribeWorkspaceNotification(accessibilitySubscription);

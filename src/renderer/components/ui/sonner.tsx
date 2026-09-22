@@ -1,12 +1,12 @@
 import type { CSSProperties } from 'react';
 import { Toaster as Sonner, type ToasterProps } from 'sonner';
 import {
-  CircleCheckIcon,
+  CheckCircleIcon as CircleCheckIcon,
   InfoIcon,
-  TriangleAlertIcon,
-  OctagonXIcon,
-  Loader2Icon,
-} from 'lucide-react';
+  WarningIcon as TriangleAlertIcon,
+  XCircleIcon as OctagonXIcon,
+  SpinnerIcon as Loader2Icon,
+} from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 function Toaster({ className, style, toastOptions, ...props }: ToasterProps) {

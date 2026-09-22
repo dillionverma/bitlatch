@@ -3,13 +3,13 @@ import {
   Check,
   Copy,
   Eye,
-  EyeOff,
+  EyeSlash as EyeOff,
   Fingerprint,
-  RotateCcw,
+  ArrowCounterClockwise as RotateCcw,
   Star,
-  Trash2,
-  CircleAlert,
-} from 'lucide-react';
+  Trash as Trash2,
+  WarningCircle as CircleAlert,
+} from '@phosphor-icons/react';
 import type { ItemDetail } from '../shared/types';
 import { ItemIcon, displayWebsite, typeName } from './items';
 import type { Notifier } from './Toasts';
@@ -18,17 +18,6 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
-import {
-  AlertDialog,
-  AlertDialogTrigger,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from '@/components/ui/alert-dialog';
 import './tasks.css';
 
 export function Detail({
@@ -46,7 +35,6 @@ export function Detail({
   const [copied, setCopied] = useState('');
   const [copying, setCopying] = useState('');
   const [error, setError] = useState('');
-  const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [active, setActive] = useState(true);
   const epoch = useRef(0);
@@ -60,7 +48,6 @@ export function Detail({
     setCopied('');
     setCopying('');
     setError('');
-    setConfirming(false);
     setDeleting(false);
     working.current = false;
     copyWorking.current = false;
@@ -88,21 +75,30 @@ export function Detail({
     setDeleting(true);
     setError('');
     const version = epoch.current;
-    const pending = notify.show('pending', restore ? 'Restoring…' : 'Moving to Trash…');
+    let pending: ReturnType<Notifier['show']> | undefined;
     try {
+      if (!restore) {
+        const confirmation = await window.latch.confirm('trash');
+        if (!alive.current || version !== epoch.current) return;
+        if (!confirmation.ok) {
+          setError(confirmation.error);
+          return;
+        }
+        if (!confirmation.value) return;
+      }
+      pending = notify.show('pending', restore ? 'Restoring…' : 'Moving to Trash…');
       const result = await (restore ? window.latch.restore(item.id) : window.latch.remove(item.id));
       if (!alive.current || version !== epoch.current) return;
       if (result.ok) {
         notify.settle(pending, 'done', restore ? 'Restored to your vault' : 'Moved to Trash');
-        setConfirming(false);
         onGone();
       } else {
-        notify.settle(pending, 'error', 'Could not update the item.');
+        if (pending) notify.settle(pending, 'error', 'Could not update the item.');
         setError(result.error);
       }
     } catch {
       if (alive.current && version === epoch.current) {
-        notify.settle(pending, 'error', 'Could not update the item.');
+        if (pending) notify.settle(pending, 'error', 'Could not update the item.');
         setError('Could not update the item. Try again.');
       }
     } finally {
@@ -135,12 +131,22 @@ export function Detail({
   if (!active) return null;
   return (
     <article className="task-detail bg-background text-foreground">
-      <div className="task-detail-toolbar">
-        <span className="text-xs text-muted-foreground">{typeName(item.type)}</span>
+      <div className="task-detail-toolbar scroll-header">
+        <span className="task-location">
+          <span className="text-muted-foreground">Personal vault</span>
+          <span aria-hidden="true">/</span>
+          {typeName(item.type)}
+        </span>
         <div className="task-actions">
           {item.favorite && <Star size={14} aria-label="Favorite" fill="currentColor" />}
           {item.editable && (
-            <Button type="button" variant="outline" size="sm" onClick={onEdit} disabled={deleting}>
+            <Button
+              type="button"
+              variant="secondary"
+              size="default"
+              onClick={onEdit}
+              disabled={deleting}
+            >
               Edit
             </Button>
           )}
@@ -158,77 +164,34 @@ export function Detail({
             </Button>
           )}
           {item.deletable && (
-            <AlertDialog
-              open={confirming}
-              onOpenChange={(open) => {
-                if (!working.current) setConfirming(open);
-              }}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Delete item"
+              disabled={deleting}
+              aria-busy={deleting}
+              onClick={() => void changeTrash(false)}
             >
-              <AlertDialogTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Delete item"
-                  disabled={deleting}
-                >
-                  <Trash2 />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent
-                aria-busy={deleting}
-                onEscapeKeyDown={(event) => {
-                  if (deleting) event.preventDefault();
-                }}
-                onCloseAutoFocus={(event) => {
-                  if (!alive.current) {
-                    event.preventDefault();
-                    document
-                      .querySelector<HTMLElement>('#auth-password, [aria-label="Search vault"]')
-                      ?.focus();
-                  }
-                }}
-              >
-                <AlertDialogHeader>
-                  <AlertDialogTitle className="break-words">
-                    Move “{item.name}” to Trash?
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    You can restore it from Trash. This does not delete it permanently.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                {error && (
-                  <Alert variant="destructive">
-                    <CircleAlert />
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                )}
-                <AlertDialogFooter>
-                  <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    variant="destructive"
-                    disabled={deleting}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      void changeTrash(false);
-                    }}
-                  >
-                    {deleting && <Spinner />}
-                    {deleting ? 'Moving…' : 'Move to Trash'}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+              {deleting ? <Spinner /> : <Trash2 />}
+            </Button>
           )}
         </div>
       </div>
-      <div className="task-detail-body">
+      <div
+        className="task-detail-body"
+        onScroll={(event) => {
+          event.currentTarget.parentElement!.dataset.scrolled = String(
+            event.currentTarget.scrollTop > 0,
+          );
+        }}
+      >
         <header className="task-item-identity">
           <ItemIcon item={item} large />
           <div>
-            <h2 className="text-[20px] leading-[26px] font-semibold">{item.name}</h2>
+            <h2 className="font-heading text-[20px] leading-[26px] font-semibold">{item.name}</h2>
             <p className="text-xs text-muted-foreground">
-              {displayWebsite(item.website) || 'Personal vault'}
+              {displayWebsite(item.website) || typeName(item.type)}
             </p>
           </div>
         </header>
@@ -241,7 +204,10 @@ export function Detail({
           </div>
         )}
         {(item.type === 1 || item.website) && (
-          <div className="task-credentials rounded-lg border border-border">
+          <section
+            aria-label="Login details"
+            className="task-credentials rounded-lg border border-border bg-card"
+          >
             {item.type === 1 && (
               <>
                 <div className="task-credential">
@@ -332,7 +298,7 @@ export function Detail({
                 </div>
               </>
             )}
-          </div>
+          </section>
         )}
         <span role="status" className="sr-only">
           {copied ? `${copied === 'password' ? 'Password' : 'Username'} copied` : ''}
@@ -347,8 +313,8 @@ export function Detail({
           </Alert>
         )}
         {item.notes && (
-          <section className="notes task-notes-display">
-            <h3 className="text-sm font-semibold text-foreground">Notes</h3>
+          <section className="notes task-notes-display rounded-lg border border-border bg-card">
+            <h3 className="text-xs text-muted-foreground">Notes</h3>
             <p className="text-sm text-foreground leading-relaxed">{item.notes}</p>
           </section>
         )}
@@ -360,21 +326,31 @@ export function Detail({
             </AlertDescription>
           </Alert>
         )}
-        {error && !confirming && (
+        {error && (
           <Alert variant="destructive">
             <CircleAlert />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
         <footer className="detail-footer task-detail-footer">
-          <span className="text-xs text-muted-foreground">
-            Personal vault · {typeName(item.type)}
-          </span>
-          <small className="text-[11px] leading-[15px] text-muted-foreground">
-            {item.createdDate && <>Created {stamp(item.createdDate)}</>}
-            {item.createdDate && item.revisionDate && ' · '}
-            {item.revisionDate && <>Updated {stamp(item.revisionDate, true)}</>}
-          </small>
+          <dl>
+            <div>
+              <dt>Vault</dt>
+              <dd>Personal vault</dd>
+            </div>
+            {item.createdDate && (
+              <div>
+                <dt>Created</dt>
+                <dd>{stamp(item.createdDate)}</dd>
+              </div>
+            )}
+            {item.revisionDate && (
+              <div>
+                <dt>Updated</dt>
+                <dd>{stamp(item.revisionDate, true)}</dd>
+              </div>
+            )}
+          </dl>
         </footer>
       </div>
     </article>

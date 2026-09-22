@@ -1,6 +1,19 @@
-import { useCallback, useId, useRef } from 'react';
+import {
+  useCallback,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import { defaultRangeExtractor, useVirtualizer, type Range } from '@tanstack/react-virtual';
-import { Fingerprint, LockKeyhole, Search, Star } from 'lucide-react';
+import {
+  Fingerprint,
+  LockKey as LockKeyhole,
+  MagnifyingGlass as Search,
+  Star,
+} from '@phosphor-icons/react';
 import type { ItemSummary } from '../shared/types';
 import { ItemIcon, displayWebsite, typeName } from './items';
 import { VAULT_LIST_OVERSCAN, VAULT_ROW_HEIGHT } from './metrics';
@@ -24,6 +37,7 @@ import { Spinner } from '@/components/ui/spinner';
  */
 export function ItemList({
   items,
+  header,
   selectedId,
   onSelect,
   query,
@@ -34,6 +48,7 @@ export function ItemList({
   error = '',
 }: {
   items: ItemSummary[];
+  header: ReactNode;
   selectedId: string;
   onSelect: (item: ItemSummary) => void;
   query: string;
@@ -44,6 +59,17 @@ export function ItemList({
   error?: string;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(92);
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const measure = () => setHeaderHeight(header.offsetHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
   const listId = useId();
   const activeIndex = items.findIndex((item) => item.id === selectedId);
   const optionId = (id: string) => `${listId}-item-${id}`;
@@ -67,6 +93,8 @@ export function ItemList({
     getScrollElement: () => listRef.current,
     estimateSize: () => VAULT_ROW_HEIGHT,
     overscan: VAULT_LIST_OVERSCAN,
+    paddingStart: headerHeight,
+    scrollPaddingStart: headerHeight + 4,
     rangeExtractor,
     getItemKey,
   });
@@ -76,126 +104,148 @@ export function ItemList({
 
   return (
     <div
-      className="list-scroll"
-      ref={listRef}
-      role="listbox"
-      aria-label="Vault items"
-      aria-busy={loading}
-      aria-activedescendant={activeMounted ? optionId(selectedId) : undefined}
-      tabIndex={0}
-      onKeyDown={(event) => {
-        if (event.metaKey || event.ctrlKey || event.altKey || event.nativeEvent.isComposing) return;
-        const page = Math.max(
-          1,
-          Math.floor((listRef.current?.clientHeight ?? VAULT_ROW_HEIGHT) / VAULT_ROW_HEIGHT),
-        );
-        let next: number;
-        switch (event.key) {
-          case 'ArrowDown':
-            next = activeIndex < 0 ? 0 : activeIndex + 1;
-            break;
-          case 'ArrowUp':
-            next = activeIndex < 0 ? items.length - 1 : activeIndex - 1;
-            break;
-          case 'Home':
-            next = 0;
-            break;
-          case 'End':
-            next = items.length - 1;
-            break;
-          case 'PageDown':
-            next = activeIndex < 0 ? 0 : activeIndex + page;
-            break;
-          case 'PageUp':
-            next = activeIndex < 0 ? 0 : activeIndex - page;
-            break;
-          default:
-            return;
-        }
-        event.preventDefault();
-        next = Math.max(0, Math.min(items.length - 1, next));
-        const item = items[next];
-        if (!item) return;
-        if (item.id !== selectedId) onSelect(item);
-        virtualizer.scrollToIndex(next, { align: 'auto' });
-      }}
+      className="list-content"
+      style={{ '--scroll-header-height': `${headerHeight}px` } as CSSProperties}
     >
-      {items.length ? (
-        <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
-          {rows.map((row) => {
-            const item = items[row.index]!;
-            return (
-              <div
-                id={optionId(item.id)}
-                key={item.id}
-                role="option"
-                aria-selected={item.id === selectedId}
-                aria-posinset={row.index + 1}
-                aria-setsize={items.length}
-                className={`item-row ${item.id === selectedId ? 'selected' : ''}`}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: VAULT_ROW_HEIGHT,
-                  transform: `translateY(${row.start}px)`,
-                }}
-                onClick={() => {
-                  listRef.current?.focus({ preventScroll: true });
-                  onSelect(item);
-                }}
-              >
-                <ItemIcon item={item} />
-                <span className="item-text">
-                  <strong>{item.name || 'Untitled item'}</strong>
-                  <small>
-                    {item.username || displayWebsite(item.website) || typeName(item.type)}
-                  </small>
-                </span>
-                {item.favorite && <Star size={12} className="row-star" aria-label="Favorite" />}
-                {item.hasPasskey && (
-                  <Fingerprint size={14} className="muted" aria-label="Has a passkey" />
-                )}
-                {item.restricted && (
-                  <LockKeyhole size={14} className="muted" aria-label="Restricted" />
-                )}
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <Empty className="list-empty" role="status">
-          <EmptyHeader>
-            <EmptyMedia>{loading ? <Spinner /> : <Search size={22} />}</EmptyMedia>
-            <EmptyTitle>
-              {loading
-                ? 'Loading items…'
-                : error
-                  ? 'Could not load items'
-                  : query
-                    ? 'No results'
-                    : (emptyLabel ?? 'No items yet')}
-            </EmptyTitle>
-            <EmptyDescription>
-              {loading
-                ? 'Reading your vault.'
-                : error ||
-                  (query
-                    ? 'Try a name, email, or website.'
-                    : (emptyDescription ??
-                      (emptyLabel
-                        ? 'Items you move to Trash are kept here by Bitwarden.'
-                        : 'Add a login to get started.')))}
-            </EmptyDescription>
-          </EmptyHeader>
-          {!loading && !error && !query && !emptyLabel && (
-            <Button type="button" variant="outline" onClick={onNew}>
-              Add your first login
-            </Button>
-          )}
-        </Empty>
-      )}
+      <div ref={headerRef} className="list-header scroll-header">
+        {header}
+      </div>
+      <div
+        className="list-scroll"
+        style={{ marginTop: -headerHeight, scrollPaddingTop: headerHeight + 4 }}
+        onScroll={(event) => {
+          event.currentTarget.parentElement!.dataset.scrolled = String(
+            event.currentTarget.scrollTop > 0,
+          );
+        }}
+        ref={listRef}
+        role="listbox"
+        aria-label="Vault items"
+        aria-busy={loading}
+        aria-activedescendant={activeMounted ? optionId(selectedId) : undefined}
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.metaKey || event.ctrlKey || event.altKey || event.nativeEvent.isComposing)
+            return;
+          const page = Math.max(
+            1,
+            Math.floor(
+              ((listRef.current?.clientHeight ?? VAULT_ROW_HEIGHT) - headerHeight) /
+                VAULT_ROW_HEIGHT,
+            ),
+          );
+          let next: number;
+          switch (event.key) {
+            case 'ArrowDown':
+              next = activeIndex < 0 ? 0 : activeIndex + 1;
+              break;
+            case 'ArrowUp':
+              next = activeIndex < 0 ? items.length - 1 : activeIndex - 1;
+              break;
+            case 'Home':
+              next = 0;
+              break;
+            case 'End':
+              next = items.length - 1;
+              break;
+            case 'PageDown':
+              next = activeIndex < 0 ? 0 : activeIndex + page;
+              break;
+            case 'PageUp':
+              next = activeIndex < 0 ? 0 : activeIndex - page;
+              break;
+            default:
+              return;
+          }
+          event.preventDefault();
+          next = Math.max(0, Math.min(items.length - 1, next));
+          const item = items[next];
+          if (!item) return;
+          if (item.id !== selectedId) onSelect(item);
+          virtualizer.scrollToIndex(next, { align: 'auto' });
+        }}
+      >
+        {items.length ? (
+          <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+            {rows.map((row) => {
+              const item = items[row.index]!;
+              return (
+                <div
+                  id={optionId(item.id)}
+                  key={item.id}
+                  role="option"
+                  aria-selected={item.id === selectedId}
+                  aria-posinset={row.index + 1}
+                  aria-setsize={items.length}
+                  className={`item-row ${item.id === selectedId ? 'selected' : ''}`}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: VAULT_ROW_HEIGHT,
+                    transform: `translateY(${row.start}px)`,
+                  }}
+                  onClick={() => {
+                    listRef.current?.focus({ preventScroll: true });
+                    onSelect(item);
+                  }}
+                >
+                  <ItemIcon item={item} />
+                  <span className="item-text">
+                    <strong>{item.name || 'Untitled item'}</strong>
+                    <small>
+                      {item.username || displayWebsite(item.website) || typeName(item.type)}
+                    </small>
+                  </span>
+                  {item.favorite && <Star size={12} className="row-star" aria-label="Favorite" />}
+                  {item.hasPasskey && (
+                    <Fingerprint size={14} className="muted" aria-label="Has a passkey" />
+                  )}
+                  {item.restricted && (
+                    <LockKeyhole size={14} className="muted" aria-label="Restricted" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <Empty
+            className="list-empty"
+            role="status"
+            style={{ marginTop: headerHeight, minHeight: `calc(100% - ${headerHeight}px)` }}
+          >
+            <EmptyHeader>
+              <EmptyMedia>{loading ? <Spinner /> : <Search size={22} />}</EmptyMedia>
+              <EmptyTitle>
+                {loading
+                  ? 'Loading items…'
+                  : error
+                    ? 'Could not load items'
+                    : query
+                      ? 'No results'
+                      : (emptyLabel ?? 'No items yet')}
+              </EmptyTitle>
+              <EmptyDescription>
+                {loading
+                  ? 'Reading your vault.'
+                  : error ||
+                    (query
+                      ? 'Try a name, email, or website.'
+                      : (emptyDescription ??
+                        (emptyLabel
+                          ? 'Items you move to Trash are kept here by Bitwarden.'
+                          : 'Add a login to get started.')))}
+              </EmptyDescription>
+            </EmptyHeader>
+            {!loading && !error && !query && !emptyLabel && (
+              <Button type="button" variant="outline" onClick={onNew}>
+                Add your first login
+              </Button>
+            )}
+          </Empty>
+        )}
+      </div>
     </div>
   );
 }

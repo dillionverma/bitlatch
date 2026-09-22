@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { ArrowUpRight, Check, CircleAlert, X } from 'lucide-react';
+import { ArrowUpRight, Check, WarningCircle as CircleAlert, X } from '@phosphor-icons/react';
 import type { VaultState } from '../shared/types';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,8 +18,7 @@ import {
   FieldLabel,
 } from '@/components/ui/field';
 import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Spinner } from '@/components/ui/spinner';
 import './tasks.css';
 
@@ -96,7 +95,7 @@ export function Settings({
       }}
     >
       <DialogContent
-        className="task-dialog"
+        className="task-dialog task-settings"
         showCloseButton={false}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
@@ -120,13 +119,17 @@ export function Settings({
         onEscapeKeyDown={(event) => {
           if (pending) event.preventDefault();
         }}
-        onInteractOutside={(event) => event.preventDefault()}
+        onInteractOutside={(event) => {
+          if (pending) event.preventDefault();
+        }}
       >
         <DialogHeader className="task-header">
           <DialogTitle ref={title} tabIndex={-1}>
             Settings
           </DialogTitle>
-          <DialogDescription>Browser connection and vault security.</DialogDescription>
+          <DialogDescription className="sr-only">
+            Browser connection and vault security.
+          </DialogDescription>
           <Button
             type="button"
             variant="ghost"
@@ -140,14 +143,14 @@ export function Settings({
           </Button>
         </DialogHeader>
         <div className="task-body" aria-busy={pending}>
-          <div className="task-settings-section">
-            <h3 className="text-sm font-semibold">Browser</h3>
-            <ol className="task-setup-steps">
-              <li>
-                <strong>Install the browser bridge.</strong>
-                <p className="text-xs text-muted-foreground">
-                  Connects this Mac app to Chrome and Aside.
-                </p>
+          <section className="task-settings-section">
+            <h3>Browser</h3>
+            <div className="settings-group">
+              <div className="settings-row">
+                <div>
+                  <strong>Browser bridge</strong>
+                  <p>Connect Chrome or Aside to Latch.</p>
+                </div>
                 <Button
                   type="button"
                   variant="outline"
@@ -160,45 +163,44 @@ export function Settings({
                   ) : connected ? (
                     <Check data-icon="inline-start" />
                   ) : null}
-                  {busy === 'install'
-                    ? 'Installing…'
-                    : connected
-                      ? 'Bridge installed'
-                      : 'Connect browser'}
+                  {busy === 'install' ? 'Installing…' : connected ? 'Installed' : 'Connect browser'}
                 </Button>
-              </li>
-              <li>
-                <strong>Load the extension.</strong>
-                <p className="text-xs text-muted-foreground">
-                  Open <code>chrome://extensions</code>, enable Developer mode, then choose{' '}
-                  <b>Load unpacked</b> and select the extension folder.
-                </p>
+              </div>
+              <div className="settings-row">
+                <div>
+                  <strong>Browser extension</strong>
+                  <p>Load the extension in your browser.</p>
+                </div>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => void run('folder')}
                   disabled={pending}
+                  aria-label="Show extension folder"
                 >
-                  {busy === 'folder' ? <Spinner /> : <ArrowUpRight data-icon="inline-end" />}Show
-                  extension folder
+                  {busy === 'folder' ? <Spinner /> : <ArrowUpRight data-icon="inline-end" />}Open
+                  folder
                 </Button>
-              </li>
-              <li>
-                <strong>Focus a login field.</strong>
-                <p className="text-xs text-muted-foreground">
-                  Unlock Latch to see matching accounts. Keep the Mac app running. Installing the
-                  bridge alone does not verify the extension connection.
-                </p>
-              </li>
-            </ol>
-          </div>
-          <Separator />
-          <div className="task-settings-section">
-            <h3 className="text-sm font-semibold">Security</h3>
-            <FieldGroup>
+              </div>
+            </div>
+            <details className="settings-help">
+              <summary>Extension setup</summary>
+              <p>
+                Open <code>chrome://extensions</code>, enable Developer mode, choose{' '}
+                <b>Load unpacked</b>, and select the extension folder.
+              </p>
+              <p>
+                Keep Latch running and unlocked, then focus a login field. Installing the bridge
+                alone does not verify the connection.
+              </p>
+            </details>
+          </section>
+          <section className="task-settings-section">
+            <h3>Security</h3>
+            <FieldGroup className="settings-group">
               <Field
                 orientation="horizontal"
-                className="setting-row task-setting-row bg-transparent"
+                className="setting-row settings-row"
                 data-disabled={(!biometricsOn && biometrics !== 'ready') || pending}
               >
                 <FieldContent>
@@ -207,10 +209,10 @@ export function Settings({
                   </FieldLabel>
                   <FieldDescription id="touch-id-description">
                     {biometrics === 'unsupported'
-                      ? 'Touch ID is not supported on this Mac.'
+                      ? 'Not supported on this Mac.'
                       : biometrics === 'unavailable'
-                        ? 'Touch ID is unavailable. Open your MacBook or connect a keyboard with Touch ID. You can still use your master password.'
-                        : 'Keeps the vault session key encrypted on this Mac. Your master password still works. Turning this off or signing out removes the stored key.'}
+                        ? 'Connect a keyboard with Touch ID or open your MacBook.'
+                        : 'Use Touch ID instead of your master password.'}
                   </FieldDescription>
                 </FieldContent>
                 <Switch
@@ -230,20 +232,15 @@ export function Settings({
                 Updating Touch ID…
               </p>
             )}
-            <p id="touch-id-limits" className="text-xs text-muted-foreground">
-              The login Keychain protects the stored key. Touch ID is an app check, not a biometric
-              restriction on that key. While enabled, Latch retains the CLI session key when
-              locking.
+            <p id="touch-id-limits" className="settings-caption">
+              Keeps the session key in your login Keychain while locked. Touch ID is checked by
+              Latch. Turn this off to remove the stored key.
             </p>
-          </div>
-          <Separator />
-          <Alert>
-            <AlertTitle>Preview limits</AlertTitle>
-            <AlertDescription>
-              Browser sign-ins can offer to save or update a login while Latch is unlocked. Passkey
-              use, system-wide autofill, and shared or protected items still require another client.
-            </AlertDescription>
-          </Alert>
+          </section>
+          <details className="settings-help">
+            <summary>About this preview</summary>
+            <p>Use Bitwarden for passkeys, shared or protected items, and system-wide autofill.</p>
+          </details>
           {error && (
             <Alert variant="destructive">
               <CircleAlert />
@@ -252,7 +249,7 @@ export function Settings({
           )}
         </div>
         <DialogFooter className="task-footer">
-          <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
+          <Button type="button" onClick={onClose} disabled={pending}>
             Done
           </Button>
         </DialogFooter>

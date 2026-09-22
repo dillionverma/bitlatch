@@ -5,6 +5,7 @@ import {
   globalShortcut,
   ipcMain,
   Menu,
+  nativeTheme,
   powerMonitor,
   session,
   shell,
@@ -13,6 +14,8 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readFile, mkdir } from 'node:fs/promises';
 import { prepareWindowAppearance } from './window-appearance';
+import { manageWindowLayout } from './window-layout';
+import { installNativeInteractions } from './native-interactions';
 import type { WindowCommand } from '../shared/types';
 import { localEngine } from './engine';
 import { Vault, generatePassword } from './vault';
@@ -30,6 +33,7 @@ if (!app.requestSingleInstanceLock()) app.quit();
 
 let window: BrowserWindow;
 let appearance: ReturnType<typeof prepareWindowAppearance>;
+let nativeInteractions: ReturnType<typeof installNativeInteractions>;
 let vault: Vault;
 let cli: CliPort | undefined;
 let bridge: BrowserBridge;
@@ -117,15 +121,18 @@ void app
     );
     session.defaultSession.setPermissionCheckHandler(() => false);
     const requestedMaterial = process.env.LATCH_MATERIAL;
+    nativeTheme.themeSource = 'system';
     appearance = prepareWindowAppearance({
-      // Glass remains an explicit developer opt-in until the native matrix passes.
+      // Built-in vibrancy needs no addon; retain the existing explicit glass opt-in.
       allowGlass: requestedMaterial === 'glass',
       override:
-        requestedMaterial === 'vibrancy' || requestedMaterial === 'unavailable'
+        requestedMaterial === 'vibrancy' ||
+        requestedMaterial === 'unavailable' ||
+        requestedMaterial === 'solid'
           ? requestedMaterial
           : requestedMaterial === 'glass'
             ? 'glass'
-            : 'solid',
+            : 'vibrancy',
     });
     window = new BrowserWindow({
       ...appearance.windowOptions,
@@ -149,6 +156,9 @@ void app
       },
     });
     appearance.attach(window);
+    nativeInteractions = installNativeInteractions(window);
+    const updateWindowLayout = manageWindowLayout(window);
+    updateWindowLayout(vault.snapshot());
     const unsubscribeAppearance = appearance.subscribe((snapshot) => {
       if (!window.isDestroyed()) window.webContents.send('latch:appearance', snapshot);
     });
@@ -163,9 +173,14 @@ void app
     });
     window.once('ready-to-show', () => window.show());
     vault.on('state', (state) => {
-      if (state.status !== 'unlocked') void clearCopiedSecret().catch(() => undefined);
-      else lastUnlockAt = Date.now();
-      if (!window.isDestroyed()) window.webContents.send('latch:state', state);
+      if (state.status !== 'unlocked') {
+        nativeInteractions.cancelConfirmation();
+        void clearCopiedSecret().catch(() => undefined);
+      } else lastUnlockAt = Date.now();
+      if (!window.isDestroyed()) {
+        window.webContents.send('latch:state', state);
+        updateWindowLayout(state);
+      }
     });
     ipcMain.handle('latch:request', (event, raw: unknown) =>
       safely(async () => {
@@ -203,6 +218,12 @@ void app
 
 async function handleRequest(request: DesktopRequest): Promise<unknown> {
   switch (request.type) {
+    case 'confirm': {
+      if (vault.snapshot().status !== 'unlocked') return false;
+      const epoch = mutationEpoch;
+      const confirmed = await nativeInteractions.confirm(request.action);
+      return confirmed && epoch === mutationEpoch && vault.snapshot().status === 'unlocked';
+    }
     case 'appearance':
       return appearance.snapshot();
     case 'state':

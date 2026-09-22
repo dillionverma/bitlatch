@@ -1,12 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowRight, ChevronDown, Fingerprint, LogOut, CircleAlert } from 'lucide-react';
+import {
+  ArrowRight,
+  CaretDown as ChevronDown,
+  Fingerprint,
+  WarningCircle as CircleAlert,
+} from '@phosphor-icons/react';
 import type { ChallengeAnswer, LoginChallenge, Result, VaultState } from '../shared/types';
 import { Mark } from './Mark';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field, FieldGroup, FieldLabel, FieldDescription, FieldError } from '@/components/ui/field';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import './tasks.css';
 
@@ -28,6 +32,7 @@ export function Auth({
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [busy, setBusy] = useState(false);
+  const [biometricPending, setBiometricPending] = useState(false);
   const [error, setError] = useState('');
   const alive = useRef(false);
   const epoch = useRef(0);
@@ -43,6 +48,7 @@ export function Auth({
         epoch.current++;
         working.current = false;
         setBusy(false);
+        setBiometricPending(false);
         setPassword('');
         setClientSecret('');
       }
@@ -53,10 +59,11 @@ export function Auth({
       unsubscribe();
     };
   }, [locked]);
-  async function run(action: () => Promise<Result<VaultState>>) {
+  async function run(action: () => Promise<Result<VaultState>>, biometric = false) {
     if (working.current || !alive.current) return;
     working.current = true;
     setBusy(true);
+    setBiometricPending(biometric);
     setError('');
     const request = ++epoch.current;
     try {
@@ -71,13 +78,14 @@ export function Auth({
       if (alive.current && request === epoch.current) {
         working.current = false;
         setBusy(false);
+        setBiometricPending(false);
       }
     }
   }
   useEffect(() => {
     if (!touchId || asked.current) return;
     asked.current = true;
-    void run(() => window.latch.unlockWithBiometrics());
+    void run(() => window.latch.unlockWithBiometrics(), true);
     // The biometric prompt opens once for this lock screen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [touchId]);
@@ -99,12 +107,8 @@ export function Auth({
     });
   }
   return (
-    <main className="task-auth bg-background text-foreground">
-      <div className="task-auth-brand">
-        <Mark size={24} />
-        <strong>Latch</strong>
-        <Badge variant="secondary">Preview</Badge>
-      </div>
+    <main className="task-auth bg-background text-foreground" data-locked={locked}>
+      <div className="auth-titlebar" aria-hidden="true" />
       {state.challenge ? (
         <Challenge
           challenge={state.challenge}
@@ -115,13 +119,18 @@ export function Auth({
       ) : (
         <section className="task-auth-panel">
           <header className="task-auth-header">
-            <h1 className="text-[20px] leading-[26px] font-semibold">
+            <div className="auth-mark" data-scanning={biometricPending}>
+              {biometricPending ? <Fingerprint size={30} aria-hidden="true" /> : <Mark size={30} />}
+            </div>
+            <h1 className="text-[17px] leading-[22px] font-semibold">
               {locked ? 'Unlock Latch' : 'Connect your Bitwarden vault'}
             </h1>
-            <p className="text-xs text-muted-foreground">
-              {locked
-                ? state.email || 'Personal vault'
-                : 'Use your existing account and master password.'}
+            <p className="text-xs text-muted-foreground" role="status">
+              {biometricPending
+                ? 'Confirm with Touch ID…'
+                : locked
+                  ? state.email || 'Personal vault'
+                  : 'Use your existing account and master password.'}
             </p>
           </header>
           <form className="task-auth-form" onSubmit={submit} aria-busy={busy}>
@@ -137,7 +146,7 @@ export function Auth({
                   <Field data-invalid={!!error}>
                     <FieldLabel htmlFor="auth-email">Email address</FieldLabel>
                     <Input
-                      controlSize="lg"
+                      className="h-8"
                       id="auth-email"
                       type="email"
                       autoComplete="username"
@@ -152,10 +161,13 @@ export function Auth({
                   </Field>
                 )}
                 <Field data-invalid={!!error}>
-                  <FieldLabel htmlFor="auth-password">Master password</FieldLabel>
+                  <FieldLabel htmlFor="auth-password" className={locked ? 'sr-only' : undefined}>
+                    Master password
+                  </FieldLabel>
                   <Input
-                    controlSize="lg"
+                    className="h-8"
                     id="auth-password"
+                    placeholder={locked ? 'Master password' : undefined}
                     type="password"
                     autoComplete="current-password"
                     value={password}
@@ -189,7 +201,7 @@ export function Auth({
                       <Field>
                         <FieldLabel htmlFor="auth-custom-server">Server address</FieldLabel>
                         <Input
-                          controlSize="lg"
+                          className="h-8"
                           id="auth-custom-server"
                           type="url"
                           placeholder="https://vault.example.com"
@@ -224,7 +236,7 @@ export function Auth({
                         <Field data-invalid={!!error}>
                           <FieldLabel htmlFor="auth-client-id">Client ID</FieldLabel>
                           <Input
-                            controlSize="lg"
+                            className="h-8"
                             id="auth-client-id"
                             autoComplete="off"
                             value={clientId}
@@ -238,7 +250,7 @@ export function Auth({
                         <Field data-invalid={!!error}>
                           <FieldLabel htmlFor="auth-client-secret">Client secret</FieldLabel>
                           <Input
-                            controlSize="lg"
+                            className="h-8"
                             id="auth-client-secret"
                             type="password"
                             autoComplete="off"
@@ -264,19 +276,25 @@ export function Auth({
                 disabled={busy || !!state.setupError}
                 aria-busy={busy}
               >
-                {busy ? <Spinner /> : <ArrowRight data-icon="inline-end" />}
-                {busy ? 'Opening your vault…' : locked ? 'Unlock vault' : 'Connect your vault'}
+                {busy && !biometricPending && <Spinner />}
+                {busy && !biometricPending
+                  ? locked
+                    ? 'Unlocking…'
+                    : 'Connecting…'
+                  : locked
+                    ? 'Unlock vault'
+                    : 'Connect your vault'}
               </Button>
               {touchId && (
                 <Button
                   size="lg"
                   variant="outline"
                   type="button"
-                  onClick={() => void run(() => window.latch.unlockWithBiometrics())}
+                  onClick={() => void run(() => window.latch.unlockWithBiometrics(), true)}
                   disabled={busy}
                 >
-                  <Fingerprint data-icon="inline-start" />
-                  Unlock with Touch ID
+                  {biometricPending ? <Spinner /> : <Fingerprint data-icon="inline-start" />}
+                  {biometricPending ? 'Waiting for Touch ID…' : 'Unlock with Touch ID'}
                 </Button>
               )}
               {locked && (
@@ -286,7 +304,6 @@ export function Auth({
                   onClick={() => void run(() => window.latch.logout())}
                   disabled={busy}
                 >
-                  <LogOut data-icon="inline-start" />
                   Use another account
                 </Button>
               )}
@@ -402,7 +419,7 @@ function Challenge({ challenge, onCancel }: { challenge: LoginChallenge; onCance
               <Field data-invalid={!!message}>
                 <FieldLabel htmlFor="auth-code">Verification code</FieldLabel>
                 <Input
-                  controlSize="lg"
+                  className="h-8"
                   id="auth-code"
                   autoComplete="one-time-code"
                   inputMode={challenge.method === 'yubikey' ? 'text' : 'numeric'}

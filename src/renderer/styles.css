@@ -3,11 +3,15 @@
 @import 'tw-animate-css';
 @import '../shared/theme.css';
 @import './tokens.css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (@media (prefers-color-scheme: dark));
 @source "./";
 
 @layer base {
   * {
     border-color: var(--border);
+    @apply border-border outline-ring/50;
   }
   html,
   body,
@@ -18,6 +22,7 @@
   }
   html {
     font-size: 16px;
+    @apply font-sans;
   }
   body {
     background: var(--window);
@@ -26,15 +31,13 @@
     font-family: var(--font-ui);
     font-size: 13px;
     line-height: 18px;
+    @apply bg-background text-foreground;
   }
 }
 
 @layer components {
-  button:focus-visible,
-  input:focus-visible,
-  textarea:focus-visible,
   select:focus-visible,
-  [tabindex]:focus-visible {
+  [tabindex]:not([data-slot]):focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
@@ -88,8 +91,8 @@
   }
 }
 
-/* Opaque by default, including first paint, auth, credentials and every portal.
-   Only the navigation region can reveal a successfully attached native view. */
+/* Native material is visible only through the sidebar. Content and credential
+   surfaces stay opaque, including when the window moves over a busy desktop. */
 .boot {
   height: 100%;
   display: flex;
@@ -122,5 +125,64 @@ html[data-reduced-motion='true'] *::after {
   }
   html:is([data-material]) .vault-app .sidebar {
     background: var(--sidebar);
+  }
+}
+
+:root {
+  --font-heading: var(--font-ui);
+}
+
+/* Renderer scroll-edge treatment above the native window material. */
+.scroll-header,
+.workspace-titlebar {
+  position: relative;
+  z-index: 2;
+  background: color-mix(in srgb, var(--background) 90%, transparent);
+  backdrop-filter: blur(18px) saturate(1.2);
+}
+.workspace-titlebar {
+  position: sticky;
+  background: transparent;
+}
+[data-scrolled='true'] > .scroll-header {
+  background: color-mix(in srgb, var(--background) 90%, transparent);
+  box-shadow: 0 1px 0 var(--border);
+}
+html[data-material='solid'] .scroll-header,
+html[data-reduced-transparency='true'] .scroll-header,
+html[data-high-contrast='true'] .scroll-header {
+  background: var(--background);
+  backdrop-filter: none;
+}
+html[data-material='solid'] .workspace-titlebar {
+  backdrop-filter: none;
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .scroll-header {
+    background: var(--background) !important;
+    backdrop-filter: none;
+  }
+  .workspace-titlebar {
+    backdrop-filter: none;
+  }
+}
+
+/* Fade the scrolling content before it reaches toolbar labels. This also
+   prevents sharp text bleeding through transparent-window compositing. */
+.list-scroll,
+.task-detail-body {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent calc(var(--scroll-header-height, 52px) - 8px),
+    #000 calc(var(--scroll-header-height, 52px) + 8px)
+  );
+}
+html[data-material='solid'] :is(.list-scroll, .task-detail-body) {
+  mask-image: none;
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .list-scroll,
+  .task-detail-body {
+    mask-image: none;
   }
 }

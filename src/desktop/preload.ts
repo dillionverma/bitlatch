@@ -5,6 +5,7 @@ import type { DesktopRequest } from '../shared/protocol';
 const request = (message: DesktopRequest) => ipcRenderer.invoke('latch:request', message);
 
 const api: LatchApi = {
+  confirm: (action) => request({ type: 'confirm', action }),
   state: () => request({ type: 'state' }),
   login: (input) => request({ type: 'login', input }),
   answerChallenge: (answer) => request({ type: 'challenge', answer }),
