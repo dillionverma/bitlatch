@@ -144,6 +144,9 @@ export interface BrowserMatches {
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
 export interface LatchApi {
+  websiteIcons(): Promise<Result<boolean>>;
+  setWebsiteIcons(enabled: boolean): Promise<Result<boolean>>;
+  websiteIcon(id: string): Promise<Result<string | null>>;
   confirm(action: NativeConfirmation): Promise<Result<boolean>>;
   itemMenu(id: string, position: MenuPosition): Promise<Result<ItemMenuAction | null>>;
   state(): Promise<Result<VaultState>>;

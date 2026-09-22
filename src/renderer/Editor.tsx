@@ -199,9 +199,6 @@ export function Editor({
           event.preventDefault();
           if (!discarding) close();
         }}
-        onInteractOutside={(event) => {
-          event.preventDefault();
-        }}
       >
         <DialogHeader className="task-header">
           <DialogTitle>

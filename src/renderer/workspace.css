@@ -250,6 +250,16 @@
   border-radius: var(--radius-overlay);
   font-size: 24px;
 }
+.website-logo {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+.item-icon.large .website-logo {
+  width: 32px;
+  height: 32px;
+}
 .vault-app .list-empty {
   min-height: 100%;
   padding: 24px 12px;

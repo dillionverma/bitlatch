@@ -39,6 +39,7 @@ export function ItemList({
   items,
   header,
   selectedId,
+  revealSelection = 0,
   onSelect,
   onItemMenu,
   query,
@@ -51,6 +52,7 @@ export function ItemList({
   items: ItemSummary[];
   header: ReactNode;
   selectedId: string;
+  revealSelection?: number;
   onSelect: (item: ItemSummary) => void;
   onItemMenu: (item: ItemSummary, position: MenuPosition) => void;
   query: string;
@@ -103,6 +105,14 @@ export function ItemList({
 
   const rows = virtualizer.getVirtualItems();
   const activeMounted = activeIndex >= 0 && rows.some((row) => row.index === activeIndex);
+  const lastReveal = useRef(revealSelection);
+  useLayoutEffect(() => {
+    if (lastReveal.current === revealSelection || activeIndex < 0) return;
+    lastReveal.current = revealSelection;
+    // Quick open can choose an offscreen row, including the current selection.
+    // Use the virtualizer so the sticky header and unmounted rows are respected.
+    virtualizer.scrollToIndex(activeIndex, { align: 'auto' });
+  }, [revealSelection, activeIndex, virtualizer]);
 
   return (
     <div
@@ -203,7 +213,7 @@ export function ItemList({
                   }}
                   onClick={() => {
                     listRef.current?.focus({ preventScroll: true });
-                    onSelect(item);
+                    if (item.id !== selectedId) onSelect(item);
                   }}
                   onContextMenu={(event) => {
                     event.preventDefault();

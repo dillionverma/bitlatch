@@ -9,8 +9,10 @@ import {
   Info,
   GearSix,
   LockKey,
+  PaintBrush,
 } from '@phosphor-icons/react';
 import type { VaultState } from '../shared/types';
+import { useWebsiteIcons } from './WebsiteIcons';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import {
@@ -27,6 +29,12 @@ import './tasks.css';
 import './settings.css';
 
 const sections = [
+  {
+    id: 'appearance',
+    label: 'Appearance',
+    icon: PaintBrush,
+    description: 'Make items easier to recognize in your vault.',
+  },
   {
     id: 'browser',
     label: 'Browser',
@@ -63,9 +71,10 @@ export function Settings({
   onBiometrics: (enabled: boolean) => void | Promise<void>;
   biometricsBusy?: boolean;
 }) {
+  const icons = useWebsiteIcons();
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState<'install' | 'folder' | 'biometrics' | null>(null);
+  const [busy, setBusy] = useState<'install' | 'folder' | 'biometrics' | 'icons' | null>(null);
   const [active, setActive] = useState(true);
   const alive = useRef(false);
   const epoch = useRef(0);
@@ -88,7 +97,7 @@ export function Settings({
       unsubscribe();
     };
   }, []);
-  async function run(kind: 'install' | 'folder' | 'biometrics') {
+  async function run(kind: 'install' | 'folder' | 'biometrics' | 'icons') {
     if (working.current || biometricsBusy || !alive.current) return;
     working.current = true;
     setBusy(kind);
@@ -96,6 +105,7 @@ export function Settings({
     const request = ++epoch.current;
     try {
       if (kind === 'biometrics') await onBiometrics(!biometricsOn);
+      else if (kind === 'icons') await icons.setEnabled(!icons.enabled);
       else {
         const result = await (kind === 'install'
           ? window.latch.installBrowser()
@@ -199,6 +209,34 @@ export function Settings({
             <h2>{current.label}</h2>
             <p>{current.description}</p>
           </header>
+          {section === 'appearance' && (
+            <section className="task-settings-section">
+              <h3>Vault items</h3>
+              <FieldGroup className="settings-group">
+                <Field orientation="horizontal" className="setting-row settings-row">
+                  <FieldContent>
+                    <FieldLabel htmlFor="settings-website-icons">Website icons</FieldLabel>
+                    <FieldDescription id="website-icons-description">
+                      Show website logos beside your logins.
+                    </FieldDescription>
+                  </FieldContent>
+                  <Switch
+                    id="settings-website-icons"
+                    checked={icons.enabled}
+                    onCheckedChange={() => void run('icons')}
+                    disabled={pending || !icons.ready}
+                    aria-describedby="website-icons-description website-icons-privacy"
+                    aria-busy={busy === 'icons'}
+                  />
+                </Field>
+              </FieldGroup>
+              <p id="website-icons-privacy" className="settings-caption">
+                Requests send website hostnames to Bitwarden’s icon service, never passwords,
+                usernames, or URL paths. Local addresses stay private. Icons are cached until you
+                lock the vault.
+              </p>
+            </section>
+          )}
           {section === 'browser' && (
             <section className="task-settings-section">
               <h3>Connection</h3>

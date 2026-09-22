@@ -27,6 +27,7 @@
   --color-selection: var(--selection);
   --color-selection-inactive: var(--selection-inactive);
   --color-window: var(--window);
+  --color-dialog-scrim: var(--dialog-scrim);
   --color-switch-thumb: var(--switch-thumb);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
@@ -53,6 +54,7 @@
 }
 
 :root {
+  --dialog-scrim: rgb(0 0 0 / 35%);
   --sidebar-width: 188px;
   --list-width: 288px;
   --toolbar-height: 52px;
@@ -62,5 +64,11 @@
   :root {
     --sidebar-width: 180px;
     --list-width: 280px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --dialog-scrim: rgb(0 0 0 / 50%);
   }
 }

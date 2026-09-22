@@ -23,6 +23,8 @@ import { Settings } from './Settings';
 import { Mark } from './Mark';
 import { Detail } from './Detail';
 import { ItemList } from './ItemList';
+import { QuickOpen } from './QuickOpen';
+import { WebsiteIconsProvider } from './WebsiteIcons';
 import { Toasts, useToasts, type Notifier } from './Toasts';
 import { Button } from '@/components/ui/button';
 import {
@@ -204,7 +206,11 @@ export function App() {
     return <Auth key={state.status + state.email} state={state} onState={receiveState} />;
   // All vault state, virtualizers, task portals and notifications have exactly
   // this lifetime. A later unlock mounts a fresh workspace and fresh guards.
-  return <VaultWorkspace state={state} onState={receiveState} onLock={lock} />;
+  return (
+    <WebsiteIconsProvider>
+      <VaultWorkspace state={state} onState={receiveState} onLock={lock} />
+    </WebsiteIconsProvider>
+  );
 }
 
 function VaultWorkspace({
@@ -220,12 +226,14 @@ function VaultWorkspace({
   const [trashed, setTrashed] = useState<ItemSummary[]>([]);
   const [selected, setSelected] = useState<ItemDetail | null>(null);
   const [selectedId, setSelectedId] = useState('');
+  const [revealSelection, setRevealSelection] = useState(0);
   const [detailStatus, setDetailStatus] = useState<DetailStatus>('unselected');
   const [detailError, setDetailError] = useState('');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [editor, setEditor] = useState<'new' | 'edit' | null>(null);
   const [settings, setSettings] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [trashLoading, setTrashLoading] = useState(false);
@@ -311,14 +319,17 @@ function VaultWorkspace({
     };
   }, [filter, state.itemsRevision]);
 
-  const commands = useRef({ editor, settings });
-  commands.current = { editor, settings };
+  const commands = useRef({ editor, settings, quickOpen });
+  commands.current = { editor, settings, quickOpen };
   const runCommand = useCallback((command: 'search' | 'new' | 'settings') => {
-    if (!alive.current || commands.current.editor || commands.current.settings || hasModal())
+    if (!alive.current) return;
+    if (command === 'search' && commands.current.quickOpen) {
+      setQuickOpen(false);
       return;
+    }
+    if (commands.current.editor || commands.current.settings || hasModal()) return;
     if (command === 'search') {
-      searchInput.current?.focus();
-      searchInput.current?.select();
+      setQuickOpen(true);
     }
     if (command === 'new') {
       newButton.current?.focus();
@@ -583,6 +594,7 @@ function VaultWorkspace({
           </aside>
           <section className="item-list" aria-label={currentFilter.label}>
             <ItemList
+              revealSelection={revealSelection}
               onItemMenu={(item, position) => void showItemMenu(item, position)}
               header={
                 <>
@@ -599,7 +611,15 @@ function VaultWorkspace({
                         onChange={(event) => setQuery(event.target.value)}
                       />
                       <InputGroupAddon align="inline-end">
-                        {!query && <Kbd>⌘K</Kbd>}
+                        {!query && (
+                          <InputGroupButton
+                            size="sm"
+                            aria-label="Quick open (⌘K)"
+                            onClick={() => runCommand('search')}
+                          >
+                            <Kbd>⌘K</Kbd>
+                          </InputGroupButton>
+                        )}
                         {query && (
                           <InputGroupButton
                             size="icon-xs"
@@ -765,6 +785,23 @@ function VaultWorkspace({
             )}
           </section>
         </main>
+        {quickOpen && (
+          <QuickOpen
+            indexed={indexed}
+            loading={loading}
+            error={listError.all}
+            onClose={() => setQuickOpen(false)}
+            onSelect={(item) => {
+              if (!alive.current) return;
+              setQuickOpen(false);
+              setSettings(false);
+              setQuery('');
+              setFilter('all');
+              setRevealSelection((request) => request + 1);
+              if (item.id !== selectedId || detailStatus === 'error') void select(item);
+            }}
+          />
+        )}
         {editor && (
           <Editor
             item={editor === 'edit' ? selected : null}

@@ -16,6 +16,7 @@ import { readFile, mkdir } from 'node:fs/promises';
 import { prepareWindowAppearance } from './window-appearance';
 import { manageWindowLayout } from './window-layout';
 import { installNativeInteractions } from './native-interactions';
+import { WebsiteIcons } from './website-icons';
 import type { WindowCommand } from '../shared/types';
 import { localEngine } from './engine';
 import { Vault, generatePassword } from './vault';
@@ -34,6 +35,7 @@ if (!app.requestSingleInstanceLock()) app.quit();
 let window: BrowserWindow;
 let appearance: ReturnType<typeof prepareWindowAppearance>;
 let nativeInteractions: ReturnType<typeof installNativeInteractions>;
+let websiteIcons: WebsiteIcons;
 let vault: Vault;
 let cli: CliPort | undefined;
 let bridge: BrowserBridge;
@@ -70,6 +72,8 @@ void app
   .whenReady()
   .then(async () => {
     await mkdir(app.getPath('userData'), { recursive: true, mode: 0o700 });
+    websiteIcons = new WebsiteIcons(join(app.getPath('userData'), 'website-icons.json'));
+    await websiteIcons.load();
     const engine = await localEngine({
       dataDir: join(app.getPath('userData'), 'bitwarden'),
     });
@@ -175,6 +179,7 @@ void app
     vault.on('state', (state) => {
       nativeInteractions.cancelMenu();
       if (state.status !== 'unlocked') {
+        websiteIcons.clear();
         nativeInteractions.cancelConfirmation();
         void clearCopiedSecret().catch(() => undefined);
       } else lastUnlockAt = Date.now();
@@ -219,6 +224,18 @@ void app
 
 async function handleRequest(request: DesktopRequest): Promise<unknown> {
   switch (request.type) {
+    case 'websiteIcons':
+      return websiteIcons.enabled;
+    case 'setWebsiteIcons':
+      return websiteIcons.setEnabled(request.enabled);
+    case 'websiteIcon': {
+      if (vault.snapshot().status !== 'unlocked' || !websiteIcons.enabled) return null;
+      const item = vault.detail(request.id);
+      if (item.type !== 1 || item.restricted) return null;
+      const epoch = mutationEpoch;
+      const icon = await websiteIcons.get(item.website);
+      return epoch === mutationEpoch && vault.snapshot().status === 'unlocked' ? icon : null;
+    }
     case 'itemMenu': {
       if (vault.snapshot().status !== 'unlocked') return null;
       const epoch = mutationEpoch;
@@ -378,7 +395,7 @@ function installMenu() {
         label: 'View',
         submenu: [
           {
-            label: 'Search vault',
+            label: 'Quick open',
             accelerator: 'CmdOrCtrl+K',
             click: () => {
               sendCommand('search');

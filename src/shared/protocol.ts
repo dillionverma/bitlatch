@@ -31,6 +31,9 @@ const loginDraft = z
   .strict();
 
 export const desktopRequestSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('websiteIcons') }).strict(),
+  z.object({ type: z.literal('setWebsiteIcons'), enabled: z.boolean() }).strict(),
+  z.object({ type: z.literal('websiteIcon'), id }).strict(),
   z.object({ type: z.literal('state') }).strict(),
   z.object({ type: z.literal('appearance') }).strict(),
   z.object({ type: z.literal('confirm'), action: z.enum(['discard', 'trash']) }).strict(),

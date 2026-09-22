@@ -5,6 +5,9 @@ import type { DesktopRequest } from '../shared/protocol';
 const request = (message: DesktopRequest) => ipcRenderer.invoke('latch:request', message);
 
 const api: LatchApi = {
+  websiteIcons: () => request({ type: 'websiteIcons' }),
+  setWebsiteIcons: (enabled) => request({ type: 'setWebsiteIcons', enabled }),
+  websiteIcon: (id) => request({ type: 'websiteIcon', id }),
   confirm: (action) => request({ type: 'confirm', action }),
   itemMenu: (id, position) => request({ type: 'itemMenu', id, position }),
   state: () => request({ type: 'state' }),

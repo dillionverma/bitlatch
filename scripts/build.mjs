@@ -28,6 +28,7 @@ const bundledPackages = [
   'clsx',
   'tailwind-merge',
   'sonner',
+  'cmdk',
   'tailwindcss',
   'tw-animate-css',
 ];
