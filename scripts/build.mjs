@@ -33,7 +33,7 @@ const bundledPackages = [
   'tw-animate-css',
 ];
 // Include runtime dependency notices transitively, including nested package versions.
-const notices = [await readFile(resolve(root, 'licenses/shadcn-ui-LICENSE.txt'), 'utf8')];
+const notices = [await readFile(resolve(root, 'THIRD_PARTY.md'), 'utf8')];
 const visited = new Set();
 async function addNotice(name, from = root) {
   const require = createRequire(join(from, 'package.json'));
@@ -68,7 +68,7 @@ async function addNotice(name, from = root) {
     } catch {}
   }
   if (!license && name === 'react-remove-scroll-bar') {
-    license = await readFile(resolve(root, 'licenses/react-remove-scroll-bar-LICENSE.txt'), 'utf8');
+    license = 'MIT notice included above in THIRD_PARTY.md.';
   }
   if (!license) throw new Error(`Missing license notice for ${name}`);
   notices.push(`${name} ${info.version}\n${'='.repeat(60)}\n${license}`);
