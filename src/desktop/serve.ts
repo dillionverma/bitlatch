@@ -6,6 +6,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cliError, type CliOptions, type CliPort, type RunOptions } from './cli';
 import { UserError } from '../shared/protocol';
+import { listingVersion, syncedVersions } from './sync-metadata';
 
 /**
  * Keeps one unlocked `bw serve` process warm and speaks to it over HTTP, so a
@@ -25,77 +26,163 @@ export class WarmBitwardenCli implements CliPort {
   private session = '';
   private starting?: Promise<void>;
   private stopping?: Promise<void>;
+  private queue: Promise<unknown> = Promise.resolve();
+  private generation = 0;
+  private processGeneration = 0;
+  private activeOperations = 0;
 
   constructor(
     private readonly cold: CliPort,
     private readonly options: CliOptions,
   ) {}
 
-  async run(args: string[], options: RunOptions = {}): Promise<string> {
+  run(args: string[], options: RunOptions = {}): Promise<string> {
+    const generation = this.generation;
+    const task = this.queue.then(async () => {
+      ++this.activeOperations;
+      try {
+        return await this.execute(args, options, generation);
+      } finally {
+        --this.activeOperations;
+      }
+    });
+    this.queue = task.catch(() => undefined);
+    return task;
+  }
+
+  private assertCurrent(generation: number) {
+    if (generation !== this.generation)
+      throw new UserError('Vault locked. Try again after unlocking.');
+  }
+
+  private async execute(args: string[], options: RunOptions, generation: number) {
+    this.assertCurrent(generation);
     const route = routeFor(args, options);
-    // Signing in, locking and signing out rewrite the data directory the
-    // server is holding open, so they get it to themselves. Unlocking is the
-    // exception: the server can do it, which saves starting a second CLI.
-    if (!route || (!options.session && !route.unlocks)) {
-      await this.stop();
-      return this.cold.run(args, options);
+    if (!route || (!options.session && !route.unlocks && !route.status)) {
+      await this.reset();
+      this.assertCurrent(generation);
+      const output = await this.cold.run(args, options);
+      this.assertCurrent(generation);
+      return output;
     }
     try {
-      await this.ensureRunning(route.unlocks ? undefined : options.session);
+      await this.ensureRunning(
+        route.unlocks || route.status ? undefined : options.session,
+        generation,
+      );
     } catch {
-      return this.cold.run(args, options);
+      this.assertCurrent(generation);
+      const output = await this.cold.run(args, options);
+      this.assertCurrent(generation);
+      return output;
     }
+    this.assertCurrent(generation);
     try {
-      // What the vault held before a sync, so a half-loaded reply is spotted.
-      const known = route.syncs ? await this.count() : 0;
       const output = await this.send(route);
+      this.assertCurrent(generation);
       if (route.unlocks) {
         if (!output) throw new Error('The vault server unlocked without returning a key.');
-        // The server now holds this key, so later calls must not restart it.
         this.session = output;
       }
-      if (route.settles) await this.settle(output);
-      if (route.syncs) await this.settleSync(known);
-      if (route.removes) await this.settleListing(route.removes, false);
-      if (route.restores) await this.settleListing(route.restores, true);
+      if (route.settles) await this.settle(output, generation);
+      if (route.syncs) await this.settleSync(generation);
+      if (route.removes) await this.settleListing(route.removes, false, generation);
+      if (route.restores) await this.settleListing(route.restores, true, generation);
+      this.assertCurrent(generation);
       return output;
     } catch (error) {
-      // A verdict from the server stands. A broken connection does not.
+      this.assertCurrent(generation);
       if (error instanceof UserError) throw error;
-      await this.stop();
-      return this.cold.run(args, options);
+      await this.reset();
+      this.assertCurrent(generation);
+      // Never replay a write whose reply was lost: it may already have succeeded.
+      if (route.method !== 'GET' && !route.unlocks && !route.syncs)
+        throw new UserError('Could not confirm the change. Sync your vault before trying again.');
+      const output = await this.cold.run(args, options);
+      this.assertCurrent(generation);
+      return output;
     }
   }
 
   cancel() {
-    void this.stop().catch(() => undefined);
+    ++this.generation;
     this.cold.cancel();
+    void this.reset().catch(() => undefined);
   }
 
-  stop() {
+  async stop() {
+    this.cancel();
+    await this.reset();
+  }
+
+  lock(): Promise<void> {
+    const reusable = Boolean(
+      this.child && this.session && !this.activeOperations && !this.stopping && !this.inFlight.size,
+    );
+    const generation = ++this.generation;
+    this.cold.cancel();
+    const task = (async () => {
+      if (reusable) {
+        try {
+          await this.send(LOCK);
+          this.assertCurrent(generation);
+          this.session = '';
+          const status = JSON.parse(await this.send(STATUS)) as { status: string };
+          this.assertCurrent(generation);
+          if (status.status === 'locked') return;
+        } catch {
+          this.assertCurrent(generation);
+        }
+      }
+      // An operation in progress must be terminated, never allowed to finish
+      // unlocking or writing after the UI has locked.
+      await this.reset();
+      this.assertCurrent(generation);
+      await this.cold.run(['lock']);
+      this.assertCurrent(generation);
+    })();
+    this.queue = task.catch(() => undefined);
+    return task;
+  }
+
+  /** Starts without a session key; only a locked worker may be prepared. */
+  async prepare() {
+    const status = JSON.parse(await this.run(['status'])) as { status: string };
+    if (status.status !== 'locked') await this.stop();
+  }
+
+  private reset() {
     this.stopping ??= this.shutdown().finally(() => {
       this.stopping = undefined;
     });
     return this.stopping;
   }
 
-  /** `undefined` takes whatever server is already running, used when unlocking. */
-  private async ensureRunning(session: string | undefined) {
+  private async ensureRunning(session: string | undefined, generation: number) {
+    await this.stopping;
+    this.assertCurrent(generation);
     if (session !== undefined) {
-      if (this.session !== session) await this.stop();
+      if (this.session !== session) await this.reset();
+      this.assertCurrent(generation);
       this.session = session;
     }
     const starting = (this.starting ??= this.start(this.session));
     try {
       await starting;
     } catch (error) {
-      await this.stop();
+      await this.reset();
       throw error;
     }
   }
 
   private async start(session: string) {
+    const generation = this.processGeneration;
     const { ours, theirs } = await socketPair();
+    if (generation !== this.processGeneration) {
+      ours.destroy();
+      theirs.destroy();
+      throw new UserError('Vault locked. Try again after unlocking.');
+    }
     const child = spawn(
       this.options.executable,
       [
@@ -135,10 +222,9 @@ export class WarmBitwardenCli implements CliPort {
     child.once('error', forget);
     child.once('exit', forget);
     ours.once('close', forget);
-    // Reading the vault proves it is unlocked and decrypted, which a status
-    // check does not, and it leaves the items loaded for the first real call.
-    // A server started to perform an unlock has no vault to read yet.
-    await this.send(session ? ITEMS : STATUS, START_TIMEOUT_MS);
+    // The first real listing verifies decryption. Probing with a full listing
+    // here would decrypt and transfer the entire vault twice on session restore.
+    await this.send(STATUS, START_TIMEOUT_MS);
   }
 
   /** Drops a server that died on its own, so the next call starts a fresh one. */
@@ -154,6 +240,7 @@ export class WarmBitwardenCli implements CliPort {
   }
 
   private async shutdown() {
+    ++this.processGeneration;
     const child = this.child;
     const socket = this.socket;
     this.child = undefined;
@@ -174,9 +261,13 @@ export class WarmBitwardenCli implements CliPort {
     // Ask first, so it releases its hold on the data directory, then insist.
     child.kill('SIGTERM');
     const insist = setTimeout(() => child.kill('SIGKILL'), STOP_GRACE_MS);
-    const abandon = new Promise<void>((resolve) => setTimeout(resolve, STOP_TIMEOUT_MS));
+    let deadline: NodeJS.Timeout | undefined;
+    const abandon = new Promise<void>((resolve) => {
+      deadline = setTimeout(resolve, STOP_TIMEOUT_MS);
+    });
     await Promise.race([exited, abandon]);
     clearTimeout(insist);
+    clearTimeout(deadline);
   }
 
   /**
@@ -185,7 +276,7 @@ export class WarmBitwardenCli implements CliPort {
    * command. The warm server keeps the vault in memory and can still answer a
    * read from a snapshot taken just before the write landed.
    */
-  private async settle(saved: string) {
+  private async settle(saved: string, generation: number) {
     let written: SavedCipher;
     try {
       written = JSON.parse(saved) as SavedCipher;
@@ -196,10 +287,12 @@ export class WarmBitwardenCli implements CliPort {
     if (!route) return;
     const deadline = Date.now() + SETTLE_TIMEOUT_MS;
     for (;;) {
+      this.assertCurrent(generation);
       try {
         const current = JSON.parse(await this.send(route)) as SavedCipher;
         if (current?.id === written.id && current.revisionDate === written.revisionDate) return;
       } catch {
+        this.assertCurrent(generation);
         /* Still catching up, or gone again. Either way the wait below decides. */
       }
       // The write itself succeeded, so a slow settle is not a failed save.
@@ -208,34 +301,16 @@ export class WarmBitwardenCli implements CliPort {
     }
   }
 
-  /**
-   * Everything the vault holds, trash included. A sync empties both listings
-   * while it reloads, so counting only one of them misses the case where the
-   * other is the one with something to lose.
-   */
-  private async count() {
-    try {
-      const active = (JSON.parse(await this.send(ITEMS)) as unknown[]).length;
-      const trashed = (JSON.parse(await this.send(TRASH)) as unknown[]).length;
-      return active + trashed;
-    } catch {
-      return 0;
-    }
-  }
-
-  /**
-   * Waits for a sync to finish coming into view. The server empties its vault
-   * while it reloads, so a read taken mid-sync can report no items at all.
-   * A vault that never comes back gets a server that reloads it from disk.
-   */
   /** Waits for a trashed or restored item to move, as a fresh CLI would see it. */
-  private async settleListing(id: string, listed: boolean) {
+  private async settleListing(id: string, listed: boolean, generation: number) {
     const deadline = Date.now() + SETTLE_TIMEOUT_MS;
     for (;;) {
+      this.assertCurrent(generation);
       try {
         const items = JSON.parse(await this.send(ITEMS)) as { id?: string }[];
         if (items.some((item) => item.id === id) === listed) return;
       } catch {
+        this.assertCurrent(generation);
         /* Mid-change reads can fail outright; the wait below decides. */
       }
       if (Date.now() >= deadline) return;
@@ -243,17 +318,29 @@ export class WarmBitwardenCli implements CliPort {
     }
   }
 
-  private async settleSync(known: number) {
-    if (known === 0) return;
-    const deadline = Date.now() + SYNC_SETTLE_TIMEOUT_MS;
-    for (;;) {
-      try {
-        if ((await this.count()) >= known) return;
-      } catch {
-        /* Mid-reload reads can fail outright; the wait below decides. */
-      }
-      if (Date.now() >= deadline) return this.stop();
-      await new Promise((resolve) => setTimeout(resolve, SETTLE_INTERVAL_MS));
+  private async settleSync(generation: number) {
+    const expected = await syncedVersions(this.options.dataDir);
+    this.assertCurrent(generation);
+    if (expected) {
+      const active = listingVersion(JSON.parse(await this.send(ITEMS)));
+      const trash = listingVersion(JSON.parse(await this.send(TRASH)));
+      this.assertCurrent(generation);
+      if (active === expected.active && trash === expected.trash) return;
+    }
+    // A mismatched decrypted view can remain stale indefinitely. Reload from
+    // the official CLI's saved cache immediately; never wait for an old count.
+    const session = this.session;
+    await this.reset();
+    this.assertCurrent(generation);
+    await this.ensureRunning(session, generation);
+    if (expected) {
+      const active = listingVersion(JSON.parse(await this.send(ITEMS)));
+      const trash = listingVersion(JSON.parse(await this.send(TRASH)));
+      this.assertCurrent(generation);
+      if (active !== expected.active || trash !== expected.trash)
+        throw new UserError(
+          'Bitwarden could not finish loading the synced vault. Lock and unlock to try again.',
+        );
     }
   }
 
@@ -309,7 +396,11 @@ export class WarmBitwardenCli implements CliPort {
             }
             if (envelope.success === false || (response.statusCode ?? 0) >= 400)
               return reject(cliError(envelope.message ?? '', false));
-            resolve(route.pick(envelope.data));
+            try {
+              resolve(route.pick(envelope.data));
+            } catch {
+              reject(new Error('The vault server sent an invalid result.'));
+            }
           });
         },
       );
@@ -354,6 +445,8 @@ interface Route {
   settles?: boolean;
   /** Whether this call reloads the whole vault, emptying it on the way. */
   syncs?: boolean;
+  /** Status is available before unlocking. */
+  status?: boolean;
   /** The id this call removes, which reads have to stop returning. */
   removes?: string;
   /** The id this call brings back, which reads have to start returning. */
@@ -370,7 +463,6 @@ const SERVE_FD = 3;
 const START_TIMEOUT_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 60_000;
 const SETTLE_TIMEOUT_MS = 5_000;
-const SYNC_SETTLE_TIMEOUT_MS = 2_000;
 const SETTLE_INTERVAL_MS = 20;
 const STOP_GRACE_MS = 2_000;
 const STOP_TIMEOUT_MS = 8_000;
@@ -387,7 +479,18 @@ const listed = (data: unknown) => json((data as { data?: unknown } | null)?.data
 
 const ITEMS: Route = { method: 'GET', path: '/list/object/items', pick: listed };
 const TRASH: Route = { method: 'GET', path: '/list/object/items?trash=true', pick: listed };
-const STATUS: Route = { method: 'GET', path: '/status', pick: json };
+const STATUS: Route = {
+  method: 'GET',
+  path: '/status',
+  status: true,
+  pick: (data) => {
+    const status = (data as { template?: { status?: string } } | null)?.template;
+    if (!status || !['locked', 'unlocked', 'unauthenticated'].includes(status.status ?? ''))
+      throw new Error('The vault server sent an invalid status.');
+    return json(status);
+  },
+};
+const LOCK: Route = { method: 'POST', path: '/lock', pick: json };
 const UNLOCK: Route = {
   method: 'POST',
   path: '/unlock',
@@ -412,6 +515,7 @@ export function routeFor(args: string[], options: RunOptions = {}): Route | unde
   )
     return { ...UNLOCK, body: { password: options.password } };
   if (options.password) return undefined;
+  if (args.length === 1 && command === 'status') return { ...STATUS };
   if (args.length === 1 && command === 'sync') return { ...SYNC };
   if (args.length === 2 && command === 'list' && object === 'items') return { ...ITEMS };
   if (args.length === 3 && command === 'list' && object === 'items' && args[2] === '--trash')

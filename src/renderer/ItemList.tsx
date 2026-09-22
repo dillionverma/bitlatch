@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Fingerprint, LockKeyhole, Plus, Search, Star } from 'lucide-react';
 import type { ItemSummary } from '../shared/types';
@@ -19,6 +19,9 @@ export function ItemList({
   query,
   onNew,
   emptyLabel,
+  loading = false,
+  error,
+  onRetry,
 }: {
   items: ItemSummary[];
   selectedId: string;
@@ -26,6 +29,9 @@ export function ItemList({
   query: string;
   onNew: () => void;
   emptyLabel?: string;
+  loading?: boolean;
+  error?: string;
+  onRetry?: () => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
@@ -36,12 +42,17 @@ export function ItemList({
     getItemKey: (index) => items[index]!.id,
   });
 
+  useLayoutEffect(() => {
+    virtualizer.scrollToOffset(0);
+  }, [query, virtualizer]);
+
   return (
     <div
       className="list-scroll"
       ref={listRef}
       role="listbox"
       aria-label="Vault items"
+      aria-busy={loading}
       tabIndex={0}
       onKeyDown={(event) => {
         if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
@@ -57,7 +68,19 @@ export function ItemList({
         }
       }}
     >
-      {items.length ? (
+      {error ? (
+        <div className="list-empty" role="alert">
+          <strong>Could not load items</strong>
+          <p>{error}</p>
+          <button className="text-action" onClick={onRetry}>
+            Try again
+          </button>
+        </div>
+      ) : loading && !items.length ? (
+        <div className="list-empty" role="status">
+          Loading items…
+        </div>
+      ) : items.length ? (
         <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
           {virtualizer.getVirtualItems().map((row) => {
             const item = items[row.index]!;

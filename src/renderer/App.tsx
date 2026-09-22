@@ -25,6 +25,9 @@ import { ItemList } from './ItemList';
 import { Toasts, useToasts } from './Toasts';
 
 const initialState: VaultState = {
+  revision: -1,
+  itemsRevision: 0,
+  trashLoaded: false,
   status: 'signed-out',
   email: '',
   server: 'https://vault.bitwarden.com',
@@ -69,6 +72,11 @@ export function App() {
   const [settings, setSettings] = useState(false);
   const [notice, setNotice] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [itemsLoading, setItemsLoading] = useState(false);
+  const [trashLoading, setTrashLoading] = useState(false);
+  const [itemsError, setItemsError] = useState('');
+  const [trashError, setTrashError] = useState('');
+  const [listRetry, setListRetry] = useState(0);
   const selectionVersion = useRef(0);
   const listVersion = useRef(0);
   const searchInput = useRef<HTMLInputElement>(null);
@@ -76,6 +84,12 @@ export function App() {
   const notify = useMemo(() => ({ show, settle }), [show, settle]);
 
   const receiveState = useCallback((next: VaultState) => {
+    if (next.revision < stateRef.current.revision) return;
+    if (
+      next.revision === stateRef.current.revision &&
+      next.setupError === stateRef.current.setupError
+    )
+      return;
     stateRef.current = next;
     setState(next);
     setReady(true);
@@ -89,17 +103,42 @@ export function App() {
       setQuery('');
       setNotice('');
       setSettings(false);
-    } else {
-      // Both lists come from one snapshot, and a slower earlier fetch is
-      // dropped rather than allowed to overwrite a newer one.
-      const version = ++listVersion.current;
-      void Promise.all([window.latch.items(), window.latch.trash()]).then(([listed, binned]) => {
-        if (version !== listVersion.current || stateRef.current.status !== 'unlocked') return;
-        if (listed.ok) setItems(listed.value);
-        if (binned.ok) setTrashed(binned.value);
-      });
+      ++listVersion.current;
+      setFilter('all');
     }
   }, []);
+
+  useEffect(() => {
+    if (state.status !== 'unlocked') return;
+    const version = ++listVersion.current;
+    setItemsLoading(true);
+    setItemsError('');
+    void window.latch.items().then((result) => {
+      if (version !== listVersion.current || stateRef.current.status !== 'unlocked') return;
+      setItemsLoading(false);
+      if (result.ok) setItems(result.value);
+      else setItemsError(result.error);
+    });
+    return () => {
+      ++listVersion.current;
+    };
+  }, [state.status, state.itemsRevision, listRetry]);
+
+  useEffect(() => {
+    if (state.status !== 'unlocked' || filter !== 'trash') return;
+    let current = true;
+    setTrashLoading(true);
+    setTrashError('');
+    void window.latch.trash().then((result) => {
+      if (!current || stateRef.current.status !== 'unlocked') return;
+      setTrashLoading(false);
+      if (result.ok) setTrashed(result.value);
+      else setTrashError(result.error);
+    });
+    return () => {
+      current = false;
+    };
+  }, [state.status, state.itemsRevision, filter, listRetry]);
 
   useEffect(() => {
     const unsubscribe = window.latch.onState(receiveState);
@@ -155,20 +194,31 @@ export function App() {
       .map(({ item }) => item);
   }, [indexed, indexedTrash, query, filter]);
 
-  async function select(item: ItemSummary) {
-    const version = ++selectionVersion.current;
+  function select(item: ItemSummary) {
+    if (item.id === selectedId) return;
+    ++selectionVersion.current;
     setSelectedId(item.id);
     setSelected(null);
     setNotice('');
-    if (item.restricted) {
-      setNotice('This shared or protected item is available in the official Bitwarden client.');
-      return;
-    }
-    const response = await window.latch.detail(item.id);
-    if (version !== selectionVersion.current || stateRef.current.status !== 'unlocked') return;
-    if (response.ok) setSelected(response.value);
-    else setNotice(response.error);
   }
+
+  useEffect(() => {
+    if (!selectedId || state.status !== 'unlocked') return;
+    const version = ++selectionVersion.current;
+    setSelected(null);
+    setNotice('');
+    void window.latch.detail(selectedId).then((response) => {
+      if (version !== selectionVersion.current || stateRef.current.status !== 'unlocked') return;
+      if (response.ok) setSelected(response.value);
+      else {
+        setSelectedId('');
+        setNotice(response.error);
+      }
+    });
+    return () => {
+      ++selectionVersion.current;
+    };
+  }, [selectedId, state.status, state.itemsRevision]);
 
   async function setBiometrics(enabled: boolean) {
     const pending = show('pending', enabled ? 'Setting up Touch ID…' : 'Turning off Touch ID…');
@@ -254,7 +304,9 @@ export function App() {
                 <Icon size={14} strokeWidth={1.6} />
                 <span>{title}</span>
                 {id === 'all' && <small>{items.length}</small>}
-                {id === 'trash' && trashed.length > 0 && <small>{trashed.length}</small>}
+                {id === 'trash' && state.trashLoaded && state.trashCount > 0 && (
+                  <small>{state.trashCount}</small>
+                )}
               </button>
             ))}
           </nav>
@@ -298,6 +350,10 @@ export function App() {
             </button>
           </header>
           <ItemList
+            key={filter}
+            loading={filter === 'trash' ? trashLoading : itemsLoading}
+            error={filter === 'trash' ? trashError : itemsError}
+            onRetry={() => setListRetry((value) => value + 1)}
             items={visible}
             selectedId={selectedId}
             onSelect={(item) => void select(item)}

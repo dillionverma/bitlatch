@@ -16,6 +16,7 @@ import { readFile, mkdir } from 'node:fs/promises';
 import { localEngine } from './engine';
 import { Vault, generatePassword } from './vault';
 import { touchIdSessionStore } from './biometrics';
+import { AccountHints } from './account-hint';
 import { BrowserBridge } from './browser-bridge';
 import { desktopRequestSchema, safely, UserError } from '../shared/protocol';
 import type { CliPort } from './cli';
@@ -37,6 +38,8 @@ let clipboardQueue: Promise<void> = Promise.resolve();
 let isQuitting = false;
 let lastUnlockAt = Date.now();
 let setupError: string | undefined;
+let hasAccountHint = false;
+let mutationEpoch = 0;
 /** Resolves once the vault knows whether an account is already signed in. */
 let examined: Promise<unknown> = Promise.resolve();
 const rendererPath = join(__dirname, '../renderer/index.html');
@@ -69,10 +72,22 @@ void app
     setupError = engine.setupError;
     cli = engine.cli;
     const sessions = touchIdSessionStore(app.getPath('userData'));
-    await sessions.load();
+    const hints = new AccountHints(join(app.getPath('userData'), 'account-hint.json'));
+    const [, hint] = await Promise.all([sessions.load(), hints.read()]);
     vault = new Vault(engine.cli, sessions);
-    // Started before the window loads so the first state it asks for is real.
-    examined = setupError ? Promise.resolve() : vault.initialize();
+    if (hint) {
+      vault.showLockedAccount(hint);
+      hasAccountHint = true;
+    }
+    vault.on('state', (state) => hints.remember(state));
+    // Account metadata can paint immediately; actions still wait for the CLI.
+    examined = setupError
+      ? Promise.resolve()
+      : vault.initialize().catch(() => {
+          setupError = 'Could not check your vault. Restart Latch to try again.';
+          if (window && !window.isDestroyed())
+            window.webContents.send('latch:state', { ...vault.snapshot(), setupError });
+        });
     const manifest = JSON.parse(await readFile(join(__dirname, 'extension.json'), 'utf8')) as {
       extensionId: string;
     };
@@ -170,10 +185,10 @@ void app
 async function handleRequest(request: DesktopRequest): Promise<unknown> {
   switch (request.type) {
     case 'state':
-      // Answering before the vault has looked would flash the sign-in screen.
-      await examined.catch(() => undefined);
+      if (!hasAccountHint) await examined;
       return { ...vault.snapshot(), ...(setupError ? { setupError } : {}) };
     case 'lock':
+      ++mutationEpoch;
       return vault.lock();
     case 'challenge':
       // Feeds a sign-in that is already in progress, so it bypasses the busy gate.
@@ -232,7 +247,11 @@ async function mutateVault(
 ) {
   if (busy) throw new UserError('Please wait for the current vault operation to finish.');
   busy = true;
+  const epoch = mutationEpoch;
   try {
+    await examined;
+    if (epoch !== mutationEpoch) throw new UserError('Vault locked. Try again after unlocking.');
+    if (setupError) throw new UserError(setupError);
     switch (request.type) {
       case 'login':
         return await vault.login(request.input);
@@ -271,6 +290,7 @@ function clearCopiedSecret() {
 }
 
 function lockVault() {
+  ++mutationEpoch;
   if (vault && (vault.snapshot().status !== 'signed-out' || busy))
     void vault.lock().catch(() => undefined);
 }
@@ -317,7 +337,8 @@ app.on('before-quit', (event) => {
   event.preventDefault();
   isQuitting = true;
   globalShortcut.unregisterAll();
-  void Promise.allSettled([vault?.lock(), bridge?.stop(), clearCopiedSecret()])
+  ++mutationEpoch;
+  void Promise.allSettled([vault?.lock(false), bridge?.stop(), clearCopiedSecret()])
     // The vault server holds an unlocked vault, so it goes last and always.
     .then(() => cli?.stop?.())
     .finally(() => app.quit());

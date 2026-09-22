@@ -16,7 +16,7 @@ Private MVP · macOS Apple Silicon · Chrome / Aside
 - Lock manually or on Mac lock/sleep/idle. Unlock an already-synced vault offline, including after restarting the app.
 - Copy/reveal selected fields. Copied credentials expire after 30 seconds, without clearing unrelated clipboard content.
 
-This is a **password MVP**. Passkeys are the next major integration. Logins and secure notes can be edited, and items can be moved to the trash and restored, though never deleted permanently; shared/protected items are restricted, other item types and passkey-bearing items are read-only, and automatic save prompts, enterprise features, and system-wide autofill are not implemented. See [security boundaries](SECURITY.md).
+This is a **password MVP**. Passkeys are the next major integration. Logins and secure notes can be edited, and items can be moved to the trash and restored, though never deleted permanently; shared/protected items are restricted, other item types and passkey-bearing items are read-only, and enterprise features and system-wide autofill are not implemented. See [security boundaries](SECURITY.md).
 
 ## Install and use
 
@@ -33,7 +33,7 @@ Matching defaults to the saved website's exact host. To include sibling subdomai
 
 **Shortcuts:** `⌘K` search · `⌘N` new login · `⌘L` lock · `⌘⇧Space` show Latch (when available).
 
-Latch uses its own application data directory and Bitwarden CLI session. Your existing Bitwarden installation remains a separate client. No master password, session key, or search index is intentionally saved by Latch; upstream CLI authentication state and encrypted vault data remain on disk.
+Latch uses its own application data directory and Bitwarden CLI session. Your existing Bitwarden installation remains a separate client. Latch saves an account email/server hint for a fast lock screen. It saves an encrypted session key only when Touch ID is enabled. It does not save the master password or search index; upstream CLI authentication state and encrypted vault data remain on disk.
 
 ## Develop
 
@@ -55,6 +55,8 @@ npm run package        # release/mac-arm64/Latch.app
 The packaged application uses the separately installed official CLI. The npm CLI is not a project dependency and is excluded from release packaging because its published bundle contains separately licensed modules. [Third-party details](THIRD_PARTY.md).
 
 ## Verification
+
+See the [performance changes and measurements](docs/performance.md) for the CLI lifecycle update.
 
 Do not add or run automated tests. Use type checking, production builds, packaging, and manual UI checks with isolated synthetic data. Keep credentials out of logs and screenshots. Historical results in [verification](docs/verification.md) describe earlier snapshots and do not verify the current working tree.
 

@@ -4,6 +4,7 @@ import { CodeRejectedError, type CliPort, type CliPrompt } from './cli';
 import { fillableUrl, matchesUri, normalizeServer, webUrl, type CipherUri } from './matching';
 import { UserError } from '../shared/protocol';
 import type { SessionStore } from './biometrics';
+import type { AccountHint } from './account-hint';
 import type {
   BrowserMatches,
   CaptureOffer,
@@ -75,9 +76,16 @@ export class Vault extends EventEmitter {
   private session = '';
   private ciphers = new Map<string, Cipher>();
   private generation = 0;
+  private revision = 0;
+  private itemsRevision = 0;
+  private trashLoaded = false;
+  private trashLoading?: Promise<void>;
   private pending?: PendingLogin;
   private captured?: Captured;
-  private state: Omit<VaultState, 'biometrics' | 'biometricsOn'> = {
+  private state: Omit<
+    VaultState,
+    'biometrics' | 'biometricsOn' | 'revision' | 'itemsRevision' | 'trashLoaded'
+  > = {
     status: 'signed-out',
     email: '',
     server: 'https://vault.bitwarden.com',
@@ -102,16 +110,34 @@ export class Vault extends EventEmitter {
   }
 
   snapshot(): VaultState {
-    return { ...this.state, ...this.biometrics() };
+    return {
+      ...this.state,
+      ...this.biometrics(),
+      revision: this.revision,
+      itemsRevision: this.itemsRevision,
+      trashLoaded: this.trashLoaded,
+    };
+  }
+
+  /** A remembered account can show a locked screen while the CLI starts. */
+  showLockedAccount(hint: AccountHint) {
+    this.state = { ...this.state, ...hint, status: 'locked' };
   }
 
   async initialize() {
-    const status = JSON.parse(await this.cli.run(['status'])) as {
+    const generation = this.generation;
+    const output = await this.cli.run(['status']).catch((error: unknown) => {
+      if (generation !== this.generation) return undefined;
+      throw error;
+    });
+    if (output === undefined) return this.snapshot();
+    const status = JSON.parse(output) as {
       status: string;
       userEmail?: string;
       serverUrl?: string;
       lastSync?: string;
     };
+    if (generation !== this.generation) return this.snapshot();
     this.state = {
       status: status.status === 'unauthenticated' ? 'signed-out' : 'locked',
       email: status.userEmail ?? '',
@@ -285,6 +311,7 @@ export class Vault extends EventEmitter {
     await this.load(generation);
     // The old key died with the lock, so replace what Touch ID will hand back.
     if (this.sessions?.enabled()) await this.sessions.keep(session);
+    this.assertGeneration(generation);
     return this.publish();
   }
 
@@ -292,14 +319,16 @@ export class Vault extends EventEmitter {
   async unlockWithBiometrics() {
     if (this.state.status !== 'locked') throw new UserError('The vault is not locked.');
     if (!this.sessions?.enabled()) throw new UserError('Touch ID is not set up for this vault.');
+    const generation = ++this.generation;
     const session = await this.sessions.recall().catch(() => {
       throw new UserError('Touch ID did not confirm it was you.');
     });
-    const generation = ++this.generation;
+    this.assertGeneration(generation);
     this.session = session;
     try {
       await this.load(generation);
     } catch {
+      this.assertGeneration(generation);
       // A key that no longer opens the vault is worse than keeping none.
       await this.sessions.forget();
       if (generation === this.generation) this.publish();
@@ -315,33 +344,51 @@ export class Vault extends EventEmitter {
       throw new UserError('macOS is not offering Touch ID right now.');
     if (!enabled) {
       await this.sessions.forget();
-      // The CLI was left open for Touch ID, so close it now.
-      await this.cli.run(['lock']).catch(() => undefined);
-      return this.publish();
+      // The stored session is no longer usable after bw lock. Keep the UI and
+      // its cached credentials locked too, then prepare a password-only worker.
+      return this.lock();
     }
     this.requireUnlocked();
+    const generation = this.generation;
     await this.sessions.keep(this.session);
+    if (generation !== this.generation) {
+      await this.sessions.forget();
+      this.assertGeneration(generation);
+    }
     return this.publish();
   }
 
-  async lock() {
-    ++this.generation;
-    this.cli.cancel();
+  async lock(prepare = true) {
+    const generation = ++this.generation;
+    const locking = !this.sessions?.enabled() && this.cli.lock ? this.cli.lock() : undefined;
+    if (!locking) this.cli.cancel();
     this.session = '';
     this.ciphers.clear();
+    this.trashLoaded = false;
+    this.trashLoading = undefined;
     this.captured = undefined;
+    this.pending?.settle?.({ cancel: true });
+    delete this.state.challenge;
     if (this.state.status !== 'signed-out') this.state.status = 'locked';
     this.countItems();
     this.publish();
     // `bw lock` destroys the session key, so the CLI stays open while Touch ID
     // is the way back in. What guards the vault then is the stored key.
-    if (!this.sessions?.enabled()) await this.cli.run(['lock']);
+    if (locking) await locking;
+    else if (!this.sessions?.enabled()) await this.cli.run(['lock']);
+    if (
+      prepare &&
+      generation === this.generation &&
+      this.state.status === 'locked' &&
+      !this.sessions?.enabled()
+    )
+      void this.cli.prepare?.().catch(() => undefined);
     return this.snapshot();
   }
 
   async logout() {
     await this.sessions?.forget();
-    await this.lock();
+    await this.lock(false);
     await this.cli.run(['logout']);
     this.state = {
       status: 'signed-out',
@@ -370,9 +417,35 @@ export class Vault extends EventEmitter {
   }
 
   /** Items sitting in Bitwarden's trash, which another client can restore. */
-  trash(): ItemSummary[] {
+  async trash(): Promise<ItemSummary[]> {
     this.requireUnlocked();
+    if (!this.trashLoaded) {
+      const generation = this.generation;
+      const version = this.itemsRevision;
+      const loading = (this.trashLoading ??= this.loadTrash(generation, version));
+      try {
+        await loading;
+      } finally {
+        if (this.trashLoading === loading) this.trashLoading = undefined;
+      }
+      this.assertGeneration(generation);
+      this.requireUnlocked();
+      if (!this.trashLoaded) return this.trash();
+    }
     return this.listing((cipher) => Boolean(cipher.deletedDate));
+  }
+
+  private async loadTrash(generation: number, version: number) {
+    const trashed = JSON.parse(
+      await this.cli.run(['list', 'items', '--trash'], { session: this.session }),
+    ) as Cipher[];
+    this.assertGeneration(generation);
+    if (version !== this.itemsRevision) return;
+    for (const [id, cipher] of this.ciphers) if (cipher.deletedDate) this.ciphers.delete(id);
+    for (const cipher of trashed) this.ciphers.set(cipher.id, cacheFields(cipher));
+    this.trashLoaded = true;
+    this.countItems(false);
+    this.publish();
   }
 
   private listing(include: (cipher: Cipher) => boolean) {
@@ -436,7 +509,8 @@ export class Vault extends EventEmitter {
     this.countItems();
   }
 
-  private countItems() {
+  private countItems(changed = true) {
+    if (changed) ++this.itemsRevision;
     let active = 0;
     let trashed = 0;
     for (const cipher of this.ciphers.values()) {
@@ -633,23 +707,20 @@ export class Vault extends EventEmitter {
         await this.cli.run(['list', 'items'], { session: this.session }),
       ) as Cipher[];
       this.assertGeneration(generation);
-      // The trash is a separate listing; both are kept so it can be browsed.
-      const trashed = JSON.parse(
-        await this.cli.run(['list', 'items', '--trash'], { session: this.session }),
-      ) as Cipher[];
-      this.assertGeneration(generation);
+      this.trashLoaded = false;
+      this.trashLoading = undefined;
       this.ciphers = new Map(
-        [...items.filter((item) => !item.deletedDate), ...trashed].map((item) => [
-          item.id,
-          cacheFields(item),
-        ]),
+        items.filter((item) => !item.deletedDate).map((item) => [item.id, cacheFields(item)]),
       );
       this.state.status = 'unlocked';
       this.countItems();
     } catch (error) {
       if (generation === this.generation) {
+        this.cli.cancel();
         this.session = '';
         this.ciphers.clear();
+        this.trashLoaded = false;
+        this.trashLoading = undefined;
         this.state.status = 'locked';
         this.countItems();
         this.publish();
@@ -676,6 +747,7 @@ export class Vault extends EventEmitter {
   }
 
   private publish() {
+    ++this.revision;
     const state = this.snapshot();
     this.emit('state', state);
     return state;
