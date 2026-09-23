@@ -441,8 +441,8 @@ export function Settings({
                   <div>
                     <strong>Supported items</strong>
                     <p>
-                      Personal logins and secure notes. Use Bitwarden for passkeys, shared or
-                      protected items, and system-wide autofill.
+                      Personal logins, passkeys and secure notes. Use Bitwarden for shared or
+                      protected items.
                     </p>
                   </div>
                 </div>

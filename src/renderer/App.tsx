@@ -91,7 +91,7 @@ const filters = [
     label: 'Passkeys',
     icon: Fingerprint,
     empty: 'No saved passkeys',
-    description: 'Passkey items appear here as read-only.',
+    description: 'Passkeys sign in through macOS AutoFill. Edit them in Bitwarden.',
   },
   {
     id: 'trash',

@@ -306,9 +306,10 @@ export function Detail({
         {item.hasPasskey && (
           <Alert>
             <Fingerprint />
-            <AlertTitle>Passkey saved in Bitwarden</AlertTitle>
+            <AlertTitle>Passkey</AlertTitle>
             <AlertDescription>
-              Use your existing passkey provider. Latch does not handle passkeys yet.
+              Signs in through macOS AutoFill when Latch is unlocked. Edit or remove it in
+              Bitwarden.
             </AlertDescription>
           </Alert>
         )}

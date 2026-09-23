@@ -50,6 +50,8 @@ export async function buildAutoFill(root) {
       '-fapplication-extension',
       '-framework',
       'AppKit',
+      '-framework',
+      'LocalAuthentication',
       resolve(root, 'native/autofill/Provider.m'),
       '-o',
       resolve(contents, 'MacOS/LatchAutoFill'),
@@ -79,7 +81,7 @@ export async function buildAutoFill(root) {
 <key>NSExtensionPrincipalClass</key><string>LatchCredentialProvider</string>
 <key>NSExtensionAttributes</key><dict><key>ASCredentialProviderExtensionCapabilities</key><dict>
 <key>ProvidesPasswords</key><true/>
-<key>ProvidesPasskeys</key><false/>
+<key>ProvidesPasskeys</key><true/>
 <key>ShowsConfigurationUI</key><true/>
 </dict></dict></dict>
 </dict></plist>`,

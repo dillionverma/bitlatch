@@ -3,6 +3,20 @@ import { randomInt } from 'node:crypto';
 import { CodeRejectedError, type CliPort, type CliPrompt } from './cli';
 import { fillableUrl, matchesUri, normalizeServer, webUrl, type CipherUri } from './matching';
 import { UserError } from '../shared/protocol';
+import {
+  ES256,
+  attestationObject,
+  authenticatorData,
+  createCredentialKey,
+  credentialIdBytes,
+  fromBase64Url,
+  isValidRpId,
+  sameCredential,
+  signAssertion,
+  toBase64Url,
+  usableCredential,
+  type Fido2Credential,
+} from './passkeys';
 import type { SessionStore } from './biometrics';
 import type { AccountHint } from './account-hint';
 import type {
@@ -33,7 +47,7 @@ export interface Cipher {
     username?: string | null;
     password?: string | null;
     uris?: CipherUri[];
-    fido2Credentials?: unknown[];
+    fido2Credentials?: Fido2Credential[];
     [key: string]: unknown;
   };
   [key: string]: unknown;
@@ -70,6 +84,32 @@ interface PendingLogin {
   restart: boolean;
   failure?: UserError;
   settle?: (answer: ChallengeAnswer) => void;
+}
+
+/** A passkey the picker can offer for a relying party. Nothing secret. */
+export interface PasskeyMatch {
+  id: string;
+  name: string;
+  userName: string;
+  credentialId: string;
+  userHandle: string;
+  rpId: string;
+}
+
+export interface PasskeyIdentity {
+  kind: 'passkey';
+  id: string;
+  rpId: string;
+  userName: string;
+  credentialId: string;
+  userHandle: string;
+}
+
+export interface PasswordIdentity {
+  kind: 'password';
+  id: string;
+  username: string;
+  url: string;
 }
 
 export class Vault extends EventEmitter {
@@ -534,10 +574,21 @@ export class Vault extends EventEmitter {
   }
 
   /** Only non-secret, fillable identities go to Apple's suggestion index. */
-  autoFillIdentities(): { id: string; username: string; url: string }[] {
+  autoFillIdentities(): (PasswordIdentity | PasskeyIdentity)[] {
     if (this.state.status !== 'unlocked') return [];
-    const identities = new Map<string, { id: string; username: string; url: string }>();
+    const identities = new Map<string, PasswordIdentity | PasskeyIdentity>();
     for (const cipher of this.ciphers.values()) {
+      for (const credential of passkeysOf(cipher)) {
+        const raw = credentialIdBytes(credential.credentialId)!;
+        identities.set(`passkey:${cipher.id}:${credential.credentialId}`, {
+          kind: 'passkey',
+          id: cipher.id,
+          rpId: credential.rpId,
+          userName: credential.userName || cipher.login?.username || '',
+          credentialId: toBase64Url(raw),
+          userHandle: credential.userHandle ?? '',
+        });
+      }
       for (const uri of cipher.login?.uris ?? []) {
         // Apple's suggestion identity is not the current page URL. Keep exact
         // and prefix rules in the picker, where macOS supplies the target URL.
@@ -546,6 +597,7 @@ export class Vault extends EventEmitter {
         const url = webUrl(uri.uri.includes('://') ? uri.uri : `https://${uri.uri}`)?.origin;
         if (!url || !matchesUri(uri, url) || !canFill(cipher, url)) continue;
         identities.set(`${cipher.id}:${url}`, {
+          kind: 'password',
           id: cipher.id,
           username: cipher.login?.username ?? '',
           url,
@@ -649,6 +701,168 @@ export class Vault extends EventEmitter {
     if (!canFill(cipher, url))
       throw new UserError('This login does not match the current website.');
     return { username: cipher.login?.username ?? '', password: cipher.login?.password ?? '' };
+  }
+
+  /** Passkeys for a relying party, limited to the identifiers it allows when it names any. */
+  passkeys(rpId: string, allowed: Uint8Array[] = []): PasskeyMatch[] {
+    if (this.state.status !== 'unlocked' || !isValidRpId(rpId)) return [];
+    const matches: PasskeyMatch[] = [];
+    for (const cipher of this.ciphers.values()) {
+      for (const credential of passkeysOf(cipher)) {
+        if (credential.rpId.toLowerCase() !== rpId.toLowerCase()) continue;
+        const raw = credentialIdBytes(credential.credentialId)!;
+        if (allowed.length && !allowed.some((id) => id.length === raw.length && raw.equals(id)))
+          continue;
+        matches.push({
+          id: cipher.id,
+          name: cipher.name || 'Untitled',
+          userName: credential.userName || cipher.login?.username || '',
+          credentialId: toBase64Url(raw),
+          userHandle: credential.userHandle ?? '',
+          rpId: credential.rpId,
+        });
+      }
+    }
+    return matches.slice(0, 16);
+  }
+
+  /**
+   * Signs a WebAuthn assertion with a stored passkey. The signature counter is
+   * written back first when the credential uses one, so a failed write fails
+   * the sign-in instead of desynchronising the relying party.
+   */
+  async assertPasskey(input: {
+    id: string;
+    credentialId: string;
+    rpId: string;
+    clientDataHash: string;
+    userVerified: boolean;
+  }) {
+    const cipher = this.item(input.id);
+    const generation = this.generation;
+    const raw = fromBase64Url(input.credentialId);
+    const credential = passkeysOf(cipher).find((entry) => sameCredential(entry.credentialId, raw));
+    if (!credential || credential.rpId.toLowerCase() !== input.rpId.toLowerCase())
+      throw new UserError('This passkey does not belong to this website.');
+    const clientDataHash = fromBase64Url(input.clientDataHash);
+    if (clientDataHash.length !== 32) throw new UserError('The sign-in request is malformed.');
+    const counter = Number(credential.counter) || 0;
+    const next = counter > 0 ? counter + 1 : 0;
+    if (next > 0) {
+      await this.writeCounter(cipher.id, credential.credentialId, next);
+      this.assertGeneration(generation);
+    }
+    const authData = authenticatorData({
+      rpId: input.rpId,
+      counter: next,
+      userVerified: input.userVerified,
+    });
+    return {
+      credentialId: input.credentialId,
+      userHandle: credential.userHandle ?? '',
+      authenticatorData: toBase64Url(authData),
+      signature: toBase64Url(signAssertion(credential.keyValue, authData, clientDataHash)),
+    };
+  }
+
+  private async writeCounter(id: string, credentialId: string, counter: number) {
+    const latest = JSON.parse(
+      await this.cli.run(['get', 'item', id], { session: this.session }),
+    ) as Cipher;
+    const credential = latest.login?.fido2Credentials?.find(
+      (entry) => entry.credentialId === credentialId,
+    );
+    if (!credential) throw new UserError('This passkey is no longer in your vault. Sync Latch.');
+    credential.counter = String(Math.max(counter, (Number(credential.counter) || 0) + 1));
+    const payload = Buffer.from(JSON.stringify(latest)).toString('base64');
+    const saved = JSON.parse(
+      await this.cli.run(['edit', 'item', id], { session: this.session, input: payload }),
+    ) as Cipher;
+    this.ciphers.set(saved.id, cacheFields(saved));
+    this.publish();
+  }
+
+  /** Creates a passkey for a relying party as a new login item, as Bitwarden's clients do. */
+  async registerPasskey(input: {
+    rpId: string;
+    rpName: string;
+    userName: string;
+    userDisplayName: string;
+    userHandle: string;
+    clientDataHash: string;
+    algorithms: number[];
+    excluded: string[];
+    userVerified: boolean;
+  }) {
+    this.requireUnlocked();
+    const generation = this.generation;
+    if (!isValidRpId(input.rpId))
+      throw new UserError('This website did not provide a valid passkey identifier.');
+    if (!input.algorithms.includes(ES256))
+      throw new UserError('This website does not accept the key type Latch can create.');
+    const clientDataHash = fromBase64Url(input.clientDataHash);
+    if (clientDataHash.length !== 32) throw new UserError('The passkey request is malformed.');
+    const userHandle = fromBase64Url(input.userHandle);
+    if (!userHandle.length || userHandle.length > 64)
+      throw new UserError('This website sent an unusable account identifier.');
+    const excluded = input.excluded.map((value) => fromBase64Url(value));
+    for (const cipher of this.ciphers.values())
+      for (const credential of passkeysOf(cipher))
+        if (excluded.some((raw) => sameCredential(credential.credentialId, raw)))
+          throw new UserError('A passkey for this account is already saved in Latch.');
+    const key = createCredentialKey();
+    const credential: Fido2Credential = {
+      credentialId: key.credentialId,
+      keyType: 'public-key',
+      keyAlgorithm: 'ECDSA',
+      keyCurve: 'P-256',
+      keyValue: key.keyValue,
+      rpId: input.rpId,
+      userHandle: toBase64Url(userHandle),
+      userName: input.userName,
+      counter: '0',
+      rpName: input.rpName || input.rpId,
+      userDisplayName: input.userDisplayName || input.userName,
+      discoverable: 'true',
+      creationDate: new Date().toISOString(),
+    };
+    const cipher: Cipher = {
+      id: '',
+      type: 1,
+      name: input.rpName || input.rpId,
+      organizationId: null,
+      collectionIds: [],
+      folderId: null,
+      reprompt: 0,
+      favorite: false,
+      notes: null,
+      login: {
+        username: input.userName,
+        password: null,
+        uris: [{ uri: `https://${input.rpId}`, match: null }],
+        fido2Credentials: [credential],
+      },
+    };
+    const payload = Buffer.from(JSON.stringify(cipher)).toString('base64');
+    const saved = JSON.parse(
+      await this.cli.run(['create', 'item'], { session: this.session, input: payload }),
+    ) as Cipher;
+    this.assertGeneration(generation);
+    this.ciphers.set(saved.id, cacheFields(saved));
+    this.countItems();
+    this.state.lastSync = new Date().toISOString();
+    this.publish();
+    const raw = credentialIdBytes(key.credentialId)!;
+    const authData = authenticatorData({
+      rpId: input.rpId,
+      counter: 0,
+      userVerified: input.userVerified,
+      attested: { credentialId: raw, publicKeyDer: key.publicKeyDer },
+    });
+    return {
+      credentialId: toBase64Url(raw),
+      attestationObject: toBase64Url(attestationObject(authData)),
+    };
   }
 
   async save(draft: LoginDraft) {
@@ -795,9 +1009,18 @@ function cacheFields(cipher: Cipher): Cipher {
       username: isRestricted(cipher) ? null : cipher.login?.username,
       password: isRestricted(cipher) ? null : cipher.login?.password,
       uris: cipher.login?.uris,
-      fido2Credentials: cipher.login?.fido2Credentials?.length ? [{}] : [],
+      fido2Credentials: isRestricted(cipher)
+        ? cipher.login?.fido2Credentials?.length
+          ? [{ credentialId: '' } as Fido2Credential]
+          : []
+        : (cipher.login?.fido2Credentials ?? []),
     },
   };
+}
+/** The passkeys on an item that this Mac can sign with. */
+function passkeysOf(cipher: Cipher): Fido2Credential[] {
+  if (cipher.type !== 1 || cipher.deletedDate || isRestricted(cipher)) return [];
+  return (cipher.login?.fido2Credentials ?? []).filter(usableCredential);
 }
 /** Whether Latch will move an item to the trash. Type does not matter here. */
 function isRemovable(cipher: Cipher) {

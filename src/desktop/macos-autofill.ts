@@ -9,10 +9,39 @@ import { UserError } from '../shared/protocol';
 import type { MacAutoFillState } from '../shared/types';
 import type { Vault } from './vault';
 
+const base64url = z
+  .string()
+  .max(2048)
+  .regex(/^[\w-]*$/);
+const rpId = z.string().min(1).max(253);
 const requestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('matches'), urls: z.array(z.string().max(4096)).max(16) }).strict(),
   z.object({ type: z.literal('fill'), url: z.string().max(4096), id: z.string().uuid() }).strict(),
+  z.object({ type: z.literal('passkeys'), rpId, allowed: z.array(base64url).max(64) }).strict(),
+  z
+    .object({
+      type: z.literal('assert'),
+      id: z.string().uuid(),
+      rpId,
+      credentialId: base64url,
+      clientDataHash: base64url,
+      userVerified: z.boolean(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('register'),
+      rpId,
+      userName: z.string().max(512),
+      userHandle: base64url,
+      clientDataHash: base64url,
+      algorithms: z.array(z.number().int()).max(32),
+      excluded: z.array(base64url).max(64),
+      userVerified: z.boolean(),
+    })
+    .strict(),
 ]);
+type Request = z.infer<typeof requestSchema>;
 type NativeReply = { ok: boolean; available?: boolean; enabled?: boolean; container?: string };
 type Native = { invoke(operation: string, input: string, callback: (json: string) => void): void };
 
@@ -168,25 +197,53 @@ export class MacAutoFill {
           socket.end(JSON.stringify({ ok: false, locked: true }) + '\n');
           return;
         }
-        // Vault lookup, matching and release are synchronous: no pending fill can
-        // resume after a lock. The extension uses Apple's service identifiers
-        // for the picker and Apple's selected identity for indexed suggestions.
-        const value =
-          request.type === 'fill'
-            ? this.vault.fill(request.id, request.url)
-            : request.urls.flatMap((url) =>
-                this.vault.matches(url).items.map((item) => ({
-                  id: item.id,
-                  name: item.name,
-                  username: item.username,
-                  url,
-                })),
-              );
-        socket.end(JSON.stringify({ ok: true, value }) + '\n');
+        void this.answer(socket, request);
       } catch {
         socket.end('{"ok":false}\n');
       }
     });
+  }
+
+  /**
+   * Password lookup, matching and release are synchronous: no pending fill can
+   * resume after a lock. Passkey writes go through the CLI; the vault rejects
+   * them once its generation changes, and the lock closes this socket.
+   */
+  private async answer(socket: Socket, request: Request) {
+    try {
+      // Passkey writes wait on the Bitwarden CLI; the extension waits 20 seconds.
+      if (request.type === 'assert' || request.type === 'register') socket.setTimeout(20_000);
+      let value: unknown;
+      if (request.type === 'fill') value = this.vault.fill(request.id, request.url);
+      else if (request.type === 'matches')
+        value = request.urls.flatMap((url) =>
+          this.vault.matches(url).items.map((item) => ({
+            id: item.id,
+            name: item.name,
+            username: item.username,
+            url,
+          })),
+        );
+      else if (request.type === 'passkeys')
+        value = this.vault.passkeys(
+          request.rpId,
+          request.allowed.map((id) => Buffer.from(id, 'base64url')),
+        );
+      else if (request.type === 'assert') value = await this.vault.assertPasskey(request);
+      else
+        value = await this.vault.registerPasskey({
+          ...request,
+          rpName: request.rpId,
+          userDisplayName: request.userName,
+        });
+      if (this.stopped || this.vault.snapshot().status !== 'unlocked') throw new Error();
+      socket.end(JSON.stringify({ ok: true, value }) + '\n');
+    } catch (error) {
+      socket.end(
+        JSON.stringify({ ok: false, error: error instanceof UserError ? error.message : '' }) +
+          '\n',
+      );
+    }
   }
 
   async stop() {

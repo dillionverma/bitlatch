@@ -22,6 +22,15 @@ static void Deliver(napi_env env, napi_value callback, void *, void *data) {
   napi_call_function(env, receiver, callback, 1, &value, nullptr);
 }
 
+// Bitwarden stores passkey byte strings as unpadded base64url.
+static NSData *DataFromBase64Url(id value) {
+  if (![value isKindOfClass:NSString.class]) return nil;
+  NSMutableString *text = [[(NSString *)value stringByReplacingOccurrencesOfString:@"-" withString:@"+"]
+    stringByReplacingOccurrencesOfString:@"_" withString:@"/"].mutableCopy;
+  while (text.length % 4) [text appendString:@"="];
+  return [[NSData alloc] initWithBase64EncodedString:text options:0];
+}
+
 static bool HasEntitlement(NSString *key) {
   SecTaskRef task = SecTaskCreateFromSelf(kCFAllocatorDefault);
   if (!task) return false;
@@ -92,8 +101,23 @@ static napi_value Invoke(napi_env env, napi_callback_info info) {
         if (![rows isKindOfClass:NSArray.class]) { finish(@{@"ok": @NO}); return; }
         NSMutableArray *identities = [NSMutableArray array];
         for (NSDictionary *row in rows) {
-          if (![row isKindOfClass:NSDictionary.class] || ![row[@"id"] isKindOfClass:NSString.class] ||
-              ![row[@"url"] isKindOfClass:NSString.class] || ![row[@"username"] isKindOfClass:NSString.class]) {
+          if (![row isKindOfClass:NSDictionary.class] || ![row[@"id"] isKindOfClass:NSString.class]) {
+            finish(@{@"ok": @NO}); return;
+          }
+          if ([row[@"kind"] isEqual:@"passkey"]) {
+            // Passkeys are indexed by relying party and credential ID so the system
+            // sheet can list them and route allow-list requests here.
+            NSData *credentialID = DataFromBase64Url(row[@"credentialId"]);
+            NSData *userHandle = DataFromBase64Url(row[@"userHandle"]);
+            if (![row[@"rpId"] isKindOfClass:NSString.class] || ![row[@"userName"] isKindOfClass:NSString.class] ||
+                !credentialID || !userHandle) {
+              finish(@{@"ok": @NO}); return;
+            }
+            [identities addObject:[[ASPasskeyCredentialIdentity alloc] initWithRelyingPartyIdentifier:row[@"rpId"]
+              userName:row[@"userName"] credentialID:credentialID userHandle:userHandle recordIdentifier:row[@"id"]]];
+            continue;
+          }
+          if (![row[@"url"] isKindOfClass:NSString.class] || ![row[@"username"] isKindOfClass:NSString.class]) {
             finish(@{@"ok": @NO}); return;
           }
           ASCredentialServiceIdentifier *service = [[ASCredentialServiceIdentifier alloc]
