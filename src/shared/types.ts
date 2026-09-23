@@ -143,7 +143,16 @@ export interface BrowserMatches {
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
+export interface MacAutoFillState {
+  available: boolean;
+  enabled: boolean;
+  reason?: string;
+}
+
 export interface LatchApi {
+  macAutoFill(): Promise<Result<MacAutoFillState>>;
+  enableMacAutoFill(): Promise<Result<MacAutoFillState>>;
+  macAutoFillSettings(): Promise<Result<void>>;
   websiteIcons(): Promise<Result<boolean>>;
   setWebsiteIcons(enabled: boolean): Promise<Result<boolean>>;
   websiteIcon(id: string): Promise<Result<string | null>>;

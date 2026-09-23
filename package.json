@@ -19,9 +19,11 @@
     "check": "npm run typecheck && npm run build",
     "format": "prettier --write src scripts *.json *.md *.mjs",
     "format:check": "prettier --check src scripts *.json *.md *.mjs",
-    "package": "npm run build && electron-builder --mac dir --arm64"
+    "package": "npm run build && electron-builder --mac dir --arm64",
+    "package:autofill": "node scripts/package-autofill.mjs"
   },
   "devDependencies": {
+    "@electron/osx-sign": "^2.7.0",
     "@phosphor-icons/react": "^2.1.10",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-virtual": "^3.13.12",
@@ -36,6 +38,8 @@
     "electron": "44.4.1",
     "electron-builder": "^26.8.1",
     "esbuild": "^0.28.2",
+    "node-api-headers": "^1.9.0",
+    "plist": "^5.0.0",
     "prettier": "^3.8.1",
     "radix-ui": "^1.6.7",
     "react": "^19.2.0",
@@ -63,7 +67,9 @@
       "THIRD_PARTY.md"
     ],
     "asar": true,
+    "afterPack": "scripts/embed-autofill.cjs",
     "asarUnpack": [
+      "dist/native/*.node",
       "dist/extension/**/*",
       "dist/desktop/native-host.cjs",
       "node_modules/electron-liquid-glass/prebuilds/**/*"

@@ -84,6 +84,8 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, respond) => {
     if (type === 'matches') return native<BrowserMatches>({ type, url });
     if (type === 'fill' && 'id' in message && typeof message.id === 'string')
       return native<FillCredential>({ type, url, id: message.id });
+    if (type === 'icon' && 'id' in message && typeof message.id === 'string')
+      return native<string | null>({ type, url, id: message.id });
     if (
       type === 'capture' &&
       'username' in message &&

@@ -4,13 +4,16 @@ import { mkdir, readFile, writeFile, copyFile, rm } from 'node:fs/promises';
 import { generateKeyPairSync, createHash } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { createRequire } from 'node:module';
+import { buildAutoFill } from './build-autofill.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 await rm(resolve(root, 'dist'), { recursive: true, force: true });
 await mkdir(resolve(root, 'dist/desktop'), { recursive: true });
 await mkdir(resolve(root, 'dist/extension'), { recursive: true });
+await buildAutoFill(root);
 
 const bundledPackages = [
+  'node-api-headers',
   'electron-liquid-glass',
   'node-gyp-build',
   'react',

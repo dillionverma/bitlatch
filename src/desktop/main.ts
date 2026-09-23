@@ -23,6 +23,7 @@ import { Vault, generatePassword } from './vault';
 import { touchIdSessionStore } from './biometrics';
 import { AccountHints } from './account-hint';
 import { BrowserBridge } from './browser-bridge';
+import { MacAutoFill } from './macos-autofill';
 import { desktopRequestSchema, safely, UserError } from '../shared/protocol';
 import type { CliPort } from './cli';
 import type { DesktopRequest } from '../shared/protocol';
@@ -39,6 +40,7 @@ let websiteIcons: WebsiteIcons;
 let vault: Vault;
 let cli: CliPort | undefined;
 let bridge: BrowserBridge;
+let macAutoFill: MacAutoFill;
 let busy = false;
 let copiedValue = '';
 let clipboardTimer: NodeJS.Timeout | undefined;
@@ -83,6 +85,13 @@ void app
     const hints = new AccountHints(join(app.getPath('userData'), 'account-hint.json'));
     const [, hint] = await Promise.all([sessions.load(), hints.read()]);
     vault = new Vault(engine.cli, sessions);
+    macAutoFill = new MacAutoFill(vault);
+    vault.on('state', () => macAutoFill.update());
+    // AutoFill setup failures must not prevent opening or locking the vault.
+    void macAutoFill
+      .status()
+      .then(() => macAutoFill.update())
+      .catch(() => undefined);
     if (hint) {
       vault.showLockedAccount(hint);
       hasAccountHint = true;
@@ -104,7 +113,7 @@ void app
       extensionId: manifest.extensionId,
       executable: process.execPath,
       hostScript,
-      handle(request) {
+      async handle(request) {
         if (request.type === 'open') {
           showWindow();
           return vault.snapshot().status;
@@ -116,6 +125,15 @@ void app
         if (request.type === 'pendingCapture') return vault.pendingCapture(request.url);
         if (request.type === 'commitCapture') return vault.commitCapture(request.url);
         if (request.type === 'dismissCapture') return vault.dismissCapture();
+        if (request.type === 'icon') {
+          // Only an item the page may already see gets an icon; no secret is read.
+          if (!websiteIcons.enabled) return null;
+          const item = vault.matches(request.url).items.find((entry) => entry.id === request.id);
+          if (!item?.website) return null;
+          const epoch = mutationEpoch;
+          const icon = await websiteIcons.get(item.website);
+          return epoch === mutationEpoch && vault.snapshot().status === 'unlocked' ? icon : null;
+        }
         return vault.fill(request.id, request.url);
       },
     });
@@ -176,6 +194,7 @@ void app
       }
     });
     window.once('ready-to-show', () => window.show());
+    window.on('focus', () => void macAutoFill.status().catch(() => undefined));
     vault.on('state', (state) => {
       nativeInteractions.cancelMenu();
       if (state.status !== 'unlocked') {
@@ -224,6 +243,12 @@ void app
 
 async function handleRequest(request: DesktopRequest): Promise<unknown> {
   switch (request.type) {
+    case 'macAutoFill':
+      return macAutoFill.status();
+    case 'enableMacAutoFill':
+      return macAutoFill.enable();
+    case 'macAutoFillSettings':
+      return macAutoFill.settings();
     case 'websiteIcons':
       return websiteIcons.enabled;
     case 'setWebsiteIcons':
@@ -415,7 +440,12 @@ app.on('before-quit', (event) => {
   isQuitting = true;
   globalShortcut.unregisterAll();
   ++mutationEpoch;
-  void Promise.allSettled([vault?.lock(false), bridge?.stop(), clearCopiedSecret()])
+  void Promise.allSettled([
+    vault?.lock(false),
+    bridge?.stop(),
+    macAutoFill?.stop(),
+    clearCopiedSecret(),
+  ])
     // The vault server holds an unlocked vault, so it goes last and always.
     .then(() => cli?.stop?.())
     .finally(() => app.quit());

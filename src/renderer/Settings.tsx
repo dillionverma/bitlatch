@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   ArrowUpRight,
   Check,
@@ -11,7 +11,7 @@ import {
   LockKey,
   PaintBrush,
 } from '@phosphor-icons/react';
-import type { VaultState } from '../shared/types';
+import type { MacAutoFillState, VaultState } from '../shared/types';
 import { useWebsiteIcons } from './WebsiteIcons';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
@@ -29,6 +29,12 @@ import './tasks.css';
 import './settings.css';
 
 const sections = [
+  {
+    id: 'autofill',
+    label: 'AutoFill',
+    icon: LockKey,
+    description: 'Fill logins in Safari and supported Mac apps.',
+  },
   {
     id: 'appearance',
     label: 'Appearance',
@@ -74,7 +80,10 @@ export function Settings({
   const icons = useWebsiteIcons();
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState<'install' | 'folder' | 'biometrics' | 'icons' | null>(null);
+  const [busy, setBusy] = useState<
+    'install' | 'folder' | 'biometrics' | 'icons' | 'autofill' | 'autofillSettings' | null
+  >(null);
+  const [autoFill, setAutoFill] = useState<MacAutoFillState | null>(null);
   const [active, setActive] = useState(true);
   const alive = useRef(false);
   const epoch = useRef(0);
@@ -97,7 +106,32 @@ export function Settings({
       unsubscribe();
     };
   }, []);
-  async function run(kind: 'install' | 'folder' | 'biometrics' | 'icons') {
+  useEffect(() => {
+    let current = true;
+    let revision = 0;
+    const refresh = async () => {
+      if (working.current) return;
+      const request = ++revision;
+      const result = await window.latch.macAutoFill().catch(() => null);
+      if (!current || !alive.current || request !== revision || working.current) return;
+      if (result?.ok) setAutoFill(result.value);
+      else
+        setError(
+          result && !result.ok
+            ? result.error
+            : 'Could not check macOS AutoFill. Reopen Settings to try again.',
+        );
+    };
+    void refresh();
+    window.addEventListener('focus', refresh);
+    return () => {
+      current = false;
+      window.removeEventListener('focus', refresh);
+    };
+  }, []);
+  async function run(
+    kind: 'install' | 'folder' | 'biometrics' | 'icons' | 'autofill' | 'autofillSettings',
+  ) {
     if (working.current || biometricsBusy || !alive.current) return;
     working.current = true;
     setBusy(kind);
@@ -106,7 +140,17 @@ export function Settings({
     try {
       if (kind === 'biometrics') await onBiometrics(!biometricsOn);
       else if (kind === 'icons') await icons.setEnabled(!icons.enabled);
-      else {
+      else if (kind === 'autofill' || kind === 'autofillSettings') {
+        if (kind === 'autofillSettings') {
+          const result = await window.latch.macAutoFillSettings();
+          if (!result.ok && alive.current && request === epoch.current) setError(result.error);
+        } else {
+          const result = await window.latch.enableMacAutoFill();
+          if (!alive.current || request !== epoch.current) return;
+          if (result.ok) setAutoFill(result.value);
+          else setError(result.error);
+        }
+      } else {
         const result = await (kind === 'install'
           ? window.latch.installBrowser()
           : window.latch.openExtensionFolder());
@@ -209,6 +253,50 @@ export function Settings({
             <h2>{current.label}</h2>
             <p>{current.description}</p>
           </header>
+          {section === 'autofill' && (
+            <section className="task-settings-section">
+              <h3>macOS AutoFill</h3>
+              <div className="settings-group">
+                <div className="settings-row">
+                  <div>
+                    <strong>Use Latch for AutoFill</strong>
+                    <p>
+                      {autoFill?.enabled
+                        ? 'Latch is enabled in macOS.'
+                        : 'Let macOS suggest logins from your vault.'}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={pending || !autoFill?.available}
+                    onClick={() => void run(autoFill?.enabled ? 'autofillSettings' : 'autofill')}
+                    aria-busy={busy === 'autofill'}
+                  >
+                    {busy === 'autofill' || !autoFill ? (
+                      <Spinner />
+                    ) : autoFill.enabled ? (
+                      <Check data-icon="inline-start" />
+                    ) : null}
+                    {busy === 'autofill'
+                      ? 'Waiting for macOS…'
+                      : autoFill?.enabled
+                        ? 'Manage in Settings'
+                        : 'Turn on…'}
+                  </Button>
+                </div>
+              </div>
+              <p className="settings-caption">
+                {autoFill && !autoFill.available
+                  ? autoFill.reason
+                  : 'macOS will ask you to confirm. Keep Latch running and unlocked to fill a login.'}
+              </p>
+              <p className="settings-caption">
+                Login websites and usernames are shared with macOS for suggestions. Passwords are
+                requested only when you choose a login.
+              </p>
+            </section>
+          )}
           {section === 'appearance' && (
             <section className="task-settings-section">
               <h3>Vault items</h3>

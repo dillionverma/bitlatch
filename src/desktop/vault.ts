@@ -533,6 +533,28 @@ export class Vault extends EventEmitter {
     };
   }
 
+  /** Only non-secret, fillable identities go to Apple's suggestion index. */
+  autoFillIdentities(): { id: string; username: string; url: string }[] {
+    if (this.state.status !== 'unlocked') return [];
+    const identities = new Map<string, { id: string; username: string; url: string }>();
+    for (const cipher of this.ciphers.values()) {
+      for (const uri of cipher.login?.uris ?? []) {
+        // Apple's suggestion identity is not the current page URL. Keep exact
+        // and prefix rules in the picker, where macOS supplies the target URL.
+        // Never publish saved URL paths, queries or fragments to the OS index.
+        if (!uri.uri || uri.match === 2 || uri.match === 3) continue;
+        const url = webUrl(uri.uri.includes('://') ? uri.uri : `https://${uri.uri}`)?.origin;
+        if (!url || !matchesUri(uri, url) || !canFill(cipher, url)) continue;
+        identities.set(`${cipher.id}:${url}`, {
+          id: cipher.id,
+          username: cipher.login?.username ?? '',
+          url,
+        });
+      }
+    }
+    return [...identities.values()];
+  }
+
   /**
    * Notices a sign-in the browser just watched, and decides whether it is worth
    * offering to save. Nothing is held while the vault is locked, so a captured

@@ -5,6 +5,9 @@ import type { DesktopRequest } from '../shared/protocol';
 const request = (message: DesktopRequest) => ipcRenderer.invoke('latch:request', message);
 
 const api: LatchApi = {
+  macAutoFill: () => request({ type: 'macAutoFill' }),
+  enableMacAutoFill: () => request({ type: 'enableMacAutoFill' }),
+  macAutoFillSettings: () => request({ type: 'macAutoFillSettings' }),
   websiteIcons: () => request({ type: 'websiteIcons' }),
   setWebsiteIcons: (enabled) => request({ type: 'setWebsiteIcons', enabled }),
   websiteIcon: (id) => request({ type: 'websiteIcon', id }),
