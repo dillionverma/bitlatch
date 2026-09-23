@@ -70,6 +70,7 @@ import type {
     .text{flex:1;min-width:0}.name,.sub{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.name{font-size:13px;font-weight:500;line-height:18px}.sub{font-size:12px;line-height:16px;color:var(--muted-foreground)}
     .key{flex:none;min-width:20px;padding:0 5px;border-radius:4px;background:var(--secondary);box-shadow:inset 0 0 0 1px var(--border);color:var(--muted-foreground);font-size:11px;line-height:17px;text-align:center}
     .hint{font-size:12px;line-height:16px;color:var(--muted-foreground);padding:10px 12px;overflow-wrap:anywhere}
+    .group{font-size:11px;line-height:15px;font-weight:500;color:var(--muted-foreground);padding:8px 8px 2px;border-top:1px solid var(--border);margin-top:4px}
     .foot{border-top:1px solid var(--border);padding:5px 6px 5px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex:none;color:var(--muted-foreground);font-size:12px;line-height:16px}
     .origin{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
     .action{font-size:12px;font-weight:500;color:var(--foreground);background:transparent;border:0;border-radius:6px;padding:4px 8px;min-height:26px;flex:none}
@@ -452,7 +453,11 @@ import type {
     } else if (!response.value.items.length) {
       results.append(element('div', 'hint', 'No logins for this website.'));
     } else {
-      for (const [index, item] of response.value.items.entries()) {
+      const ranked = rankItems(response.value.items, pageIdentities());
+      const shown = ranked.filter((entry) => entry.rank < 2).length;
+      for (const [index, { item, rank }] of ranked.entries()) {
+        if (shown && index === shown && rank === 2)
+          results.append(element('div', 'group', 'Other logins'));
         const row = element('button', 'row');
         row.type = 'button';
         row.dataset.loginId = item.id;
@@ -502,6 +507,50 @@ import type {
       if (version === requestVersion && tile.isConnected) tile.replaceChildren(image);
     });
     image.src = icon.value;
+  }
+
+  const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
+
+  /**
+   * Account names the page already shows: a filled username field, a hidden
+   * identifier the site carried over, or an email printed near the form, like
+   * an account chooser chip. Read only, never sent anywhere.
+   */
+  function pageIdentities(): Set<string> {
+    const found = new Set<string>();
+    const add = (value: string | null | undefined) => {
+      const text = value?.trim().toLowerCase();
+      if (text && text.length <= 254) found.add(text);
+    };
+    for (const input of document.querySelectorAll<HTMLInputElement>('input')) {
+      if (input === active || !['text', 'email', 'tel', 'hidden'].includes(input.type)) continue;
+      const value = input.value.trim();
+      if (!value || value.length > 254) continue;
+      const field = `${input.name} ${input.id} ${input.autocomplete}`.toLowerCase();
+      if (value.includes('@') || /user|email|login|identifier|account/.test(field)) add(value);
+    }
+    const region =
+      active?.closest<HTMLElement>('form, main, [role="main"], section, article') ?? document.body;
+    for (const match of (region?.innerText ?? '').slice(0, 20_000).matchAll(EMAIL)) add(match[0]);
+    return found;
+  }
+
+  /** 0 when the page shows this login's account, 1 for a local-part match, else 2. */
+  function identityRank(username: string, identities: Set<string>) {
+    const name = username.trim().toLowerCase();
+    if (!name || !identities.size) return 2;
+    if (identities.has(name)) return 0;
+    const local = name.split('@')[0]!;
+    for (const identity of identities)
+      if (identity === local || identity.split('@')[0] === name) return 1;
+    return 2;
+  }
+
+  /** Logins whose account the page shows first, keeping the app's order otherwise. */
+  function rankItems<T extends { username: string }>(items: T[], identities: Set<string>) {
+    return items
+      .map((item, index) => ({ item, index, rank: identityRank(item.username, identities) }))
+      .sort((a, b) => a.rank - b.rank || a.index - b.index);
   }
 
   function setValue(input: HTMLInputElement, value: string) {
@@ -598,20 +647,25 @@ import type {
     )
       return;
     const matches = await send<BrowserMatches>({ type: 'matches' });
-    if (
-      lifetime !== lifecycleVersion ||
-      !matches.ok ||
-      matches.value.state !== 'unlocked' ||
-      matches.value.items.length !== 1
-    )
-      return;
+    if (lifetime !== lifecycleVersion || !matches.ok || matches.value.state !== 'unlocked') return;
+    // One login for the site, or one whose account the page already names.
+    const exact = rankItems(matches.value.items, pageIdentities()).filter(
+      (entry) => entry.rank === 0,
+    );
+    const chosen =
+      matches.value.items.length === 1
+        ? matches.value.items[0]!
+        : exact.length === 1
+          ? exact[0]!.item
+          : undefined;
+    if (!chosen || !active?.isConnected) return;
     if (
       active.value ||
       active.form?.querySelector<HTMLInputElement>('input[type="password"]')?.value
     )
       return;
     autoFilled = true;
-    await fill(matches.value.items[0]!.id);
+    await fill(chosen.id);
   }
 
   /** The credentials a submitted form is carrying, if it looks like a sign-in. */
