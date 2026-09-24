@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/readme/vault.png" alt="Latch in dark mode: a sidebar, a list of vault items, and a selected login with its password hidden. All accounts shown are demo data." width="1080" />
+  <img src="assets/readme/vault.png" alt="Latch with a glass window over a macOS wallpaper: a clean sidebar, vault items, and a selected login with its password hidden. All accounts shown are demo data." width="1080" />
 </p>
 
 Latch is a focused Mac companion for Bitwarden. Find a login, copy a password, or fill it in your browser. Your existing vault stays with Bitwarden; Latch uses the official CLI for authentication and vault cryptography.
