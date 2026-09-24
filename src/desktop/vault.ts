@@ -617,16 +617,24 @@ export class Vault extends EventEmitter {
     if (this.state.status !== 'unlocked' || !password) return { action: 'none' };
     const site = fillableUrl(url);
     if (!site) return { action: 'none' };
+    // Items with passkeys still count as saved; Latch just never edits them.
     const known = [...this.ciphers.values()].filter(
       (cipher) =>
         cipher.type === 1 &&
         !cipher.deletedDate &&
         !isRestricted(cipher) &&
-        !cipher.login?.fido2Credentials?.length &&
         (cipher.login?.uris ?? []).some((uri) => matchesUri(uri, url)),
     );
-    const match = known.find((cipher) => (cipher.login?.username ?? '') === username);
-    if (match && (match.login?.password ?? '') === password) return { action: 'none' };
+    // The same password on this site is already saved, even when the page took
+    // an email for a saved username, or asked for the password alone.
+    if (known.some((cipher) => (cipher.login?.password ?? '') === password))
+      return { action: 'none' };
+    const account = username.trim().toLocaleLowerCase();
+    const match = known.find(
+      (cipher) => (cipher.login?.username ?? '').trim().toLocaleLowerCase() === account,
+    );
+    // Without a username there is no telling which saved account changed.
+    if ((match && !isEditable(match)) || (!account && known.length)) return { action: 'none' };
     const at = Date.now();
     if (match) {
       this.captured = {
