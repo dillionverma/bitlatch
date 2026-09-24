@@ -2,6 +2,27 @@
 
 The containing app calls Apple's `ASSettingsHelper` API to show **Turn on AutoFill from “Latch”?** on macOS 15 or later. macOS 14 opens AutoFill settings instead. This requires a signed Credential Provider extension; an Electron dialog cannot enable it.
 
+## Implementation
+
+A small Swift 6 credential-provider extension handles Apple's callbacks and user
+verification, then forwards requests to the existing TypeScript vault over an
+authenticated app-group socket. This follows [Bitwarden's desktop architecture](https://github.com/bitwarden/clients/blob/main/apps/desktop/macos/autofill-extension/CredentialProviderViewController.swift);
+it is a Latch implementation, not a copied SDK or a second passkey store.
+
+- `Provider.swift`: password picker, passkey registration/assertion, and system authentication.
+- `VaultClient.swift`: asynchronous, cancellable IPC with a 20-second deadline and bounded replies.
+- `AutoFill.swift`: settings, enablement, and Apple's credential suggestion index inside Electron.
+- `bridge.c`: only the Node-API adapter; no Apple UI or vault logic.
+- `Encoding.swift` and `main.swift`: shared byte encoding and extension entry point.
+
+Builds use Xcode's Swift compiler and system frameworks; no new packages or Xcode
+project are needed. The supported baseline remains macOS 14. Swift compilation
+uses strict Swift 6 concurrency checks and warnings as errors.
+
+Apple's [supporting passkeys](https://developer.apple.com/documentation/authenticationservices/supporting-passkeys)
+article covers apps requesting credentials. Latch implements the other side using
+[ASCredentialProviderViewController](https://developer.apple.com/documentation/authenticationservices/ascredentialproviderviewcontroller).
+
 ## Signed build
 
 Create macOS provisioning profiles for these explicit identifiers, with **AutoFill Credential Provider** enabled on both:
@@ -23,7 +44,7 @@ The command checks the profiles, builds both native binaries, embeds the extensi
 `pnpm run check` compiles the native code on macOS with Xcode's SDK and treats warnings as errors. `pnpm run package` remains unsigned; its AutoFill control explains that a signed build is required. `LATCH_DATA_DIR` disables the native integration for isolated fixtures.
 
 Use the same signing certificate for updates to retain the app's Keychain identity.
-Install one copy at `~/Applications/Latch.app`. If Xcode created a temporary app
+Install one copy at `/Applications/Latch.app`. If Xcode created a temporary app
 with either production bundle identifier to generate profiles, unregister and
 remove that app before installing Latch. Duplicate apps can make the system
 passkey chooser show the wrong provider name and icon.
@@ -36,6 +57,7 @@ passkey chooser show the wrong provider name and icon.
 - A sandboxed AppKit extension offers matching logins for the service identifiers provided by macOS. Selection requests one credential through a bounded, authenticated Unix socket in the app group. Latch rechecks the current vault and URI rules before releasing it.
 - Latch must be running and unlocked. The extension tells the user to unlock Latch and retry. It cannot unlock the vault or run the Bitwarden CLI itself.
 - Passkeys stay in the Bitwarden vault; Latch has no separate passkey store. Personal items with a P-256 passkey are indexed by relying party and credential ID, so the system passkey sheet lists them in Safari, Chromium browsers and apps. Sign-in and registration ask for Touch ID or the login password in the extension unless the site marks verification as discouraged. The app signs with the stored key, using the same authenticator data, `none` attestation and counter rule as Bitwarden's clients, and writes new passkeys and counter changes back through the CLI, so nothing is released or created if the write fails. Latch creates discoverable ES256 passkeys only; requests that exclude ES256 or that name an already-saved credential are refused.
+- Dismissing or replacing a request cancels native IPC and user verification; late replies cannot fill. Oversized passkey allow/exclude lists are rejected, never truncated.
 - OTPs and native save prompts are not implemented. Passkey registration does not receive the relying party's display name from macOS, so a new item is named after the relying party identifier.
 
 ## Manual acceptance (synthetic vault only)

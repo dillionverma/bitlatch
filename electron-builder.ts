@@ -47,6 +47,10 @@ export default {
     category: 'public.app-category.productivity',
     identity: null,
     hardenedRuntime: true,
+    publish:
+      process.env.LATCH_RELEASE === '1'
+        ? { provider: 'github', owner: 'dillionverma', repo: 'latch' }
+        : null,
   },
   // The updater downloads the zip, so the DMG needs no update metadata that
   // compressDmgs would invalidate.

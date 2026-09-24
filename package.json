@@ -22,6 +22,7 @@
     "package:linux": "pnpm run build && electron-builder --linux --publish never",
     "package:win": "pnpm run build && electron-builder --win --publish never",
     "package:autofill": "node scripts/package-autofill.mjs",
+    "package:release": "node scripts/package-autofill.mjs --release",
     "postinstall": "wxt prepare",
     "extension:dev": "wxt -b chrome",
     "extension:dev:firefox": "wxt -b firefox --mv3",
@@ -62,12 +63,13 @@
     "tldts": "^7.4.2",
     "tw-animate-css": "^1.4.0",
     "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0-rc.0",
+    "vite-plus": "1.0.0-rc.0",
     "wxt": "^0.21.4",
-    "zod": "^4.3.6",
-    "vite-plus": "1.0.0-rc.0"
+    "zod": "^4.3.6"
   },
   "dependencies": {
     "electron-liquid-glass": "1.1.1",
+    "electron-updater": "^6.8.9",
     "node-gyp-build": "4.8.4"
   },
   "engines": {

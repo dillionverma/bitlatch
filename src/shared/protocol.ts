@@ -79,7 +79,13 @@ export const desktopRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('save'), draft: loginDraft }).strict(),
   z.object({ type: z.literal('delete'), id }).strict(),
   z.object({ type: z.literal('restore'), id }).strict(),
-  z.object({ type: z.literal('copy'), id, field: z.enum(['username', 'password']) }).strict(),
+  z
+    .object({
+      type: z.literal('copy'),
+      id,
+      field: z.enum(['username', 'password', 'notes', 'website']),
+    })
+    .strict(),
   z.object({ type: z.literal('generate') }).strict(),
   z.object({ type: z.literal('installBrowser') }).strict(),
   z.object({ type: z.literal('openExtensionFolder') }).strict(),
@@ -122,8 +128,17 @@ export async function safely<T>(operation: () => T | Promise<T>) {
 
 // A separate socket/token keeps launcher commands out of the browser protocol.
 export const launcherRequestSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('unlock'), password: z.string().min(1).max(1_024) }).strict(),
+  z.object({ type: z.literal('biometricUnlock') }).strict(),
+  z.object({ type: z.literal('detail'), id }).strict(),
   z.object({ type: z.literal('search'), query: z.string().max(500) }).strict(),
-  z.object({ type: z.literal('copy'), id, field: z.enum(['username', 'password']) }).strict(),
+  z
+    .object({
+      type: z.literal('copy'),
+      id,
+      field: z.enum(['username', 'password', 'notes', 'website']),
+    })
+    .strict(),
   z.object({ type: z.literal('lock') }).strict(),
   z.object({ type: z.literal('open') }).strict(),
 ]);

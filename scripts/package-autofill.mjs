@@ -10,10 +10,16 @@ const root = resolve(import.meta.dirname, '..');
 const identity = process.env.LATCH_SIGN_IDENTITY;
 const appProfile = process.env.LATCH_APP_PROFILE;
 const extensionProfile = process.env.LATCH_AUTOFILL_PROFILE;
+const release = process.argv.includes('--release');
+const notarizationProfile = process.env.LATCH_NOTARY_PROFILE;
 let localDeviceIds;
 if (process.platform !== 'darwin' || !identity || !appProfile || !extensionProfile)
   throw new Error(
     'Set LATCH_SIGN_IDENTITY, LATCH_APP_PROFILE and LATCH_AUTOFILL_PROFILE on a Mac. See native/autofill/README.md.',
+  );
+if (release && (!identity.startsWith('Developer ID Application:') || !notarizationProfile))
+  throw new Error(
+    'Release builds require a Developer ID Application identity and LATCH_NOTARY_PROFILE.',
   );
 
 function profile(path, identifier, autofill = true) {
@@ -36,6 +42,7 @@ function profile(path, identifier, autofill = true) {
       `The profile for ${identifier} must be current, macOS-specific, and authorize AutoFill.`,
     );
   if (Array.isArray(value.ProvisionedDevices)) {
+    if (release) throw new Error('Release builds require Developer ID distribution profiles.');
     if (!localDeviceIds) {
       const hardware = JSON.parse(
         execFileSync('system_profiler', ['SPHardwareDataType', '-json'], { encoding: 'utf8' }),
@@ -60,13 +67,22 @@ const safariProfile = process.env.LATCH_SAFARI_PROFILE;
 const safari = safariProfile ? profile(safariProfile, 'app.latch.vault.safari', false) : undefined;
 if (safari && safari.team !== host.team)
   throw new Error('Safari and Latch must use the same signing team.');
-const env = { ...process.env, LATCH_APP_GROUP: group, CSC_IDENTITY_AUTO_DISCOVERY: 'false' };
+const env = {
+  ...process.env,
+  LATCH_APP_GROUP: group,
+  LATCH_RELEASE: release ? '1' : '0',
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false',
+};
 execFileSync('pnpm', ['run', 'build'], { cwd: root, env, stdio: 'inherit' });
-execFileSync(join(root, 'node_modules/.bin/electron-builder'), ['--mac', 'dir', '--arm64'], {
-  cwd: root,
-  env,
-  stdio: 'inherit',
-});
+execFileSync(
+  join(root, 'node_modules/.bin/electron-builder'),
+  ['--mac', 'dir', '--arm64', '--publish', 'never'],
+  {
+    cwd: root,
+    env,
+    stdio: 'inherit',
+  },
+);
 const app = join(root, 'release/mac-arm64/Latch.app');
 const appex = join(app, 'Contents/PlugIns/LatchAutoFill.appex');
 const signing = join(root, 'release/autofill-signing');
@@ -166,4 +182,9 @@ await sign({
   }),
 });
 execFileSync('codesign', ['--verify', '--deep', '--strict', app], { stdio: 'inherit' });
-console.log('Signed AutoFill build: release/mac-arm64/Latch.app. Not installed or notarized.');
+if (release) {
+  const { notarizeRelease } = await import('./notarize-release.mjs');
+  await notarizeRelease({ root, app, identity, notarizationProfile, env });
+} else {
+  console.log('Signed AutoFill build: release/mac-arm64/Latch.app. Not installed or notarized.');
+}

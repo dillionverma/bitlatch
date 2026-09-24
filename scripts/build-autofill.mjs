@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdir, readFile, writeFile, copyFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, copyFile, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createRequire } from 'node:module';
 
@@ -48,54 +48,63 @@ export async function buildAutoFill(root) {
     ],
     { stdio: 'inherit' },
   );
+  const native = resolve(root, 'native/autofill');
+  const run = (args) => execFileSync('xcrun', args, { stdio: 'inherit' });
   const common = [
-    '-fobjc-arc',
-    '-fblocks',
+    '-swift-version',
+    '6',
+    '-target',
+    `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx14.0`,
+    '-warnings-as-errors',
+    '-O',
+  ];
+  const bridge = resolve(output, 'bridge.o');
+  run([
+    'clang',
+    '-c',
     '-mmacosx-version-min=14.0',
     '-Wall',
     '-Wextra',
     '-Werror',
     '-Wno-unused-parameter',
-    '-framework',
-    'Foundation',
-    '-framework',
-    'AuthenticationServices',
-  ];
-  execFileSync(
-    'xcrun',
-    [
-      'clang++',
-      ...common,
-      '-std=c++17',
-      '-bundle',
-      '-undefined',
-      'dynamic_lookup',
-      '-I',
-      include,
-      '-framework',
-      'Security',
-      resolve(root, 'native/autofill/addon.mm'),
-      '-o',
-      resolve(output, 'latch-autofill.node'),
-    ],
-    { stdio: 'inherit' },
-  );
-  execFileSync(
-    'xcrun',
-    [
-      'clang',
-      ...common,
-      '-fapplication-extension',
-      '-framework',
-      'AppKit',
-      '-framework',
-      'LocalAuthentication',
-      resolve(root, 'native/autofill/Provider.m'),
-      '-o',
-      resolve(contents, 'MacOS/LatchAutoFill'),
-    ],
-    { stdio: 'inherit' },
-  );
+    '-I',
+    include,
+    resolve(native, 'bridge.c'),
+    '-o',
+    bridge,
+  ]);
+  run([
+    'swiftc',
+    ...common,
+    '-emit-library',
+    '-import-objc-header',
+    resolve(native, 'Bridge.h'),
+    resolve(native, 'AutoFill.swift'),
+    resolve(native, 'Encoding.swift'),
+    bridge,
+    '-Xlinker',
+    '-undefined',
+    '-Xlinker',
+    'dynamic_lookup',
+    '-Xlinker',
+    '-install_name',
+    '-Xlinker',
+    '@rpath/latch-autofill.node',
+    '-o',
+    resolve(output, 'latch-autofill.node'),
+  ]);
+  await rm(bridge);
+  run([
+    'swiftc',
+    ...common,
+    '-application-extension',
+    resolve(native, 'Provider.swift'),
+    resolve(native, 'VaultClient.swift'),
+    resolve(native, 'Encoding.swift'),
+    resolve(native, 'main.swift'),
+    '-o',
+    resolve(contents, 'MacOS/LatchAutoFill'),
+  ]);
   const group = process.env.LATCH_APP_GROUP ?? 'UNCONFIGURED.app.latch.vault';
   if (!/^[A-Z0-9]+\.app\.latch\.vault$/.test(group)) throw new Error('Invalid LATCH_APP_GROUP');
   const { version } = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
@@ -112,6 +121,8 @@ export async function buildAutoFill(root) {
 <key>CFBundleName</key><string>Latch</string>
 <key>CFBundleDisplayName</key><string>Latch</string>
 <key>CFBundleExecutable</key><string>LatchAutoFill</string>
+<key>CFBundleIconName</key><string>Latch</string>
+<key>CFBundleIconFile</key><string>Latch.icns</string>
 <key>CFBundlePackageType</key><string>XPC!</string>
 <key>CFBundleVersion</key><string>${version}</string>
 <key>CFBundleShortVersionString</key><string>${version}</string>

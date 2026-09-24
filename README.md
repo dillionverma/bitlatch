@@ -38,7 +38,9 @@ pnpm run package:linux  # AppImage and deb, host architecture
 pnpm run package:win    # NSIS installer, host architecture
 ```
 
-The Desktop packages workflow builds macOS arm64 and Linux x64/arm64 packages when run manually or when a `v*` tag is pushed, and keeps them as workflow artifacts. Linux packages build, but the Bitwarden CLI lookup and browser registration are still macOS-only. The Windows package builds, but Windows cannot run Latch yet: its local connections use Unix sockets.
+The Desktop packages workflow builds unsigned macOS arm64 and Linux x64/arm64 packages when run manually, and keeps them as workflow artifacts. Linux packages build, but the Bitwarden CLI lookup and browser registration are still macOS-only. The Windows package builds, but Windows cannot run Latch yet: its local connections use Unix sockets.
+
+Stable `v*` tags run the separate macOS release draft workflow, which requires Apple signing secrets and creates a notarized draft release with update metadata. See [release setup and acceptance](docs/releases.md). `pnpm run package:release` runs the same signing/notarization path locally without publishing.
 
 Native macOS AutoFill needs Xcode to build and Apple provisioning profiles for the app and its Credential Provider extension. See [AutoFill setup](native/autofill/README.md). The system enable prompt requires macOS 15 or later; macOS 14 opens System Settings instead.
 

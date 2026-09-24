@@ -17,7 +17,7 @@ import { readFile, mkdir } from 'node:fs/promises';
 import { prepareWindowAppearance } from './window-appearance';
 import { manageWindowLayout } from './window-layout';
 import { installNativeInteractions } from './native-interactions';
-import { WebsiteIcons } from './website-icons';
+import { iconHostname, WebsiteIcons } from './website-icons';
 import type { WindowCommand } from '../shared/types';
 import { localEngine } from './engine';
 import { Vault, generatePassword } from './vault';
@@ -25,6 +25,7 @@ import { touchIdSessionStore } from './biometrics';
 import { AccountHints } from './account-hint';
 import { BrowserBridge } from './browser-bridge';
 import { MacAutoFill } from './macos-autofill';
+import { createUpdates } from './updates';
 import {
   browserRequestSchema,
   launcherRequestSchema,
@@ -50,6 +51,7 @@ let bridge: BrowserBridge<BrowserRequest>;
 let safariBridge: BrowserBridge<BrowserRequest> | undefined;
 let launcherBridge: BrowserBridge<LauncherRequest>;
 let macAutoFill: MacAutoFill;
+let updates: ReturnType<typeof createUpdates> | undefined;
 let busy = false;
 let copiedValue = '';
 let clipboardTimer: NodeJS.Timeout | undefined;
@@ -165,13 +167,25 @@ void app
           showWindow();
           return null;
         }
+        if (request.type === 'unlock' || request.type === 'biometricUnlock') {
+          await handleRequest(request);
+          return null;
+        }
+        if (request.type === 'detail') {
+          const item = vault.detail(request.id);
+          if (item.type !== 1 && item.type !== 2)
+            throw new UserError('This item type is not supported yet.');
+          const { id, name, username, website, type, notes } = item;
+          return { id, name, username, website, type, notes, hasPassword: Boolean(item.password) };
+        }
         if (request.type !== 'search') return handleRequest(request);
-        const status = vault.snapshot().status;
-        if (status !== 'unlocked') return { status, items: [] };
+        const { status, email, biometrics, biometricsOn } = vault.snapshot();
+        const state = { status, email, canUseBiometrics: biometricsOn && biometrics === 'ready' };
+        if (status !== 'unlocked') return { ...state, items: [] };
         const terms = request.query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
         const items = vault
           .items()
-          .filter((item) => item.type === 1 && !item.restricted)
+          .filter((item) => (item.type === 1 || item.type === 2) && !item.restricted)
           .filter((item) =>
             terms.every((term) =>
               `${item.name} ${item.username} ${item.website}`.toLocaleLowerCase().includes(term),
@@ -179,8 +193,20 @@ void app
           )
           .sort((a, b) => Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name))
           .slice(0, 80)
-          .map(({ id, name, username, website }) => ({ id, name, username, website }));
-        return { status, items };
+          .map(({ id, name, username, website, type }) => {
+            const host = websiteIcons.enabled ? iconHostname(website) : null;
+            return {
+              id,
+              name,
+              username,
+              website,
+              type,
+              ...(host
+                ? { iconUrl: `https://icons.bitwarden.net/${encodeURIComponent(host)}/icon.png` }
+                : {}),
+            };
+          });
+        return { ...state, items };
       },
     });
     await launcherBridge.start();
@@ -301,6 +327,7 @@ void app
         return handleRequest(parsed.data);
       }),
     );
+    updates = createUpdates();
     installMenu();
     globalShortcut.register('CommandOrControl+Shift+Space', showWindow);
     powerMonitor.on('suspend', lockVault);
@@ -473,46 +500,46 @@ function sendCommand(command: WindowCommand) {
 }
 
 function installMenu() {
-  Menu.setApplicationMenu(
-    Menu.buildFromTemplate([
-      {
-        label: 'Latch',
-        submenu: [
-          { role: 'about' },
-          { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => sendCommand('settings') },
-          { type: 'separator' },
-          { label: 'Lock vault', accelerator: 'CmdOrCtrl+L', click: lockVault },
-          { type: 'separator' },
-          { role: 'hide' },
-          { role: 'hideOthers' },
-          { role: 'unhide' },
-          { type: 'separator' },
-          { role: 'quit' },
-        ],
-      },
-      {
-        label: 'File',
-        submenu: [
-          { label: 'New Login', accelerator: 'CmdOrCtrl+N', click: () => sendCommand('new') },
-        ],
-      },
-      { role: 'editMenu' },
-      {
-        label: 'View',
-        submenu: [
-          {
-            label: 'Quick open',
-            accelerator: 'CmdOrCtrl+K',
-            click: () => {
-              sendCommand('search');
-            },
+  const menu = Menu.buildFromTemplate([
+    {
+      label: 'Latch',
+      submenu: [
+        { role: 'about' },
+        { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => sendCommand('settings') },
+        { type: 'separator' },
+        { label: 'Lock vault', accelerator: 'CmdOrCtrl+L', click: lockVault },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    {
+      label: 'File',
+      submenu: [
+        { label: 'New Login', accelerator: 'CmdOrCtrl+N', click: () => sendCommand('new') },
+      ],
+    },
+    { role: 'editMenu' },
+    {
+      label: 'View',
+      submenu: [
+        {
+          label: 'Quick open',
+          accelerator: 'CmdOrCtrl+K',
+          click: () => {
+            sendCommand('search');
           },
-          { role: 'togglefullscreen' },
-        ],
-      },
-      { role: 'windowMenu' },
-    ]),
-  );
+        },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    { role: 'windowMenu' },
+  ]);
+  if (updates) menu.items[0]?.submenu?.insert(1, updates.menuItem);
+  Menu.setApplicationMenu(menu);
 }
 
 app.on('before-quit', (event) => {
@@ -531,5 +558,5 @@ app.on('before-quit', (event) => {
   ])
     // The vault server holds an unlocked vault, so it goes last and always.
     .then(() => cli?.stop?.())
-    .finally(() => app.quit());
+    .finally(() => (updates ? updates.quit() : app.quit()));
 });

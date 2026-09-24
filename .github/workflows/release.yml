@@ -1,0 +1,131 @@
+name: macOS release draft
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable version tag (must match package.json)
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: macos-release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          const tag = process.env.RELEASE_TAG;
+          const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
+          if (!/^v\d+\.\d+\.\d+$/.test(tag) || tag !== `v${version}`)
+            throw new Error('A stable version tag matching package.json is required.');
+          const rev = (ref) => execFileSync('git', ['rev-parse', ref], { encoding: 'utf8' }).trim();
+          if (rev(`refs/tags/${tag}^{commit}`) !== rev('HEAD'))
+            throw new Error('The checked-out commit must match the release tag.');
+          NODE
+      - uses: pnpm/action-setup@v4
+        with:
+          standalone: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            raycast/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -C raycast install --frozen-lockfile
+      - run: pnpm run check
+      - name: Prepare Apple signing
+        env:
+          LATCH_CERTIFICATE_P12: ${{ secrets.LATCH_CERTIFICATE_P12 }}
+          LATCH_CERTIFICATE_PASSWORD: ${{ secrets.LATCH_CERTIFICATE_PASSWORD }}
+          LATCH_APP_PROFILE_BASE64: ${{ secrets.LATCH_APP_PROFILE_BASE64 }}
+          LATCH_AUTOFILL_PROFILE_BASE64: ${{ secrets.LATCH_AUTOFILL_PROFILE_BASE64 }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          umask 077
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          import { join } from 'node:path';
+          for (const [key, file] of [
+            ['LATCH_CERTIFICATE_P12', 'latch.p12'],
+            ['LATCH_APP_PROFILE_BASE64', 'Latch.provisionprofile'],
+            ['LATCH_AUTOFILL_PROFILE_BASE64', 'LatchAutoFill.provisionprofile'],
+          ]) {
+            if (!process.env[key]) throw new Error(`Missing ${key}`);
+            writeFileSync(join(process.env.RUNNER_TEMP, file), Buffer.from(process.env[key], 'base64'), { mode: 0o600 });
+          }
+          for (const key of ['APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID'])
+            if (!process.env[key]) throw new Error(`Missing ${key}`);
+          NODE
+          keychain="$RUNNER_TEMP/latch-signing.keychain-db"
+          keychain_password="$(uuidgen)"
+          echo "::add-mask::$keychain_password"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security list-keychains -d user -s "$keychain" "$HOME/Library/Keychains/login.keychain-db"
+          security default-keychain -d user -s "$keychain"
+          security import "$RUNNER_TEMP/latch.p12" -k "$keychain" -P "$LATCH_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -k "$keychain_password" "$keychain" >/dev/null
+          xcrun notarytool store-credentials latch-notary --keychain "$keychain" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD"
+      - name: Sign, notarize and package
+        run: pnpm run package:release
+        env:
+          LATCH_SIGN_IDENTITY: ${{ secrets.LATCH_SIGN_IDENTITY }}
+          LATCH_APP_PROFILE: ${{ runner.temp }}/Latch.provisionprofile
+          LATCH_AUTOFILL_PROFILE: ${{ runner.temp }}/LatchAutoFill.provisionprofile
+          LATCH_NOTARY_PROFILE: latch-notary
+      - uses: actions/upload-artifact@v4
+        with:
+          name: notarized-macos
+          path: |
+            release/distribution/*.dmg
+            release/distribution/*.zip
+            release/distribution/*.blockmap
+            release/distribution/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove signing material
+        if: always()
+        run: |
+          security default-keychain -d user -s "$HOME/Library/Keychains/login.keychain-db"
+          security delete-keychain "$RUNNER_TEMP/latch-signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/latch.p12" "$RUNNER_TEMP/Latch.provisionprofile" "$RUNNER_TEMP/LatchAutoFill.provisionprofile"
+  draft:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: notarized-macos
+          path: release
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          test -s release/latest-mac.yml
+          gh release create "$RELEASE_TAG" release/* --verify-tag --draft --title "Latch $RELEASE_TAG" --generate-notes

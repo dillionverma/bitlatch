@@ -16,6 +16,7 @@ await buildAutoFill(root);
 const bundledPackages = [
   'node-api-headers',
   'electron-liquid-glass',
+  'electron-updater',
   'node-gyp-build',
   'react',
   'react-dom',
@@ -73,7 +74,7 @@ async function addNotice(name, from = root) {
       break;
     } catch {}
   }
-  if (!license && name === 'react-remove-scroll-bar') {
+  if (!license && ['react-remove-scroll-bar', 'lazy-val'].includes(name)) {
     license = 'MIT notice included above in THIRD_PARTY.md.';
   }
   if (!license) throw new Error(`Missing license notice for ${name}`);

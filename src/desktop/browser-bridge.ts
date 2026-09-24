@@ -156,6 +156,12 @@ export class BrowserBridge<Request> {
           throw new UserError('Browser pairing failed. Reconnect in Latch.');
         const parsed = this.options.schema.safeParse(message.request);
         if (!parsed.success) throw new UserError('Unsupported browser request.');
+        // Unlocking may wait on the CLI or the system authentication prompt.
+        if (
+          this.options.channel === 'raycast' &&
+          (parsed.data as { type?: string }).type?.match(/^(unlock|biometricUnlock)$/)
+        )
+          socket.setTimeout(120_000);
         return this.options.handle(parsed.data);
       }).then((response) => socket.end(`${JSON.stringify(response)}\n`));
     });

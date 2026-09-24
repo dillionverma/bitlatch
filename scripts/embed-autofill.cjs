@@ -5,6 +5,15 @@ exports.default = async function ({ appOutDir, electronPlatformName, packager })
   if (electronPlatformName !== 'darwin') return;
   const plist = await import('plist');
   const contents = path.join(appOutDir, 'Latch.app/Contents');
+  // The signed release is built as a directory first; electron-builder only
+  // writes this itself when building archive targets. Include it before signing.
+  const publish = packager.platformSpecificBuildOptions.publish;
+  if (publish) {
+    await writeFile(
+      path.join(contents, 'Resources/app-update.yml'),
+      JSON.stringify({ ...publish, updaterCacheDirName: 'latch-updater' }),
+    );
+  }
   const iconResources = path.join(
     packager.projectDir,
     'dist/native/LatchAutoFill.appex/Contents/Resources',

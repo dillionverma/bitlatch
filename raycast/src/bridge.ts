@@ -3,19 +3,32 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createConnection } from 'node:net';
 
-export interface Login {
+export interface VaultItem {
   id: string;
   name: string;
   username: string;
   website: string;
+  iconUrl?: string;
+  type: number;
 }
 export interface SearchResult {
   status: string;
-  items: Login[];
+  email?: string;
+  canUseBiometrics?: boolean;
+  items: VaultItem[];
 }
+export interface ItemDetail extends VaultItem {
+  notes: string;
+  hasPassword: boolean;
+}
+export type CopyField = 'password' | 'username' | 'notes' | 'website';
+
 type Request =
+  | { type: 'unlock'; password: string }
+  | { type: 'biometricUnlock' }
+  | { type: 'detail'; id: string }
   | { type: 'search'; query: string }
-  | { type: 'copy'; id: string; field: 'password' | 'username' }
+  | { type: 'copy'; id: string; field: CopyField }
   | { type: 'lock' | 'open' };
 
 // Read the rotating token per request. Never persist vault data or secrets in Raycast.
@@ -49,7 +62,10 @@ export async function request<T = void>(request: Request, signal?: AbortSignal):
     const abort = () => finish(new Error('Request cancelled.'));
     signal?.addEventListener('abort', abort, { once: true });
     socket.setEncoding('utf8');
-    socket.setTimeout(5000, () => finish(new Error('Latch did not respond. Reopen Latch.')));
+    socket.setTimeout(
+      request.type === 'unlock' || request.type === 'biometricUnlock' ? 120_000 : 5000,
+      () => finish(new Error('Latch did not respond. Reopen Latch.')),
+    );
     socket.on('error', () => finish(new Error('Open the updated Latch app first.')));
     socket.on('end', () => finish(new Error('Latch disconnected.')));
     socket.on('connect', () =>
