@@ -1,4 +1,21 @@
 import { z } from 'zod';
+import { lockTimeoutMinutes } from './types';
+
+export const lockTimeoutSchema = z.literal(lockTimeoutMinutes);
+export const passwordOptionsSchema = z
+  .object({
+    length: z.number().int().min(8).max(128),
+    lowercase: z.boolean(),
+    uppercase: z.boolean(),
+    numbers: z.boolean(),
+    symbols: z.boolean(),
+    excludeAmbiguous: z.boolean(),
+  })
+  .strict()
+  .refine(
+    (options) => options.lowercase || options.uppercase || options.numbers || options.symbols,
+    'Choose at least one character type.',
+  );
 
 const boundedText = z.string().max(16_384);
 const twoStepMethod = z.enum(['authenticator', 'yubikey', 'email']);
@@ -31,6 +48,8 @@ const loginDraft = z
   .strict();
 
 export const desktopRequestSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('lockTimeout') }).strict(),
+  z.object({ type: z.literal('setLockTimeout'), minutes: lockTimeoutSchema }).strict(),
   z.object({ type: z.literal('macAutoFill') }).strict(),
   z.object({ type: z.literal('enableMacAutoFill') }).strict(),
   z.object({ type: z.literal('macAutoFillSettings') }).strict(),
@@ -77,6 +96,7 @@ export const desktopRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('trash') }).strict(),
   z.object({ type: z.literal('detail'), id }).strict(),
   z.object({ type: z.literal('save'), draft: loginDraft }).strict(),
+  z.object({ type: z.literal('setFavorite'), id, favorite: z.boolean() }).strict(),
   z.object({ type: z.literal('delete'), id }).strict(),
   z.object({ type: z.literal('restore'), id }).strict(),
   z
@@ -86,8 +106,8 @@ export const desktopRequestSchema = z.discriminatedUnion('type', [
       field: z.enum(['username', 'password', 'notes', 'website']),
     })
     .strict(),
-  z.object({ type: z.literal('generate') }).strict(),
-  z.object({ type: z.literal('installBrowser') }).strict(),
+  z.object({ type: z.literal('generate'), options: passwordOptionsSchema }).strict(),
+  z.object({ type: z.literal('browserConnection') }).strict(),
   z.object({ type: z.literal('openExtensionFolder') }).strict(),
 ]);
 

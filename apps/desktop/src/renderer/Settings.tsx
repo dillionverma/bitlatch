@@ -11,10 +11,17 @@ import {
   LockKey,
   PaintBrush,
 } from '@phosphor-icons/react';
-import type { MacAutoFillState, VaultState } from '@latch/shared/types';
+import {
+  lockTimeoutMinutes,
+  type BrowserConnection,
+  type LockTimeoutMinutes,
+  type MacAutoFillState,
+  type VaultState,
+} from '@latch/shared/types';
 import { useWebsiteIcons } from './WebsiteIcons';
 import { Button } from '@/components/ui/button';
-import { Kbd } from '@/components/ui/kbd';
+import { Badge } from '@/components/ui/badge';
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import {
   Field,
   FieldContent,
@@ -64,26 +71,25 @@ type Section = (typeof sections)[number]['id'];
 
 export function Settings({
   onClose,
-  onLock,
   biometrics,
   biometricsOn,
   onBiometrics,
   biometricsBusy = false,
 }: {
   onClose: () => void;
-  onLock: () => void;
   biometrics: VaultState['biometrics'];
   biometricsOn: boolean;
   onBiometrics: (enabled: boolean) => void | Promise<void>;
   biometricsBusy?: boolean;
 }) {
   const icons = useWebsiteIcons();
-  const [connected, setConnected] = useState(false);
+  const [connection, setConnection] = useState<BrowserConnection | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<
-    'install' | 'folder' | 'biometrics' | 'icons' | 'autofill' | 'autofillSettings' | null
+    'folder' | 'biometrics' | 'icons' | 'autofill' | 'autofillSettings' | 'timeout' | null
   >(null);
   const [autoFill, setAutoFill] = useState<MacAutoFillState | null>(null);
+  const [timeout, setTimeoutMinutes] = useState<LockTimeoutMinutes | null>(null);
   const [active, setActive] = useState(true);
   const alive = useRef(false);
   const epoch = useRef(0);
@@ -104,6 +110,23 @@ export function Settings({
       alive.current = false;
       epoch.current++;
       unsubscribe();
+    };
+  }, []);
+  useEffect(() => {
+    let current = true;
+    void window.latch
+      .lockTimeout()
+      .then((result) => {
+        if (!current || !alive.current) return;
+        if (result.ok) setTimeoutMinutes(result.value);
+        else setError(result.error);
+      })
+      .catch(() => {
+        if (current && alive.current)
+          setError('Could not load the lock timer. Reopen Settings to try again.');
+      });
+    return () => {
+      current = false;
     };
   }, []);
   useEffect(() => {
@@ -129,8 +152,25 @@ export function Settings({
       window.removeEventListener('focus', refresh);
     };
   }, []);
+  useEffect(() => {
+    if (section !== 'browser') return;
+    let current = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      const result = await window.latch.browserConnection().catch(() => null);
+      if (!current || !alive.current) return;
+      setConnection(result?.ok ? result.value : 'setup-error');
+      timer = setTimeout(refresh, 2000);
+    };
+    void refresh();
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [section]);
   async function run(
-    kind: 'install' | 'folder' | 'biometrics' | 'icons' | 'autofill' | 'autofillSettings',
+    kind: 'folder' | 'biometrics' | 'icons' | 'autofill' | 'autofillSettings' | 'timeout',
+    minutes?: LockTimeoutMinutes,
   ) {
     if (working.current || biometricsBusy || !alive.current) return;
     working.current = true;
@@ -138,7 +178,12 @@ export function Settings({
     setError('');
     const request = ++epoch.current;
     try {
-      if (kind === 'biometrics') await onBiometrics(!biometricsOn);
+      if (kind === 'timeout' && minutes !== undefined) {
+        const result = await window.latch.setLockTimeout(minutes);
+        if (!alive.current || request !== epoch.current) return;
+        if (result.ok) setTimeoutMinutes(result.value);
+        else setError(result.error);
+      } else if (kind === 'biometrics') await onBiometrics(!biometricsOn);
       else if (kind === 'icons') await icons.setEnabled(!icons.enabled);
       else if (kind === 'autofill' || kind === 'autofillSettings') {
         if (kind === 'autofillSettings') {
@@ -151,12 +196,9 @@ export function Settings({
           else setError(result.error);
         }
       } else {
-        const result = await (kind === 'install'
-          ? window.latch.installBrowser()
-          : window.latch.openExtensionFolder());
+        const result = await window.latch.openExtensionFolder();
         if (!alive.current || request !== epoch.current) return;
         if (!result.ok) setError(result.error);
-        else if (kind === 'install') setConnected(true);
       }
     } catch {
       if (alive.current && request === epoch.current)
@@ -209,13 +251,6 @@ export function Settings({
             </Button>
           ))}
         </nav>
-        <div className="sidebar-bottom">
-          <Button variant="sidebar" className="nav-item" onClick={onLock}>
-            <LockKey size={16} />
-            <span>Lock vault</span>
-            <Kbd>⌘L</Kbd>
-          </Button>
-        </div>
       </aside>
       <section
         key={section}
@@ -237,15 +272,7 @@ export function Settings({
           </Button>
           <h1 id="settings-page-title">{current.label}</h1>
         </header>
-        <div
-          className="task-detail-body settings-body"
-          aria-busy={pending}
-          onScroll={(event) => {
-            event.currentTarget.parentElement!.dataset.scrolled = String(
-              event.currentTarget.scrollTop > 0,
-            );
-          }}
-        >
+        <div className="task-detail-body settings-body" aria-busy={pending}>
           <header className="settings-overview">
             <span className="settings-section-icon">
               <Icon size={28} />
@@ -327,64 +354,99 @@ export function Settings({
           )}
           {section === 'browser' && (
             <section className="task-settings-section">
-              <h3>Connection</h3>
+              <h3>Browser extension</h3>
               <div className="settings-group">
                 <div className="settings-row">
                   <div>
-                    <strong>Browser bridge</strong>
-                    <p>Connect Chrome or Aside to Latch.</p>
+                    <strong>Connection</strong>
+                    <p>
+                      {connection === 'connected'
+                        ? 'Your browser extension is communicating with Latch.'
+                        : connection === 'setup-error'
+                          ? 'Browser setup could not finish. Restart Latch to try again.'
+                          : 'Open the Latch extension in your browser to connect.'}
+                    </p>
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void run('install')}
-                    disabled={pending}
-                    aria-busy={busy === 'install'}
+                  <Badge
+                    variant={connection === 'setup-error' ? 'destructive' : 'secondary'}
+                    role="status"
                   >
-                    {busy === 'install' ? (
-                      <Spinner />
-                    ) : connected ? (
-                      <Check data-icon="inline-start" />
-                    ) : null}
-                    {busy === 'install'
-                      ? 'Installing…'
-                      : connected
-                        ? 'Installed'
-                        : 'Connect browser'}
-                  </Button>
+                    {connection === 'connected' && <Check />}
+                    {connection === null
+                      ? 'Checking…'
+                      : connection === 'connected'
+                        ? 'Connected'
+                        : connection === 'setup-error'
+                          ? 'Setup unavailable'
+                          : 'Not detected'}
+                  </Badge>
                 </div>
                 <div className="settings-row">
                   <div>
-                    <strong>Browser extension</strong>
-                    <p>Load the extension in your browser.</p>
+                    <strong>Add Latch to your browser</strong>
+                    <p>Chrome, Aside, Brave, Edge, Arc and other Chromium browsers.</p>
                   </div>
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => void run('folder')}
                     disabled={pending}
-                    aria-label="Show extension folder"
                   >
-                    {busy === 'folder' ? <Spinner /> : <ArrowUpRight data-icon="inline-end" />}Open
-                    folder
+                    {busy === 'folder' ? <Spinner /> : <ArrowUpRight data-icon="inline-end" />}
+                    Get extension
                   </Button>
                 </div>
               </div>
-              <details className="settings-help">
-                <summary>Extension setup</summary>
-                <p>
-                  Open <code>chrome://extensions</code>, enable Developer mode, choose{' '}
-                  <b>Load unpacked</b>, and select the extension folder.
-                </p>
-                <p>
-                  Keep Latch running and unlocked, then focus a login field. Installing the bridge
-                  alone does not verify the connection.
-                </p>
-              </details>
+              <ol className="settings-caption list-decimal space-y-2 pl-5">
+                <li>
+                  Choose <strong>Get extension</strong> to open its folder.
+                </li>
+                <li>
+                  In your browser’s extensions page, turn on <strong>Developer mode</strong>, then
+                  choose <strong>Load unpacked</strong> and select that folder.
+                </li>
+                <li>Open the Latch extension. The status above updates automatically.</li>
+              </ol>
+              <p className="settings-caption">
+                Already installed? Reload the extension after updating Latch. Keep Latch running for
+                autofill.
+              </p>
             </section>
           )}
           {section === 'security' && (
             <section className="task-settings-section">
+              <h3>Auto-lock</h3>
+              <FieldGroup className="settings-group">
+                <Field orientation="horizontal" className="setting-row settings-row">
+                  <FieldContent>
+                    <FieldLabel htmlFor="settings-lock-timeout">Lock when idle</FieldLabel>
+                    <FieldDescription id="lock-timeout-description">
+                      How long your Mac can be inactive before Latch locks.
+                    </FieldDescription>
+                  </FieldContent>
+                  <NativeSelect
+                    id="settings-lock-timeout"
+                    value={timeout ?? ''}
+                    disabled={pending || timeout === null}
+                    aria-describedby="lock-timeout-description lock-timeout-limits"
+                    aria-busy={busy === 'timeout'}
+                    onChange={(event) =>
+                      void run('timeout', Number(event.target.value) as LockTimeoutMinutes)
+                    }
+                  >
+                    {timeout === null && <NativeSelectOption value="">Loading…</NativeSelectOption>}
+                    {lockTimeoutMinutes.map((minutes) => (
+                      <NativeSelectOption key={minutes} value={minutes}>
+                        {minutes === 0 ? 'On sleep or screen lock' : `${minutes} minutes`}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </Field>
+              </FieldGroup>
+              <p id="lock-timeout-limits" className="settings-caption">
+                Your vault always locks when your Mac sleeps or the screen locks. Lock anytime with
+                ⌘L.
+              </p>
               <h3>Unlock</h3>
               <FieldGroup className="settings-group">
                 <Field

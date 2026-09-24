@@ -20,7 +20,7 @@ message.setAttribute('aria-live', 'polite');
 checkbox.setAttribute('aria-describedby', 'domain message');
 document.querySelector('.badge')!.textContent = 'Preview';
 
-// Same local mark as the Mac app. No remote asset or HTML interpolation.
+// Same local mark as the desktop app. No remote asset or HTML interpolation.
 const mark = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
 mark.setAttribute('viewBox', '200 200 624 624');
 mark.setAttribute('fill', 'currentColor');
@@ -42,7 +42,7 @@ async function send<T>(type: 'status' | 'open'): Promise<Result<T>> {
   try {
     return (await browser.runtime.sendMessage({ type })) as Result<T>;
   } catch {
-    return { ok: false, error: 'Open Latch and connect your browser in Settings.' };
+    return { ok: false, error: 'Open Latch on your computer to connect your vault.' };
   }
 }
 
@@ -64,10 +64,12 @@ async function refreshStatus() {
   const state = await send<VaultStatus>('status');
   if (disposed) return;
   const label = state.ok
-    ? { unlocked: 'Vault unlocked', locked: 'Vault locked', 'signed-out': 'Sign in on your Mac' }[
-        state.value
-      ]
-    : 'Mac app disconnected';
+    ? {
+        unlocked: 'Vault unlocked',
+        locked: 'Vault locked',
+        'signed-out': 'Sign in on your computer',
+      }[state.value]
+    : 'desktop app disconnected';
   if (status.textContent !== label) status.textContent = label;
   const error = state.ok ? '' : state.error;
   if (connectionError.textContent !== error) connectionError.textContent = error;

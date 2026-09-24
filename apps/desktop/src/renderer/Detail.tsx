@@ -173,14 +173,7 @@ export function Detail({
           )}
         </div>
       </div>
-      <div
-        className="task-detail-body"
-        onScroll={(event) => {
-          event.currentTarget.parentElement!.dataset.scrolled = String(
-            event.currentTarget.scrollTop > 0,
-          );
-        }}
-      >
+      <div className="task-detail-body">
         <header className="task-item-identity">
           <ItemIcon item={item} large />
           <div>

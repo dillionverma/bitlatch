@@ -39,7 +39,7 @@ export default defineConfig({
     name: 'Latch — your vault, within reach',
     version: pkg.version,
     description:
-      'A quiet inline password picker for the Latch Mac app. Connects to your existing Bitwarden vault.',
+      'An inline password picker for the Latch desktop app. Connects to your existing Bitwarden vault.',
     ...(browser === 'chrome' || browser === 'edge' ? { key: identity.key } : {}),
     permissions: ['nativeMessaging', 'activeTab', 'storage'],
     host_permissions: EXTENSION_MATCHES,

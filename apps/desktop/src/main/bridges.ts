@@ -10,12 +10,14 @@ import {
 } from '@latch/shared/protocol';
 import { LocalTransport } from './local-transport';
 import { installBrowser } from './browser-registration';
+import type { BrowserConnection } from '@latch/shared/types';
 import { iconHostname, type WebsiteIcons } from './website-icons';
 import type { Vault } from './vault';
 import type { MacAutoFill } from './macos-autofill';
 
 interface BridgeDependencies {
   dataDir: string;
+  browserRoot?: string;
   hostScript: string;
   vault: Vault;
   websiteIcons: WebsiteIcons;
@@ -28,6 +30,7 @@ interface BridgeDependencies {
 
 export async function startBridges({
   dataDir,
+  browserRoot,
   hostScript,
   vault,
   websiteIcons,
@@ -42,12 +45,15 @@ export async function startBridges({
     await Promise.allSettled(transports.map((transport) => transport.stop()));
   };
   let safariBridge: LocalTransport<BrowserRequest> | undefined;
+  let lastBrowserContact: number | null = null;
   try {
     const manifest = JSON.parse(await readFile(join(__dirname, 'extension.json'), 'utf8')) as {
       extensionId: string;
     };
     const handleBrowserRequest = async (request: BrowserRequest) => {
       assertRunning();
+      // This handler runs only after the local transport authenticates the request.
+      lastBrowserContact = Date.now();
       if (request.type === 'open') {
         showWindow();
         return vault.snapshot().status;
@@ -153,18 +159,23 @@ export async function startBridges({
         console.warn('Latch Safari connection unavailable. Check signing and App Group setup.');
       }
     }
+    // Registration is setup, not proof that an extension is connected. A failure
+    // here must never prevent opening the vault or using Raycast.
+    const registered = await installBrowser(
+      { dataDir, extensionId: manifest.extensionId, executable: process.execPath, hostScript },
+      browserRoot,
+    ).then(
+      () => true,
+      () => false,
+    );
     return {
       stop,
-      install: (root?: string) =>
-        installBrowser(
-          {
-            dataDir,
-            extensionId: manifest.extensionId,
-            executable: process.execPath,
-            hostScript,
-          },
-          root,
-        ),
+      browserConnection: (): BrowserConnection =>
+        lastBrowserContact !== null && Date.now() - lastBrowserContact < 15_000
+          ? 'connected'
+          : registered
+            ? 'not-detected'
+            : 'setup-error',
     };
   } catch (error) {
     await stop();

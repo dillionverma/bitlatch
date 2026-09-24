@@ -170,11 +170,7 @@
   overflow: auto;
   padding: 0 8px;
   scroll-padding-block: 4px;
-  outline-offset: -2px;
-}
-.vault-app .list-content:has(.list-scroll:focus-visible) {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
+  outline: none;
 }
 .vault-app .item-row {
   display: flex;
@@ -188,6 +184,7 @@
   color: var(--foreground);
   text-align: left;
   cursor: default;
+  user-select: none;
 }
 .vault-app .item-row:hover {
   background: var(--accent);
@@ -202,8 +199,26 @@
 .vault-app .item-row:active {
   background: var(--selection);
 }
-.vault-app .list-scroll:focus-visible .item-row.selected {
-  box-shadow: inset 0 0 0 1px var(--ring);
+.item-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.item-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.row-star[aria-pressed='false'] {
+  opacity: 0;
+}
+.item-row:hover .row-star,
+.item-row.selected .row-star,
+.row-star[aria-busy='true'],
+.row-star:focus-visible {
+  opacity: 1;
 }
 .vault-app .item-text {
   flex: 1;

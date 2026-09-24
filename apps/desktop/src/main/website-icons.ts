@@ -122,8 +122,14 @@ export class WebsiteIcons {
         chunks.push(value);
       }
       const bytes = Buffer.concat(chunks);
-      if (!bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return null;
-      if (bytes.length < 24 || bytes.readUInt32BE(16) > 512 || bytes.readUInt32BE(20) > 512)
+      // The icon service can return JPEG bytes even for its /icon.png endpoint.
+      const png = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+      const jpeg = bytes.subarray(0, 3).equals(Buffer.from([255, 216, 255]));
+      if (!png && !jpeg) return null;
+      if (
+        png &&
+        (bytes.length < 24 || bytes.readUInt32BE(16) > 512 || bytes.readUInt32BE(20) > 512)
+      )
         return null;
       const image = nativeImage.createFromBuffer(bytes);
       const { width, height } = image.getSize();

@@ -50,7 +50,10 @@ export default defineBackground(() => {
           port = undefined;
           for (const entry of pending) {
             clearTimeout(entry.timer);
-            entry.resolve({ ok: false, error: 'Open Latch and connect your browser in Settings.' });
+            entry.resolve({
+              ok: false,
+              error: 'Open Latch on your computer to connect your vault.',
+            });
           }
           pending = [];
         });
@@ -75,7 +78,7 @@ export default defineBackground(() => {
       clearTimeout(entry.timer);
       entry.resolve({
         ok: false,
-        error: 'Latch is not responding. Open the Mac app and try again.',
+        error: 'Latch is not responding. Open the desktop app and try again.',
       });
     }
     pending = [];
@@ -103,6 +106,9 @@ export default defineBackground(() => {
       if (clear) await browser.action.setBadgeText({ text: '' });
       const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
       const url = tab?.url;
+      // Keep connection detection alive on new tabs and browser settings pages,
+      // without requesting any vault items for those pages.
+      if (!url || !/^https?:\/\//.test(url)) await native<VaultStatus>({ type: 'status' });
       const result =
         url && /^https?:\/\//.test(url)
           ? await native<BrowserMatches>({ type: 'matches', url })
@@ -116,7 +122,7 @@ export default defineBackground(() => {
         !url || !/^https?:\/\//.test(url)
           ? 'Latch'
           : !result?.ok
-            ? 'Latch — open the Mac app'
+            ? 'Latch — open the desktop app'
             : !unlocked
               ? 'Latch — vault locked'
               : `Latch — ${text || 'No'} matching ${count === 1 ? 'login' : 'logins'}`;
@@ -139,9 +145,9 @@ export default defineBackground(() => {
     if (tab.active && (change.url || change.status === 'complete')) void refreshBadge(true);
   });
   browser.windows.onFocusChanged.addListener(() => void refreshBadge(true));
-  // While the native connection is alive, keep lock state and sync changes current.
+  // Also retry after Latch starts or restarts; a missing port is not permanent.
   setInterval(() => {
-    if (port) void refreshBadge();
+    void refreshBadge();
   }, 5000);
   void refreshBadge(true);
 

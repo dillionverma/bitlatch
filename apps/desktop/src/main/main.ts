@@ -80,6 +80,7 @@ lifecycle.startup = app
       app.dock?.setIcon(join(process.resourcesPath, 'latch-dock.png'));
     }
     await mkdir(app.getPath('userData'), { recursive: true, mode: 0o700 });
+    await lifecycle.loadPreferences(join(app.getPath('userData'), 'preferences.json'));
     websiteIcons = new WebsiteIcons(join(app.getPath('userData'), 'website-icons.json'));
     await websiteIcons.load();
     const engine = await localEngine({
@@ -118,6 +119,7 @@ lifecycle.startup = app
     bridges = lifecycle.track(
       await startBridges({
         dataDir: app.getPath('userData'),
+        browserRoot: process.env.LATCH_BROWSER_ROOT,
         hostScript,
         vault,
         websiteIcons,
@@ -233,6 +235,10 @@ lifecycle.startup = app
 async function handleRequest(request: DesktopRequest): Promise<unknown> {
   lifecycle.assertRunning();
   switch (request.type) {
+    case 'lockTimeout':
+      return lifecycle.lockTimeoutMinutes;
+    case 'setLockTimeout':
+      return lifecycle.setLockTimeout(request.minutes);
     case 'macAutoFill':
       return macAutoFill.status();
     case 'enableMacAutoFill':
@@ -280,9 +286,9 @@ async function handleRequest(request: DesktopRequest): Promise<unknown> {
     case 'detail':
       return vault.detail(request.id);
     case 'generate':
-      return generatePassword();
-    case 'installBrowser':
-      return bridges.install(process.env.LATCH_BROWSER_ROOT);
+      return generatePassword(request.options);
+    case 'browserConnection':
+      return bridges.browserConnection();
     case 'openExtensionFolder': {
       const error = await shell.openPath(extensionPath);
       if (error) throw new UserError('The extension folder could not be opened.');
@@ -305,6 +311,7 @@ async function mutateVault(
         | 'logout'
         | 'sync'
         | 'save'
+        | 'setFavorite'
         | 'delete'
         | 'restore'
         | 'biometricUnlock'
@@ -334,6 +341,8 @@ async function mutateVault(
         return await vault.sync();
       case 'save':
         return await vault.save(request.draft);
+      case 'setFavorite':
+        return await vault.setFavorite(request.id, request.favorite);
       case 'delete':
         return await vault.remove(request.id);
       case 'restore':

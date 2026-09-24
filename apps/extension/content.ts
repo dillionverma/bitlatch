@@ -23,7 +23,7 @@ import type {
 
 export function startContent(ctx: ContentScriptContext) {
   if (!['https:', 'http:'].includes(location.protocol)) return;
-  // Mirrors the Mac app's rule for plain HTTP: loopback and the local network,
+  // Mirrors the desktop app's rule for plain HTTP: loopback and the local network,
   // where a certificate is not possible. The app re-checks before releasing
   // anything, so this only decides whether to put UI on the page.
   if (location.protocol === 'http:' && !isLocalHost(location.hostname)) return;
@@ -169,7 +169,7 @@ export function startContent(ctx: ContentScriptContext) {
     if (version !== lifecycleVersion) return watchStatus();
     // A verified lock or sign-out hides everything now. A failed round trip
     // is retried once before the UI is dropped, so a slow bridge does not
-    // make the picker flicker. Fills still fail closed at the Mac app.
+    // make the picker flicker. Fills still fail closed at the desktop app.
     if (state.ok) statusFailures = 0;
     else statusFailures++;
     if ((state.ok && state.value !== 'unlocked') || statusFailures >= 2) return invalidateUI();
@@ -335,7 +335,7 @@ export function startContent(ctx: ContentScriptContext) {
           'span',
           'text',
           !response.ok
-            ? 'Open Latch on your Mac'
+            ? 'Open Latch on your computer'
             : response.value.state === 'signed-out'
               ? 'Sign in to Latch to fill'
               : 'Unlock Latch to fill',
@@ -344,7 +344,7 @@ export function startContent(ctx: ContentScriptContext) {
       row.addEventListener('click', (event) => {
         if (event.isTrusted) void send({ type: 'open' });
       });
-      results.append(row, element('div', 'hint', 'Opens the Mac app'));
+      results.append(row, element('div', 'hint', 'Opens the desktop app'));
       if (!response.ok) panel.append(element('div', 'hint', response.error));
     } else if (!response.value.items.length) {
       results.append(element('div', 'hint', 'No logins for this website.'));
@@ -390,7 +390,7 @@ export function startContent(ctx: ContentScriptContext) {
     }
   }
 
-  /** Swap the initial for the Mac app's cached website icon once it arrives. */
+  /** Swap the initial for the desktop app's cached website icon once it arrives. */
   async function loadIcon(id: string, tile: HTMLElement, version: number) {
     const icon = await send<string | null>({ type: 'icon', id });
     if (version !== requestVersion || !icon.ok || !icon.value) return;
@@ -812,6 +812,6 @@ export function startContent(ctx: ContentScriptContext) {
     host.remove();
   });
   scan();
-  // A sign-in that navigated away leaves its offer waiting on the Mac app.
+  // A sign-in that navigated away leaves its offer waiting on the desktop app.
   void resumeSave();
 }

@@ -211,7 +211,7 @@ export function App() {
   // this lifetime. A later unlock mounts a fresh workspace and fresh guards.
   return (
     <WebsiteIconsProvider>
-      <VaultWorkspace state={state} onState={receiveState} onLock={lock} />
+      <VaultWorkspace state={state} onState={receiveState} />
     </WebsiteIconsProvider>
   );
 }
@@ -219,11 +219,9 @@ export function App() {
 function VaultWorkspace({
   state,
   onState,
-  onLock,
 }: {
   state: VaultState;
   onState: (state: VaultState) => void;
-  onLock: () => void;
 }) {
   const [items, setItems] = useState<ItemSummary[]>([]);
   const [trashed, setTrashed] = useState<ItemSummary[]>([]);
@@ -241,6 +239,8 @@ function VaultWorkspace({
   const [modal, setModal] = useState<Modal>(null);
   const settings = modal === 'settings';
   const [syncing, setSyncing] = useState(false);
+  const [favoritePending, setFavoritePending] = useState('');
+  const favoriteWorking = useRef(false);
   const [loading, setLoading] = useState(true);
   const [trashLoading, setTrashLoading] = useState(false);
   const [listError, setListError] = useState({ all: '', trash: '' });
@@ -272,7 +272,6 @@ function VaultWorkspace({
 
   useEffect(() => {
     const version = ++listVersion.current;
-    setLoading(true);
     void window.latch
       .items()
       .then((listed) => {
@@ -385,10 +384,16 @@ function VaultWorkspace({
     setSelection({ status: 'unselected' });
   }, [selectedId, selectionVisible]);
 
-  async function select(item: ItemSummary) {
+  async function select(item: ItemSummary, refresh = false) {
     if (!alive.current) return;
     const version = ++selectionVersion.current;
-    setSelection({ status: item.restricted ? 'restricted' : 'loading', id: item.id });
+    if (
+      !refresh ||
+      selection.status !== 'ready' ||
+      selection.item.id !== item.id ||
+      item.restricted
+    )
+      setSelection({ status: item.restricted ? 'restricted' : 'loading', id: item.id });
     if (item.restricted) return;
     try {
       const response = await window.latch.detail(item.id);
@@ -402,6 +407,26 @@ function VaultWorkspace({
     } catch {
       if (!alive.current || version !== selectionVersion.current) return;
       setSelection({ status: 'error', id: item.id });
+    }
+  }
+
+  async function toggleFavorite(item: ItemSummary) {
+    if (!alive.current || favoriteWorking.current) return;
+    favoriteWorking.current = true;
+    setFavoritePending(item.id);
+    try {
+      const result = await window.latch.setFavorite(item.id, !item.favorite);
+      if (!alive.current) return;
+      if (result.ok)
+        setItems((current) =>
+          current.map((entry) => (entry.id === item.id ? result.value : entry)),
+        );
+      else notify.show('error', result.error);
+    } catch {
+      notify.show('error', 'Could not update favorites. Try again.');
+    } finally {
+      favoriteWorking.current = false;
+      if (alive.current) setFavoritePending('');
     }
   }
 
@@ -481,7 +506,7 @@ function VaultWorkspace({
     const item =
       items.find((entry) => entry.id === selectedId) ??
       trashed.find((entry) => entry.id === selectedId);
-    if (item) void refreshSelection.current(item);
+    if (item) void refreshSelection.current(item, true);
   }, [state.itemsRevision]);
 
   async function setBiometrics(enabled: boolean) {
@@ -577,15 +602,12 @@ function VaultWorkspace({
                 <Settings2 size={16} />
                 <span>Settings</span>
               </Button>
-              <Button type="button" variant="sidebar" className="nav-item" onClick={onLock}>
-                <LockKeyhole size={16} />
-                <span>Lock vault</span>
-                <Kbd>⌘L</Kbd>
-              </Button>
             </div>
           </aside>
           <section className="item-list" aria-label={currentFilter.label}>
             <ItemList
+              onFavorite={filter === 'trash' ? undefined : toggleFavorite}
+              favoritePending={favoritePending}
               revealSelection={revealSelection}
               onItemMenu={(item, position) => void showItemMenu(item, position)}
               header={
@@ -822,7 +844,6 @@ function VaultWorkspace({
               flushSync(() => setModal(null));
               settingsButton.current?.focus({ preventScroll: true });
             }}
-            onLock={onLock}
             biometrics={state.biometrics}
             biometricsOn={state.biometricsOn}
             onBiometrics={setBiometrics}

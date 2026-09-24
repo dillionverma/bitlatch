@@ -5,6 +5,8 @@ import type { DesktopRequest } from '@latch/shared/protocol';
 const request = (message: DesktopRequest) => ipcRenderer.invoke('latch:request', message);
 
 const api: LatchApi = {
+  lockTimeout: () => request({ type: 'lockTimeout' }),
+  setLockTimeout: (minutes) => request({ type: 'setLockTimeout', minutes }),
   macAutoFill: () => request({ type: 'macAutoFill' }),
   enableMacAutoFill: () => request({ type: 'enableMacAutoFill' }),
   macAutoFillSettings: () => request({ type: 'macAutoFillSettings' }),
@@ -26,11 +28,12 @@ const api: LatchApi = {
   trash: () => request({ type: 'trash' }),
   detail: (id) => request({ type: 'detail', id }),
   save: (draft) => request({ type: 'save', draft }),
+  setFavorite: (id, favorite) => request({ type: 'setFavorite', id, favorite }),
   remove: (id) => request({ type: 'delete', id }),
   restore: (id) => request({ type: 'restore', id }),
   copy: (id, field) => request({ type: 'copy', id, field }),
-  generate: () => request({ type: 'generate' }),
-  installBrowser: () => request({ type: 'installBrowser' }),
+  generate: (options) => request({ type: 'generate', options }),
+  browserConnection: () => request({ type: 'browserConnection' }),
   openExtensionFolder: () => request({ type: 'openExtensionFolder' }),
   onState: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, state: VaultState) => listener(state);

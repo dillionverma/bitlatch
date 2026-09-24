@@ -149,7 +149,6 @@
 .task-auth[data-locked='true'] {
   --primary: #145cff;
   --primary-foreground: #fff;
-  --ring: #145cff;
 }
 .auth-brand {
   width: 72px;

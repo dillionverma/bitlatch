@@ -28,6 +28,7 @@ import type {
   LoginChallenge,
   LoginDraft,
   LoginInput,
+  PasswordOptions,
   TwoStepMethod,
   VaultState,
 } from '@latch/shared/types';
@@ -873,6 +874,29 @@ export class Vault extends EventEmitter {
     };
   }
 
+  async setFavorite(id: string, favorite: boolean) {
+    const existing = this.item(id);
+    if (existing.deletedDate || !isEditable(existing))
+      throw new UserError('Update this item in the official Bitwarden client.');
+    const generation = this.generation;
+    // Read the complete, latest cipher so a metadata change preserves unknown fields.
+    const latest = JSON.parse(
+      await this.cli.run(['get', 'item', id], { session: this.session }),
+    ) as Cipher;
+    this.assertGeneration(generation);
+    if (latest.deletedDate || !isEditable(latest))
+      throw new UserError('Update this item in the official Bitwarden client.');
+    const payload = Buffer.from(JSON.stringify({ ...latest, favorite })).toString('base64');
+    const saved = JSON.parse(
+      await this.cli.run(['edit', 'item', id], { session: this.session, input: payload }),
+    ) as Cipher;
+    this.assertGeneration(generation);
+    this.ciphers.set(saved.id, cacheFields(saved));
+    this.countItems();
+    this.publish();
+    return summarize(saved);
+  }
+
   async save(draft: LoginDraft) {
     this.requireUnlocked();
     const generation = this.generation;
@@ -1063,7 +1087,22 @@ function summarize(cipher: Cipher): ItemSummary {
   };
 }
 
-export function generatePassword(length = 24) {
-  const alphabet = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%&*-_=+';
-  return Array.from({ length }, () => alphabet[randomInt(alphabet.length)]).join('');
+export function generatePassword(options: PasswordOptions) {
+  const groups = [
+    options.lowercase ? 'abcdefghijklmnopqrstuvwxyz' : '',
+    options.uppercase ? 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' : '',
+    options.numbers ? '0123456789' : '',
+    options.symbols ? '!@#$%&*-_=+' : '',
+  ]
+    .map((group) => (options.excludeAmbiguous ? group.replace(/[Il1O0o]/g, '') : group))
+    .filter(Boolean);
+  const alphabet = groups.join('');
+  // Rejection sampling keeps passwords uniform while including every selected type.
+  while (true) {
+    const characters = Array.from({ length: options.length }, () =>
+      alphabet.charAt(randomInt(alphabet.length)),
+    );
+    if (groups.every((group) => characters.some((character) => group.includes(character))))
+      return characters.join('');
+  }
 }

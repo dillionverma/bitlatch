@@ -2,9 +2,9 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { connect, createServer, type Socket } from 'node:net';
 import { Agent, request as httpRequest, type ClientRequest } from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cliError, type CliOptions, type CliPort, type RunOptions } from './cli';
+import { cliEnvironment, cliError, type CliOptions, type CliPort, type RunOptions } from './cli';
 import { UserError } from '@latch/shared/protocol';
 import { listingVersion, syncedVersions } from './sync-metadata';
 
@@ -194,20 +194,13 @@ export class WarmBitwardenCli implements CliPort {
         String(SERVE_PORT),
       ],
       {
+        shell: false,
         windowsHide: true,
         stdio: ['ignore', 'ignore', 'pipe', theirs],
         env: {
-          PATH: process.env.PATH ?? '',
-          HOME: homedir(),
-          TMPDIR: tmpdir(),
-          LANG: 'en_US.UTF-8',
-          ELECTRON_RUN_AS_NODE: '1',
-          BITWARDENCLI_APPDATA_DIR: this.options.dataDir,
+          ...cliEnvironment(this.options.dataDir),
           BW_NOINTERACTION: 'true',
           BW_SESSION: session,
-          ...(process.env.NODE_EXTRA_CA_CERTS
-            ? { NODE_EXTRA_CA_CERTS: process.env.NODE_EXTRA_CA_CERTS }
-            : {}),
         },
       },
     );

@@ -15,11 +15,9 @@ export function systemColors(): WindowAppearance['colors'] {
       return {
         primary,
         'primary-foreground': contrastText(primary),
-        'sidebar-accent': primary,
-        'sidebar-accent-foreground': contrastText(primary),
       };
     }
-    const selection = color('selected-content-background');
+    const selection = color('unemphasized-selected-content-background');
     return {
       background: color('control-background'),
       foreground: color('label'),
@@ -36,17 +34,17 @@ export function systemColors(): WindowAppearance['colors'] {
       'muted-foreground': color('secondary-label'),
       border: color(nativeTheme.shouldUseHighContrastColors ? 'label' : 'separator'),
       input: color(nativeTheme.shouldUseHighContrastColors ? 'label' : 'separator'),
-      ring: color('keyboard-focus-indicator'),
+      ring: color('secondary-label'),
       selection,
-      'selection-foreground': contrastText(selection),
-      'selection-inactive': color('unemphasized-selected-content-background'),
+      'selection-foreground': color('label'),
+      'selection-inactive': selection,
       sidebar: color('window-background'),
       'sidebar-foreground': color('label'),
       'sidebar-accent': selection,
-      'sidebar-accent-foreground': contrastText(selection),
-      'sidebar-selection-inactive': color('unemphasized-selected-content-background'),
+      'sidebar-accent-foreground': color('label'),
+      'sidebar-selection-inactive': selection,
       'sidebar-border': color('separator'),
-      'sidebar-ring': color('keyboard-focus-indicator'),
+      'sidebar-ring': color('secondary-label'),
     };
   } catch {
     // Static theme tokens remain available if an OS color cannot be resolved.

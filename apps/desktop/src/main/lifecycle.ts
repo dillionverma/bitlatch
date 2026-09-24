@@ -1,5 +1,7 @@
 import { app, clipboard, globalShortcut, powerMonitor } from 'electron';
-import { UserError, type DesktopRequest } from '@latch/shared/protocol';
+import { readFile, writeFile } from 'node:fs/promises';
+import { UserError, lockTimeoutSchema, type DesktopRequest } from '@latch/shared/protocol';
+import type { LockTimeoutMinutes } from '@latch/shared/types';
 import type { Vault } from './vault';
 import type { CliPort } from './cli';
 import type { createUpdates } from './updates';
@@ -20,6 +22,9 @@ export class DesktopLifecycle {
   private copiedValue = '';
   private clipboardTimer?: NodeJS.Timeout;
   private clipboardQueue: Promise<void> = Promise.resolve();
+  lockTimeoutMinutes: LockTimeoutMinutes = 5;
+  private preferencePath = '';
+  private preferenceQueue: Promise<unknown> = Promise.resolve();
 
   constructor() {
     app.on('before-quit', (event) => {
@@ -43,6 +48,32 @@ export class DesktopLifecycle {
     return this.phase !== 'running';
   }
 
+  async loadPreferences(path: string) {
+    this.preferencePath = path;
+    try {
+      const stored = JSON.parse(await readFile(path, 'utf8'));
+      const parsed = lockTimeoutSchema.safeParse(stored.lockTimeoutMinutes);
+      if (parsed.success) this.lockTimeoutMinutes = parsed.data;
+    } catch {
+      // Missing or damaged preferences retain the five-minute default.
+    }
+  }
+
+  setLockTimeout(minutes: LockTimeoutMinutes) {
+    const write = this.preferenceQueue
+      .catch(() => undefined)
+      .then(async () => {
+        this.assertRunning();
+        await writeFile(this.preferencePath, JSON.stringify({ lockTimeoutMinutes: minutes }), {
+          mode: 0o600,
+        });
+        this.lockTimeoutMinutes = minutes;
+        return minutes;
+      });
+    this.preferenceQueue = write;
+    return write;
+  }
+
   assertRunning() {
     if (this.quitting) throw new UserError('Latch is shutting down.');
   }
@@ -56,8 +87,9 @@ export class DesktopLifecycle {
     this.vault = vault;
     let wasUnlocked = vault.snapshot().status === 'unlocked';
     vault.on('state', (state) => {
-      if (state.status === 'unlocked') this.lastUnlockAt = Date.now();
-      else {
+      if (state.status === 'unlocked') {
+        if (!wasUnlocked) this.lastUnlockAt = Date.now();
+      } else {
         if (wasUnlocked) ++this.epoch;
         onLocked();
         void this.clearCopiedSecret().catch(() => undefined);
@@ -70,8 +102,9 @@ export class DesktopLifecycle {
     this.idleTimer = setInterval(() => {
       if (
         vault.snapshot().status === 'unlocked' &&
-        Date.now() - this.lastUnlockAt >= 300_000 &&
-        powerMonitor.getSystemIdleTime() >= 300
+        this.lockTimeoutMinutes > 0 &&
+        Date.now() - this.lastUnlockAt >= this.lockTimeoutMinutes * 60_000 &&
+        powerMonitor.getSystemIdleTime() >= this.lockTimeoutMinutes * 60
       )
         this.lockInBackground();
     }, 10_000);

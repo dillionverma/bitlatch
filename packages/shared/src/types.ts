@@ -44,6 +44,28 @@ export type WindowAppearance = Readonly<{
 
 export type VaultStatus = 'signed-out' | 'locked' | 'unlocked';
 
+export const lockTimeoutMinutes = [5, 15, 30, 60, 0] as const;
+/** Zero disables idle locking; sleep and screen lock always lock the vault. */
+export type LockTimeoutMinutes = (typeof lockTimeoutMinutes)[number];
+
+export interface PasswordOptions {
+  length: number;
+  lowercase: boolean;
+  uppercase: boolean;
+  numbers: boolean;
+  symbols: boolean;
+  excludeAmbiguous: boolean;
+}
+
+export const defaultPasswordOptions: PasswordOptions = {
+  length: 24,
+  lowercase: true,
+  uppercase: true,
+  numbers: true,
+  symbols: true,
+  excludeAmbiguous: true,
+};
+
 /** Two-step login methods the Bitwarden CLI can complete. Security keys over WebAuthn and Duo cannot be used here. */
 export type TwoStepMethod = 'authenticator' | 'yubikey' | 'email';
 
@@ -149,7 +171,11 @@ export interface MacAutoFillState {
   reason?: string;
 }
 
+export type BrowserConnection = 'connected' | 'not-detected' | 'setup-error';
+
 export interface LatchApi {
+  lockTimeout(): Promise<Result<LockTimeoutMinutes>>;
+  setLockTimeout(minutes: LockTimeoutMinutes): Promise<Result<LockTimeoutMinutes>>;
   macAutoFill(): Promise<Result<MacAutoFillState>>;
   enableMacAutoFill(): Promise<Result<MacAutoFillState>>;
   macAutoFillSettings(): Promise<Result<void>>;
@@ -171,11 +197,12 @@ export interface LatchApi {
   trash(): Promise<Result<ItemSummary[]>>;
   detail(id: string): Promise<Result<ItemDetail>>;
   save(draft: LoginDraft): Promise<Result<ItemDetail>>;
+  setFavorite(id: string, favorite: boolean): Promise<Result<ItemSummary>>;
   remove(id: string): Promise<Result<VaultState>>;
   restore(id: string): Promise<Result<VaultState>>;
   copy(id: string, field: 'username' | 'password'): Promise<Result<void>>;
-  generate(): Promise<Result<string>>;
-  installBrowser(): Promise<Result<string>>;
+  generate(options: PasswordOptions): Promise<Result<string>>;
+  browserConnection(): Promise<Result<BrowserConnection>>;
   openExtensionFolder(): Promise<Result<void>>;
   onState(listener: (state: VaultState) => void): () => void;
   appearance(): Promise<Result<WindowAppearance>>;

@@ -1,17 +1,21 @@
-import { basename } from 'node:path';
+import { basename, isAbsolute } from 'node:path';
 import { FIREFOX_EXTENSION_ID } from '@latch/shared/browser-targets';
 import { createConnection } from 'node:net';
 import { readBridgeConfig, MAX_MESSAGE_BYTES } from '../main/native-config';
 import type { Result } from '@latch/shared/types';
 
-const [configPath, extensionId, origin, firefoxId] = process.argv.slice(2);
-const chromiumCaller = origin === `chrome-extension://${extensionId}/` && !firefoxId;
+const [configPath, extensionId, origin, callerArgument, ...extraArguments] = process.argv.slice(2);
+const chromiumCaller =
+  origin === `chrome-extension://${extensionId}/` &&
+  (!callerArgument ||
+    (process.platform === 'win32' && /^--parent-window=\d+$/.test(callerArgument)));
 const firefoxCaller =
-  firefoxId === FIREFOX_EXTENSION_ID &&
+  callerArgument === FIREFOX_EXTENSION_ID &&
   typeof origin === 'string' &&
-  origin.startsWith('/') &&
+  isAbsolute(origin) &&
   basename(origin) === 'app.latch.vault.json';
-if (!configPath || !extensionId || (!chromiumCaller && !firefoxCaller)) process.exit(1);
+if (!configPath || !extensionId || extraArguments.length || (!chromiumCaller && !firefoxCaller))
+  process.exit(1);
 
 let buffer = Buffer.alloc(0);
 let sequence = Promise.resolve();
@@ -28,7 +32,7 @@ process.stdin.on('data', (chunk: Buffer) => {
       try {
         response = await forward(JSON.parse(payload));
       } catch {
-        response = { ok: false, error: 'Open Latch on your Mac to connect your vault.' };
+        response = { ok: false, error: 'Open Latch on your computer to connect your vault.' };
       }
       const body = Buffer.from(JSON.stringify(response));
       const header = Buffer.alloc(4);

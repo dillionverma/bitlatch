@@ -10,6 +10,31 @@ export interface CliOptions {
   script?: string;
 }
 
+/** Only the environment needed by the CLI, without inherited secrets or Node hooks. */
+export function cliEnvironment(dataDir: string): NodeJS.ProcessEnv {
+  return {
+    PATH: process.env.PATH ?? '',
+    HOME: homedir(),
+    TMPDIR: tmpdir(),
+    LANG: 'en_US.UTF-8',
+    ELECTRON_RUN_AS_NODE: '1',
+    BITWARDENCLI_APPDATA_DIR: dataDir,
+    ...(process.platform === 'win32'
+      ? {
+          SystemRoot: process.env.SystemRoot,
+          USERPROFILE: homedir(),
+          APPDATA: process.env.APPDATA,
+          LOCALAPPDATA: process.env.LOCALAPPDATA,
+          TEMP: tmpdir(),
+          TMP: tmpdir(),
+        }
+      : {}),
+    ...(process.env.NODE_EXTRA_CA_CERTS
+      ? { NODE_EXTRA_CA_CERTS: process.env.NODE_EXTRA_CA_CERTS }
+      : {}),
+  };
+}
+
 /** A question the CLI asks while it runs interactively. */
 export type CliPrompt =
   | { kind: 'two-step-code' }
@@ -91,23 +116,16 @@ export class BitwardenCli implements CliPort {
           ...(interactive ? [] : ['--nointeraction']),
         ],
         {
+          shell: false,
           windowsHide: true,
           stdio: ['pipe', 'pipe', 'pipe'],
           env: {
-            PATH: process.env.PATH ?? '',
-            HOME: homedir(),
-            TMPDIR: tmpdir(),
-            LANG: 'en_US.UTF-8',
-            ELECTRON_RUN_AS_NODE: '1',
-            BITWARDENCLI_APPDATA_DIR: this.options.dataDir,
+            ...cliEnvironment(this.options.dataDir),
             BW_NOINTERACTION: interactive ? 'false' : 'true',
             BW_SESSION: options.session ?? '',
             LATCH_MASTER_PASSWORD: options.password ?? '',
             BW_CLIENTID: options.clientId ?? '',
             BW_CLIENTSECRET: options.clientSecret ?? '',
-            ...(process.env.NODE_EXTRA_CA_CERTS
-              ? { NODE_EXTRA_CA_CERTS: process.env.NODE_EXTRA_CA_CERTS }
-              : {}),
           },
         },
       );

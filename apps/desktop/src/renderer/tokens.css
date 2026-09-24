@@ -54,6 +54,10 @@
 }
 
 :root {
+  --ring: var(--muted-foreground);
+  --sidebar-ring: var(--ring);
+  --sidebar-accent: var(--selection);
+  --sidebar-accent-foreground: var(--foreground);
   --dialog-scrim: rgb(0 0 0 / 35%);
   --sidebar-width: 188px;
   --list-width: 288px;

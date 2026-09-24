@@ -42,6 +42,8 @@ export function ItemList({
   revealSelection = 0,
   onSelect,
   onItemMenu,
+  onFavorite,
+  favoritePending = '',
   query,
   onNew,
   emptyLabel,
@@ -55,6 +57,8 @@ export function ItemList({
   revealSelection?: number;
   onSelect: (item: ItemSummary) => void;
   onItemMenu: (item: ItemSummary, position: MenuPosition) => void;
+  onFavorite?: (item: ItemSummary) => void;
+  favoritePending?: string;
   query: string;
   onNew: () => void;
   emptyLabel?: string;
@@ -76,10 +80,10 @@ export function ItemList({
   }, []);
   const listId = useId();
   const activeIndex = items.findIndex((item) => item.id === selectedId);
-  const optionId = (id: string) => `${listId}-item-${id}`;
+  const rowId = (id: string) => `${listId}-item-${id}`;
   // Selection changes must not invalidate all 10,000 row measurements.
   const getItemKey = useCallback((index: number) => items[index]!.id, [items]);
-  // Keep at most one extra option mounted when wheel scrolling moves the
+  // Keep at most one extra row mounted when wheel scrolling moves the
   // selected row out of view. The active descendant must exist in the DOM.
   const rangeExtractor = useCallback(
     (range: Range) => {
@@ -125,26 +129,36 @@ export function ItemList({
       <div
         className="list-scroll"
         style={{ marginTop: -headerHeight, scrollPaddingTop: headerHeight + 4 }}
-        onScroll={(event) => {
-          event.currentTarget.parentElement!.dataset.scrolled = String(
-            event.currentTarget.scrollTop > 0,
-          );
-        }}
         ref={listRef}
-        role="listbox"
+        role="grid"
         aria-label="Vault items"
+        aria-rowcount={items.length}
+        aria-colcount={2}
         aria-busy={loading}
-        aria-activedescendant={activeMounted ? optionId(selectedId) : undefined}
+        aria-activedescendant={activeMounted ? `${rowId(selectedId)}-summary` : undefined}
         tabIndex={0}
         onKeyDown={(event) => {
           if (event.metaKey || event.ctrlKey || event.altKey || event.nativeEvent.isComposing)
             return;
+          if (event.key === 'ArrowRight') {
+            event.preventDefault();
+            document
+              .getElementById(rowId(selectedId))
+              ?.querySelector<HTMLButtonElement>('.row-star')
+              ?.focus({ preventScroll: true });
+            return;
+          }
+          if (event.key === 'ArrowLeft' || event.key === 'Escape') {
+            event.preventDefault();
+            listRef.current?.focus({ preventScroll: true });
+            return;
+          }
           if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
             const item = items[activeIndex];
             if (!item) return;
             event.preventDefault();
             virtualizer.scrollToIndex(activeIndex, { align: 'auto' });
-            const bounds = document.getElementById(optionId(item.id))?.getBoundingClientRect();
+            const bounds = document.getElementById(rowId(item.id))?.getBoundingClientRect();
             if (bounds)
               onItemMenu(item, {
                 x: Math.max(0, Math.round(bounds.left + 20)),
@@ -183,6 +197,7 @@ export function ItemList({
               return;
           }
           event.preventDefault();
+          listRef.current?.focus({ preventScroll: true });
           next = Math.max(0, Math.min(items.length - 1, next));
           const item = items[next];
           if (!item) return;
@@ -191,17 +206,16 @@ export function ItemList({
         }}
       >
         {items.length ? (
-          <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+          <div role="rowgroup" style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
             {rows.map((row) => {
               const item = items[row.index]!;
               return (
                 <div
-                  id={optionId(item.id)}
+                  id={rowId(item.id)}
                   key={item.id}
-                  role="option"
+                  role="row"
                   aria-selected={item.id === selectedId}
-                  aria-posinset={row.index + 1}
-                  aria-setsize={items.length}
+                  aria-rowindex={row.index + 1}
                   className={`item-row ${item.id === selectedId ? 'selected' : ''}`}
                   style={{
                     position: 'absolute',
@@ -224,20 +238,53 @@ export function ItemList({
                     });
                   }}
                 >
-                  <ItemIcon item={item} />
-                  <span className="item-text">
-                    <strong>{item.name || 'Untitled item'}</strong>
-                    <small>
-                      {item.username || displayWebsite(item.website) || typeName(item.type)}
-                    </small>
+                  <span role="gridcell" id={`${rowId(item.id)}-summary`} className="item-summary">
+                    <ItemIcon item={item} />
+                    <span className="item-text">
+                      <strong>{item.name || 'Untitled item'}</strong>
+                      <small>
+                        {item.username || displayWebsite(item.website) || typeName(item.type)}
+                      </small>
+                    </span>
+                    {item.hasPasskey && (
+                      <Fingerprint size={14} className="muted" aria-label="Has a passkey" />
+                    )}
+                    {item.restricted && (
+                      <LockKeyhole size={14} className="muted" aria-label="Restricted" />
+                    )}
                   </span>
-                  {item.favorite && <Star size={12} className="row-star" aria-label="Favorite" />}
-                  {item.hasPasskey && (
-                    <Fingerprint size={14} className="muted" aria-label="Has a passkey" />
-                  )}
-                  {item.restricted && (
-                    <LockKeyhole size={14} className="muted" aria-label="Restricted" />
-                  )}
+                  <span role="gridcell" className="item-actions">
+                    {onFavorite &&
+                    !item.restricted &&
+                    !item.hasPasskey &&
+                    (item.type === 1 || item.type === 2) ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="row-star disabled:opacity-100"
+                        tabIndex={-1}
+                        aria-label={`Favorite ${item.name || 'Untitled item'}`}
+                        aria-pressed={item.favorite}
+                        aria-busy={favoritePending === item.id}
+                        title={item.favorite ? 'Remove from favorites' : 'Add to favorites'}
+                        disabled={!!favoritePending}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          listRef.current?.focus({ preventScroll: true });
+                          onFavorite(item);
+                        }}
+                      >
+                        {favoritePending === item.id ? (
+                          <Spinner />
+                        ) : (
+                          <Star weight={item.favorite ? 'fill' : 'regular'} />
+                        )}
+                      </Button>
+                    ) : (
+                      item.favorite && <Star size={12} weight="fill" aria-label="Favorite" />
+                    )}
+                  </span>
                 </div>
               );
             })}

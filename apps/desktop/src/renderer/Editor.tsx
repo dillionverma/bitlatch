@@ -1,11 +1,5 @@
 import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
-import {
-  Check,
-  Eye,
-  EyeSlash as EyeOff,
-  ArrowsClockwise as RefreshCw,
-  X,
-} from '@phosphor-icons/react';
+import { Check, Eye, EyeSlash as EyeOff, X } from '@phosphor-icons/react';
 import type { ItemDetail, LoginDraft } from '@latch/shared/types';
 import type { Notifier } from './Toasts';
 import { Button } from '@/components/ui/button';
@@ -28,6 +22,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { PasswordGenerator } from './PasswordGenerator';
 import './tasks.css';
 
 export function Editor({
@@ -58,10 +53,8 @@ export function Editor({
   );
   const [draft, setDraft] = useState(initial);
   const [busy, setBusy] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [error, setError] = useState('');
-  const [generationError, setGenerationError] = useState('');
   const [discarding, setDiscarding] = useState(false);
   const [active, setActive] = useState(true);
   const alive = useRef(false);
@@ -144,27 +137,6 @@ export function Editor({
       }
     }
   }
-  async function generate() {
-    if (operation.current || !alive.current) return;
-    operation.current = true;
-    const request = ++epoch.current;
-    setGenerating(true);
-    setGenerationError('');
-    try {
-      const response = await window.latch.generate();
-      if (!alive.current || request !== epoch.current) return;
-      if (response.ok) update('password', response.value);
-      else setGenerationError(response.error);
-    } catch {
-      if (alive.current && request === epoch.current)
-        setGenerationError('Could not generate a password. Try again.');
-    } finally {
-      if (alive.current && request === epoch.current) {
-        operation.current = false;
-        setGenerating(false);
-      }
-    }
-  }
   if (!active) return null;
   return (
     <Dialog
@@ -212,7 +184,7 @@ export function Editor({
             className="task-close"
             aria-label="Close editor"
             onClick={close}
-            disabled={busy || generating}
+            disabled={busy}
           >
             <X />
           </Button>
@@ -220,7 +192,7 @@ export function Editor({
         <form
           className="task-form"
           onSubmit={(event) => void save(event)}
-          aria-busy={busy || generating}
+          aria-busy={busy}
           aria-describedby={error ? 'editor-error' : undefined}
         >
           <div className="task-body">
@@ -260,20 +232,13 @@ export function Editor({
                       disabled={busy}
                     />
                   </Field>
-                  <Field data-invalid={!!generationError}>
+                  <Field>
                     <div className="task-label-actions">
                       <FieldLabel htmlFor="editor-password">Password</FieldLabel>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void generate()}
-                        disabled={busy || generating}
-                        aria-busy={generating}
-                      >
-                        {generating ? <Spinner /> : <RefreshCw data-icon="inline-start" />}
-                        {generating ? 'Generating…' : 'Generate'}
-                      </Button>
+                      <PasswordGenerator
+                        disabled={busy}
+                        onUse={(password) => update('password', password)}
+                      />
                     </div>
                     <InputGroup>
                       <InputGroupInput
@@ -282,9 +247,7 @@ export function Editor({
                         autoComplete="new-password"
                         value={draft.password}
                         onChange={(event) => update('password', event.target.value)}
-                        disabled={busy || generating}
-                        aria-invalid={!!generationError}
-                        aria-describedby={generationError ? 'generation-error' : undefined}
+                        disabled={busy}
                       />
                       <InputGroupAddon align="inline-end">
                         <InputGroupButton
@@ -298,9 +261,6 @@ export function Editor({
                         </InputGroupButton>
                       </InputGroupAddon>
                     </InputGroup>
-                    {generationError && (
-                      <FieldError id="generation-error">{generationError}</FieldError>
-                    )}
                   </Field>
                 </>
               )}
@@ -332,10 +292,10 @@ export function Editor({
             </FieldGroup>
           </div>
           <DialogFooter className="task-footer">
-            <Button type="button" variant="outline" onClick={close} disabled={busy || generating}>
+            <Button type="button" variant="outline" onClick={close} disabled={busy}>
               Cancel
             </Button>
-            <Button type="submit" disabled={busy || generating} aria-busy={busy}>
+            <Button type="submit" disabled={busy} aria-busy={busy}>
               {busy ? <Spinner /> : <Check data-icon="inline-start" />}
               {busy ? 'Saving…' : isNote ? 'Save note' : 'Save login'}
             </Button>

@@ -25,22 +25,26 @@ export class LocalTransport<Request> {
 
   constructor(private readonly options: LocalTransportOptions<Request>) {
     const name = createHash('sha256').update(options.dataDir).digest('hex').slice(0, 16);
-    this.socketPath = options.socketDirectory
-      ? join(options.socketDirectory, 'safari.sock')
-      : join(tmpdir(), `latch-${options.channel ? `${options.channel}-` : ''}${name}.sock`);
-    if (Buffer.byteLength(this.socketPath) >= 104)
+    const basename = `latch-${options.channel ? `${options.channel}-` : ''}${name}`;
+    this.socketPath =
+      process.platform === 'win32'
+        ? `\\\\.\\pipe\\${basename}`
+        : options.socketDirectory
+          ? join(options.socketDirectory, 'safari.sock')
+          : join(tmpdir(), `${basename}.sock`);
+    if (process.platform !== 'win32' && Buffer.byteLength(this.socketPath) >= 104)
       throw new UserError('Native socket path is too long.');
   }
 
   async start() {
     await mkdir(this.options.dataDir, { recursive: true, mode: 0o700 });
-    await rm(this.socketPath, { force: true });
+    if (process.platform !== 'win32') await rm(this.socketPath, { force: true });
     this.server = createServer((socket) => this.accept(socket));
     await new Promise<void>((resolve, reject) => {
       this.server!.once('error', reject);
       this.server!.listen(this.socketPath, resolve);
     });
-    await chmod(this.socketPath, 0o600);
+    if (process.platform !== 'win32') await chmod(this.socketPath, 0o600);
     await writeFile(
       join(
         this.options.dataDir,
@@ -56,7 +60,7 @@ export class LocalTransport<Request> {
     await new Promise<void>((resolve) =>
       this.server ? this.server.close(() => resolve()) : resolve(),
     );
-    await rm(this.socketPath, { force: true });
+    if (process.platform !== 'win32') await rm(this.socketPath, { force: true });
     await rm(
       join(
         this.options.dataDir,
@@ -97,7 +101,7 @@ export class LocalTransport<Request> {
           typeof message.token === 'string' ? Buffer.from(message.token) : Buffer.alloc(0);
         const expected = Buffer.from(this.token);
         if (token.length !== expected.length || !timingSafeEqual(token, expected))
-          throw new UserError('Browser pairing failed. Reconnect in Latch.');
+          throw new UserError('Browser pairing failed. Restart Latch and reload the extension.');
         const parsed = this.options.schema.safeParse(message.request);
         if (!parsed.success) throw new UserError('Unsupported browser request.');
         if (this.options.requestTimeout)
