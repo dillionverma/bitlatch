@@ -1,4 +1,7 @@
-import sharedTheme from '../shared/theme.css';
+import { browser } from 'wxt/browser';
+import type { ContentScriptContext } from 'wxt/utils/content-script-context';
+import { claspPaths } from '../shared/brand';
+import sharedTheme from '../shared/theme.css?inline';
 import type {
   BrowserMatches,
   CaptureOffer,
@@ -7,7 +10,7 @@ import type {
   VaultStatus,
 } from '../shared/types';
 
-(() => {
+export function startContent(ctx: ContentScriptContext) {
   if (!['https:', 'http:'].includes(location.protocol)) return;
   // Mirrors the Mac app's rule for plain HTTP: loopback and the local network,
   // where a certificate is not possible. The app re-checks before releasing
@@ -117,8 +120,8 @@ import type {
   let saveVersion = 0;
   let lifecycleVersion = 0;
   let filling = false;
-  let saveTimer: ReturnType<typeof setTimeout> | undefined;
-  let statusTimer: ReturnType<typeof setTimeout> | undefined;
+  let saveTimer: ReturnType<typeof ctx.setTimeout> | undefined;
+  let statusTimer: ReturnType<typeof ctx.setTimeout> | undefined;
   let statusPending = false;
   let statusFailures = 0;
   let displayedOffer: CaptureOffer | undefined;
@@ -127,16 +130,12 @@ import type {
 
   function mark() {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('fill', 'none');
+    svg.setAttribute('viewBox', '200 200 624 624');
+    svg.setAttribute('fill', 'currentColor');
     svg.setAttribute('aria-hidden', 'true');
-    for (const d of ['M6 10V7a6 6 0 0 1 12 0v2M5 10h14v11H5z', 'M12 14v3']) {
+    for (const d of claspPaths) {
       const path = document.createElementNS(svg.namespaceURI, 'path');
       path.setAttribute('d', d);
-      path.setAttribute('stroke', 'currentColor');
-      path.setAttribute('stroke-width', '1.65');
-      path.setAttribute('stroke-linecap', 'round');
-      path.setAttribute('stroke-linejoin', 'round');
       svg.append(path);
     }
     return svg;
@@ -223,7 +222,7 @@ import type {
       (panel.dataset.state !== 'unlocked' && !savePanel.childElementCount)
     )
       return;
-    statusTimer = setTimeout(() => {
+    statusTimer = ctx.setTimeout(() => {
       statusTimer = undefined;
       void checkStatus();
     }, 1000);
@@ -284,6 +283,11 @@ import type {
     return (
       rect.width >= 50 &&
       rect.height >= 15 &&
+      rect.bottom > 0 &&
+      rect.right > 0 &&
+      rect.top < innerHeight &&
+      rect.left < innerWidth &&
+      input.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) &&
       styles.visibility !== 'hidden' &&
       styles.display !== 'none' &&
       Number(styles.opacity) !== 0 &&
@@ -296,11 +300,20 @@ import type {
     if (!(target instanceof HTMLInputElement) || !visible(target)) return false;
     if (target.autocomplete === 'new-password') return false;
     if (target.type === 'password') return true;
-    if (target.autocomplete.includes('username') || target.autocomplete.includes('email'))
+    if (!['email', 'text', 'tel'].includes(target.type)) return false;
+    if (target.autocomplete.split(/\s+/).includes('username')) return true;
+    const scope = target.form ?? target.closest('[role="dialog"], dialog') ?? target.parentElement;
+    if (!scope) return false;
+    if (
+      Array.from(scope.querySelectorAll<HTMLInputElement>('input[type="password"]')).some(
+        (input) => visible(input) && input.autocomplete !== 'new-password',
+      )
+    )
       return true;
-    return (
-      ['email', 'text', 'tel'].includes(target.type) &&
-      Boolean(target.form?.querySelector('input[type="password"]'))
+    // Email also appears in invites, checkout, and search. Only offer an
+    // email-first picker when this form explicitly says it is a sign-in.
+    return Array.from(scope.querySelectorAll('h1,h2,h3,legend,button,[role="button"]')).some(
+      (element) => /\b(?:sign\s*in|log\s*in)\b/i.test(element.textContent ?? ''),
     );
   }
 
@@ -327,8 +340,8 @@ import type {
     savePanel.style.width = `${width}px`;
     savePanel.style.maxHeight = `${Math.max(0, view.height - 16)}px`;
     savePanel.style.left = `${Math.max(left, right - width)}px`;
-    savePanel.style.top = `${Math.max(top, bottom - savePanel.offsetHeight)}px`;
-    if (!active?.isConnected || !visible(active)) {
+    savePanel.style.top = `${top}px`;
+    if (!active?.isConnected || !isLoginInput(active)) {
       trigger.style.display = 'none';
       close();
       return;
@@ -385,7 +398,9 @@ import type {
 
   async function send<T>(message: unknown): Promise<Result<T>> {
     try {
-      return (await chrome.runtime.sendMessage(message)) as Result<T>;
+      const result = (await browser.runtime.sendMessage(message)) as Result<T>;
+      if (ctx.isInvalid) return { ok: false, error: 'Reload this page to reconnect Latch.' };
+      return result;
     } catch {
       return { ok: false, error: 'Reload this page to reconnect Latch.' };
     }
@@ -640,7 +655,7 @@ import type {
     if (autoFilled || !active || window !== window.top || document.visibilityState !== 'visible')
       return;
     const lifetime = lifecycleVersion;
-    const settings = await chrome.storage.local.get('autoFillOrigins');
+    const settings = await browser.storage.local.get('autoFillOrigins');
     if (
       !Array.isArray(settings.autoFillOrigins) ||
       !settings.autoFillOrigins.includes(location.origin)
@@ -669,9 +684,9 @@ import type {
   }
 
   /** The credentials a submitted form is carrying, if it looks like a sign-in. */
-  function readForm(form: HTMLFormElement) {
+  function readForm(form: ParentNode) {
     const passwords = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="password"]'))
-      .filter((input) => input.value)
+      .filter((input) => visible(input) && input.value)
       // A change-password form ends with the new one, which is what to keep.
       .slice(-1);
     const password = passwords[0]?.value ?? '';
@@ -781,7 +796,7 @@ import type {
         actions.remove();
         if (restoreFocus) focusField();
         position();
-        saveTimer = setTimeout(() => {
+        saveTimer = ctx.setTimeout(() => {
           if (version === saveVersion) hideSave();
         }, 1800);
       })();
@@ -803,9 +818,16 @@ import type {
     showSave(response.value);
   }
 
-  async function captureSubmit(form: HTMLFormElement) {
+  let lastCaptureScope: ParentNode | undefined;
+  let lastCaptureAt = 0;
+
+  async function captureSubmit(form: ParentNode) {
+    if (form === lastCaptureScope && Date.now() - lastCaptureAt < 500) return;
+    if (form instanceof HTMLFormElement && form.matches(':invalid')) return;
     const credentials = readForm(form);
     if (!credentials) return;
+    lastCaptureScope = form;
+    lastCaptureAt = Date.now();
     hideSave();
     const version = saveVersion;
     const lifetime = lifecycleVersion;
@@ -823,7 +845,7 @@ import type {
   function scan() {
     scanScheduled = false;
     if (!host.isConnected) document.documentElement.append(host);
-    if (active?.isConnected && visible(active)) {
+    if (active?.isConnected && isLoginInput(active)) {
       position();
       return;
     }
@@ -833,13 +855,12 @@ import type {
       ) ??
       Array.from(document.querySelectorAll<HTMLInputElement>('input')).find(isLoginInput) ??
       null;
-    if (active) {
-      position();
-      void maybeAutoFill();
-    }
+    position();
+    if (active) void maybeAutoFill();
   }
 
-  document.addEventListener(
+  ctx.addEventListener(
+    document,
     'submit',
     (event) => {
       if (event.isTrusted && event.target instanceof HTMLFormElement)
@@ -847,7 +868,42 @@ import type {
     },
     true,
   );
-  document.addEventListener('focusin', (event) => {
+  // Many SPA login screens use click handlers without a form submit event.
+  // Capture only an explicit sign-in action with a nearby filled password.
+  ctx.addEventListener(
+    document,
+    'click',
+    (event) => {
+      if (!event.isTrusted || !(event.target instanceof Element)) return;
+      const button = event.target.closest('button,input[type="submit"],[role="button"]');
+      if (
+        !button ||
+        !/\b(?:sign\s*in|log\s*in|continue|next|submit|register|sign\s*up|create\s+account)\b/i.test(
+          button.getAttribute('aria-label') ??
+            (button instanceof HTMLInputElement ? button.value : (button.textContent ?? '')),
+        )
+      )
+        return;
+      const form = button.closest('form');
+      if (form) {
+        void captureSubmit(form);
+        return;
+      }
+      for (let scope = button.parentElement; scope; scope = scope.parentElement) {
+        if (
+          Array.from(scope.querySelectorAll<HTMLInputElement>('input[type="password"]')).some(
+            (input) => visible(input) && Boolean(input.value),
+          )
+        ) {
+          void captureSubmit(scope);
+          return;
+        }
+        if (scope.matches('dialog,[role="dialog"],body')) break;
+      }
+    },
+    true,
+  );
+  ctx.addEventListener(document, 'focusin', (event) => {
     if (suppressNextFocus) {
       suppressNextFocus = false;
       return;
@@ -859,17 +915,19 @@ import type {
       if (event.isTrusted) void show();
     }
   });
-  document.addEventListener(
+  ctx.addEventListener(
+    document,
     'pointerdown',
     (event) => {
       if (!event.composedPath().includes(host) && event.target !== active) close();
     },
     true,
   );
-  document.addEventListener(
+  ctx.addEventListener(
+    document,
     'keydown',
     (event) => {
-      if (!open || !event.isTrusted) return;
+      if (!(event instanceof KeyboardEvent) || !open || !event.isTrusted) return;
       if (event.key === 'Escape') {
         if (event.composedPath().includes(host)) return;
         event.preventDefault();
@@ -933,31 +991,40 @@ import type {
       else void show();
     }
   });
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  ctx.addEventListener(matchMedia('(prefers-color-scheme: dark)'), 'change', () => {
     if (trigger.style.display !== 'none' || open || savePanel.childElementCount) applyScheme();
   });
-  addEventListener('resize', position, { passive: true });
-  addEventListener('scroll', position, { passive: true, capture: true });
-  window.visualViewport?.addEventListener('resize', position, { passive: true });
-  window.visualViewport?.addEventListener('scroll', position, { passive: true });
-  addEventListener('focus', () => {
+  ctx.addEventListener(window, 'resize', position, { passive: true });
+  ctx.addEventListener(window, 'scroll', position, { passive: true, capture: true });
+  if (window.visualViewport)
+    ctx.addEventListener(window.visualViewport, 'resize', position, { passive: true });
+  if (window.visualViewport)
+    ctx.addEventListener(window.visualViewport, 'scroll', position, { passive: true });
+  ctx.addEventListener(window, 'focus', () => {
     if (open) void show();
     void resumeSave();
   });
-  document.addEventListener('visibilitychange', () => {
+  ctx.addEventListener(document, 'visibilitychange', () => {
     if (document.hidden) invalidateUI();
     else void resumeSave();
   });
-  new MutationObserver((mutations) => {
+  const observer = new MutationObserver((mutations) => {
     if (
       scanScheduled ||
       !mutations.some((mutation) => !host.contains(mutation.target) && mutation.target !== host)
     )
       return;
     scanScheduled = true;
-    setTimeout(scan, 160);
-  }).observe(document.documentElement, { childList: true, subtree: true });
+    ctx.setTimeout(scan, 160);
+  });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  ctx.onInvalidated(() => {
+    invalidateUI();
+    hideSave();
+    observer.disconnect();
+    host.remove();
+  });
   scan();
   // A sign-in that navigated away leaves its offer waiting on the Mac app.
   void resumeSave();
-})();
+}

@@ -1,3 +1,7 @@
+import { browser } from 'wxt/browser';
+import '../shared/theme.css';
+import './popup.css';
+import { claspPaths } from '../shared/brand';
 import type { Result, VaultStatus } from '../shared/types';
 
 const status = document.querySelector<HTMLElement>('#status')!;
@@ -18,16 +22,12 @@ document.querySelector('.badge')!.textContent = 'Preview';
 
 // Same local mark as the Mac app. No remote asset or HTML interpolation.
 const mark = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-mark.setAttribute('viewBox', '0 0 24 24');
-mark.setAttribute('fill', 'none');
+mark.setAttribute('viewBox', '200 200 624 624');
+mark.setAttribute('fill', 'currentColor');
 mark.setAttribute('aria-hidden', 'true');
-for (const d of ['M6 10V7a6 6 0 0 1 12 0v2M5 10h14v11H5z', 'M12 14v3']) {
+for (const d of claspPaths) {
   const path = document.createElementNS(mark.namespaceURI, 'path');
   path.setAttribute('d', d);
-  path.setAttribute('stroke', 'currentColor');
-  path.setAttribute('stroke-width', '1.65');
-  path.setAttribute('stroke-linecap', 'round');
-  path.setAttribute('stroke-linejoin', 'round');
   mark.append(path);
 }
 document.querySelector('.mark')!.replaceChildren(mark);
@@ -40,7 +40,7 @@ function feedback(text: string, error = false) {
 
 async function send<T>(type: 'status' | 'open'): Promise<Result<T>> {
   try {
-    return (await chrome.runtime.sendMessage({ type })) as Result<T>;
+    return (await browser.runtime.sendMessage({ type })) as Result<T>;
   } catch {
     return { ok: false, error: 'Open Latch and connect your browser in Settings.' };
   }
@@ -81,13 +81,13 @@ window.addEventListener('pagehide', () => {
 void refreshStatus();
 
 void (async () => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   if (!tab?.url) return;
   const url = new URL(tab.url);
   if (!['https:', 'http:'].includes(url.protocol)) return;
   domain.textContent = url.host;
   domain.title = url.origin;
-  const settings = await chrome.storage.local.get('autoFillOrigins');
+  const settings = await browser.storage.local.get('autoFillOrigins');
   let origins: string[] = Array.isArray(settings.autoFillOrigins)
     ? settings.autoFillOrigins.filter(
         (value: unknown): value is string => typeof value === 'string',
@@ -100,7 +100,7 @@ void (async () => {
     checkbox.disabled = true;
     try {
       // Read again so another popup's site setting is not overwritten.
-      const current = await chrome.storage.local.get('autoFillOrigins');
+      const current = await browser.storage.local.get('autoFillOrigins');
       origins = Array.isArray(current.autoFillOrigins)
         ? current.autoFillOrigins.filter(
             (value: unknown): value is string => typeof value === 'string',
@@ -109,7 +109,7 @@ void (async () => {
       const next = enabled
         ? [...new Set([...origins, url.origin])]
         : origins.filter((origin) => origin !== url.origin);
-      await chrome.storage.local.set({ autoFillOrigins: next });
+      await browser.storage.local.set({ autoFillOrigins: next });
       origins = next;
       feedback(
         enabled

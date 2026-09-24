@@ -1,9 +1,17 @@
+import { basename } from 'node:path';
+import { FIREFOX_EXTENSION_ID } from '../shared/browser-targets';
 import { createConnection } from 'node:net';
 import { readBridgeConfig, MAX_MESSAGE_BYTES } from './native-config';
 import type { Result } from '../shared/types';
 
-const [configPath, extensionId, origin] = process.argv.slice(2);
-if (!configPath || !extensionId || origin !== `chrome-extension://${extensionId}/`) process.exit(1);
+const [configPath, extensionId, origin, firefoxId] = process.argv.slice(2);
+const chromiumCaller = origin === `chrome-extension://${extensionId}/` && !firefoxId;
+const firefoxCaller =
+  firefoxId === FIREFOX_EXTENSION_ID &&
+  typeof origin === 'string' &&
+  origin.startsWith('/') &&
+  basename(origin) === 'app.latch.vault.json';
+if (!configPath || !extensionId || (!chromiumCaller && !firefoxCaller)) process.exit(1);
 
 let buffer = Buffer.alloc(0);
 let sequence = Promise.resolve();

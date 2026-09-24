@@ -11,3 +11,6 @@ coverage/
 !.env.example
 
 .bb/
+
+.wxt/
+.output/

@@ -13,7 +13,6 @@ import {
   SlidersHorizontal as Settings2,
   Star,
   Trash as Trash2,
-  User as UserRound,
   X,
 } from '@phosphor-icons/react';
 import type { ItemDetail, ItemSummary, MenuPosition, VaultState } from '../shared/types';
@@ -546,8 +545,8 @@ function VaultWorkspace({
           <aside className="sidebar">
             <div className="workspace-titlebar" aria-hidden="true" />
             <div className="vault-label">
-              <span className="vault-avatar">
-                <UserRound size={16} />
+              <span className="vault-avatar" aria-hidden="true">
+                {Array.from(state.email.trim())[0]?.toLocaleUpperCase() || 'L'}
               </span>
               <div>
                 <strong>Personal vault</strong>

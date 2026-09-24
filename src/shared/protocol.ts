@@ -119,3 +119,12 @@ export async function safely<T>(operation: () => T | Promise<T>) {
     };
   }
 }
+
+// A separate socket/token keeps launcher commands out of the browser protocol.
+export const launcherRequestSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('search'), query: z.string().max(500) }).strict(),
+  z.object({ type: z.literal('copy'), id, field: z.enum(['username', 'password']) }).strict(),
+  z.object({ type: z.literal('lock') }).strict(),
+  z.object({ type: z.literal('open') }).strict(),
+]);
+export type LauncherRequest = z.infer<typeof launcherRequestSchema>;

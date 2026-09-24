@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, copyFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createRequire } from 'node:module';
 
@@ -10,6 +10,44 @@ export async function buildAutoFill(root) {
   const output = resolve(root, 'dist/native');
   const contents = resolve(output, 'LatchAutoFill.appex/Contents');
   await mkdir(resolve(contents, 'MacOS'), { recursive: true });
+  await mkdir(resolve(contents, 'Resources'), { recursive: true });
+  // Use the approved default appearance in a conventional macOS icon catalog.
+  const catalog = resolve(output, 'Icons.xcassets');
+  const iconset = resolve(catalog, 'Latch.appiconset');
+  await mkdir(iconset, { recursive: true });
+  const images = [];
+  for (const size of [16, 32, 128, 256, 512]) {
+    for (const scale of [1, 2]) {
+      const filename = `icon_${size}x${size}@${scale}x.png`;
+      await copyFile(
+        resolve(root, `design/latch-glass-icon/macos/icon-${size * scale}.png`),
+        resolve(iconset, filename),
+      );
+      images.push({ idiom: 'mac', size: `${size}x${size}`, scale: `${scale}x`, filename });
+    }
+  }
+  await writeFile(
+    resolve(iconset, 'Contents.json'),
+    JSON.stringify({ images, info: { author: 'xcode', version: 1 } }),
+  );
+  execFileSync(
+    'xcrun',
+    [
+      'actool',
+      catalog,
+      '--compile',
+      resolve(contents, 'Resources'),
+      '--platform',
+      'macosx',
+      '--minimum-deployment-target',
+      '14.0',
+      '--app-icon',
+      'Latch',
+      '--output-partial-info-plist',
+      resolve(output, 'icon-info.plist'),
+    ],
+    { stdio: 'inherit' },
+  );
   const common = [
     '-fobjc-arc',
     '-fblocks',
@@ -68,6 +106,9 @@ export async function buildAutoFill(root) {
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>CFBundleIdentifier</key><string>app.latch.vault.autofill</string>
+<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+<key>CFBundleDevelopmentRegion</key><string>en</string>
+<key>CFBundleSupportedPlatforms</key><array><string>MacOSX</string></array>
 <key>CFBundleName</key><string>Latch</string>
 <key>CFBundleDisplayName</key><string>Latch</string>
 <key>CFBundleExecutable</key><string>LatchAutoFill</string>
@@ -77,13 +118,14 @@ export async function buildAutoFill(root) {
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>LatchAppGroup</key><string>${group}</string>
 <key>NSExtension</key><dict>
-<key>NSExtensionPointIdentifier</key><string>com.apple.AuthenticationServices.CredentialProvider</string>
+<key>NSExtensionPointIdentifier</key><string>com.apple.authentication-services-credential-provider-ui</string>
 <key>NSExtensionPrincipalClass</key><string>LatchCredentialProvider</string>
 <key>NSExtensionAttributes</key><dict><key>ASCredentialProviderExtensionCapabilities</key><dict>
 <key>ProvidesPasswords</key><true/>
 <key>ProvidesPasskeys</key><true/>
-<key>ShowsConfigurationUI</key><true/>
-</dict></dict></dict>
+</dict>
+<key>ASCredentialProviderExtensionShowsConfigurationUI</key><true/>
+</dict></dict>
 </dict></plist>`,
   );
 }

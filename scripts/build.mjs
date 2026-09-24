@@ -1,9 +1,11 @@
 import { build } from 'esbuild';
+import { execFileSync } from 'node:child_process';
 import { build as viteBuild } from 'vite';
-import { mkdir, readFile, writeFile, copyFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, copyFile, rm, cp } from 'node:fs/promises';
 import { generateKeyPairSync, createHash } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { createRequire } from 'node:module';
+import { buildSafari } from './build-safari.mjs';
 import { buildAutoFill } from './build-autofill.mjs';
 
 const root = resolve(import.meta.dirname, '..');
@@ -18,6 +20,7 @@ const bundledPackages = [
   'node-gyp-build',
   'react',
   'react-dom',
+  'motion',
   'scheduler',
   '@tanstack/react-virtual',
   '@tanstack/virtual-core',
@@ -119,65 +122,8 @@ await copyFile(
   resolve(root, 'assets/extension.json'),
   resolve(root, 'dist/desktop/extension.json'),
 );
-await build({
-  entryPoints: ['background', 'content', 'popup'].map((name) => `src/extension/${name}.ts`),
-  bundle: true,
-  platform: 'browser',
-  target: 'chrome120',
-  format: 'iife',
-  // CSS imports in content.ts become strings for its closed shadow root.
-  loader: { '.css': 'text' },
-  outdir: 'dist/extension',
-  minify: true,
-  sourcemap: false,
-  logLevel: 'info',
-});
-await copyFile(
-  resolve(root, 'src/extension/popup.html'),
-  resolve(root, 'dist/extension/popup.html'),
-);
-// Bundle static tokens and popup styles; imports must resolve before extension packaging.
-await build({
-  stdin: {
-    contents: '@import "./src/shared/theme.css";\n@import "./src/extension/popup.css";',
-    resolveDir: root,
-    loader: 'css',
-  },
-  bundle: true,
-  outfile: 'dist/extension/popup.css',
-  minify: true,
-  target: 'chrome120',
-  logLevel: 'info',
-});
-await writeFile(
-  resolve(root, 'dist/extension/manifest.json'),
-  JSON.stringify(
-    {
-      manifest_version: 3,
-      name: 'Latch — your vault, within reach',
-      version: '0.1.0',
-      description:
-        'A quiet inline password picker for the Latch Mac app. Connects to your existing Bitwarden vault.',
-      key: identity.key,
-      permissions: ['nativeMessaging', 'activeTab', 'storage'],
-      host_permissions: ['https://*/*', 'http://localhost/*', 'http://127.0.0.1/*'],
-      background: { service_worker: 'background.js' },
-      action: { default_popup: 'popup.html', default_title: 'Latch' },
-      content_scripts: [
-        {
-          matches: ['https://*/*', 'http://localhost/*', 'http://127.0.0.1/*'],
-          js: ['content.js'],
-          run_at: 'document_idle',
-          all_frames: true,
-        },
-      ],
-      content_security_policy: {
-        extension_pages: "script-src 'self'; object-src 'none'; base-uri 'none'",
-      },
-    },
-    null,
-    2,
-  ) + '\n',
-);
+execFileSync(process.execPath, ['scripts/build-extensions.mjs'], { cwd: root, stdio: 'inherit' });
+await cp(resolve(root, '.output/chrome-mv3'), resolve(root, 'dist/extension'), { recursive: true });
+await buildSafari(root);
 await viteBuild({ configFile: resolve(root, 'vite.config.mjs') });
 console.log(`Extension ID: ${identity.extensionId}`);

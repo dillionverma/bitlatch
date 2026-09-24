@@ -1,0 +1,46 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "latch",
+  "title": "Latch",
+  "description": "Search your unlocked Latch vault without starting another Bitwarden session.",
+  "icon": "icon.png",
+  "author": "dillionverma",
+  "license": "GPL-3.0-only",
+  "private": true,
+  "platforms": [
+    "macOS"
+  ],
+  "categories": [
+    "Productivity",
+    "Security"
+  ],
+  "commands": [
+    {
+      "name": "search",
+      "title": "Search Vault",
+      "subtitle": "Latch",
+      "description": "Find logins and copy a username or password using Latch.",
+      "mode": "view"
+    },
+    {
+      "name": "lock",
+      "title": "Lock Vault",
+      "subtitle": "Latch",
+      "description": "Lock Latch immediately.",
+      "mode": "no-view"
+    }
+  ],
+  "scripts": {
+    "dev": "ray develop",
+    "build": "ray build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@raycast/api": "2.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "typescript": "^5.9.3"
+  }
+}

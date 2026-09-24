@@ -12,6 +12,7 @@ import {
 } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { existsSync } from 'node:fs';
 import { readFile, mkdir } from 'node:fs/promises';
 import { prepareWindowAppearance } from './window-appearance';
 import { manageWindowLayout } from './window-layout';
@@ -24,9 +25,15 @@ import { touchIdSessionStore } from './biometrics';
 import { AccountHints } from './account-hint';
 import { BrowserBridge } from './browser-bridge';
 import { MacAutoFill } from './macos-autofill';
-import { desktopRequestSchema, safely, UserError } from '../shared/protocol';
+import {
+  browserRequestSchema,
+  launcherRequestSchema,
+  desktopRequestSchema,
+  safely,
+  UserError,
+} from '../shared/protocol';
 import type { CliPort } from './cli';
-import type { DesktopRequest } from '../shared/protocol';
+import type { DesktopRequest, BrowserRequest, LauncherRequest } from '../shared/protocol';
 
 process.umask(0o077);
 app.setName('Latch');
@@ -39,7 +46,9 @@ let nativeInteractions: ReturnType<typeof installNativeInteractions>;
 let websiteIcons: WebsiteIcons;
 let vault: Vault;
 let cli: CliPort | undefined;
-let bridge: BrowserBridge;
+let bridge: BrowserBridge<BrowserRequest>;
+let safariBridge: BrowserBridge<BrowserRequest> | undefined;
+let launcherBridge: BrowserBridge<LauncherRequest>;
 let macAutoFill: MacAutoFill;
 let busy = false;
 let copiedValue = '';
@@ -73,6 +82,10 @@ app.on('activate', showWindow);
 void app
   .whenReady()
   .then(async () => {
+    // Refresh the running Dock tile when macOS retains artwork from an older build.
+    if (process.platform === 'darwin' && app.isPackaged) {
+      app.dock?.setIcon(join(process.resourcesPath, 'latch-dock.png'));
+    }
     await mkdir(app.getPath('userData'), { recursive: true, mode: 0o700 });
     websiteIcons = new WebsiteIcons(join(app.getPath('userData'), 'website-icons.json'));
     await websiteIcons.load();
@@ -108,36 +121,91 @@ void app
     const manifest = JSON.parse(await readFile(join(__dirname, 'extension.json'), 'utf8')) as {
       extensionId: string;
     };
+    const handleBrowserRequest = async (request: BrowserRequest) => {
+      if (request.type === 'open') {
+        showWindow();
+        return vault.snapshot().status;
+      }
+      if (request.type === 'status') return vault.snapshot().status;
+      if (request.type === 'matches') return vault.matches(request.url);
+      if (request.type === 'capture')
+        return vault.capture(request.url, request.username, request.password);
+      if (request.type === 'pendingCapture') return vault.pendingCapture(request.url);
+      if (request.type === 'commitCapture') return vault.commitCapture(request.url);
+      if (request.type === 'dismissCapture') return vault.dismissCapture();
+      if (request.type === 'icon') {
+        // Only an item the page may already see gets an icon; no secret is read.
+        if (!websiteIcons.enabled) return null;
+        const item = vault.matches(request.url).items.find((entry) => entry.id === request.id);
+        if (!item?.website) return null;
+        const epoch = mutationEpoch;
+        const icon = await websiteIcons.get(item.website);
+        return epoch === mutationEpoch && vault.snapshot().status === 'unlocked' ? icon : null;
+      }
+      return vault.fill(request.id, request.url);
+    };
     bridge = new BrowserBridge({
+      schema: browserRequestSchema,
       dataDir: app.getPath('userData'),
       extensionId: manifest.extensionId,
       executable: process.execPath,
       hostScript,
+      handle: handleBrowserRequest,
+    });
+    await bridge.start();
+    launcherBridge = new BrowserBridge({
+      channel: 'raycast',
+      schema: launcherRequestSchema,
+      dataDir: app.getPath('userData'),
+      extensionId: '',
+      executable: '',
+      hostScript: '',
       async handle(request) {
         if (request.type === 'open') {
           showWindow();
-          return vault.snapshot().status;
+          return null;
         }
-        if (request.type === 'status') return vault.snapshot().status;
-        if (request.type === 'matches') return vault.matches(request.url);
-        if (request.type === 'capture')
-          return vault.capture(request.url, request.username, request.password);
-        if (request.type === 'pendingCapture') return vault.pendingCapture(request.url);
-        if (request.type === 'commitCapture') return vault.commitCapture(request.url);
-        if (request.type === 'dismissCapture') return vault.dismissCapture();
-        if (request.type === 'icon') {
-          // Only an item the page may already see gets an icon; no secret is read.
-          if (!websiteIcons.enabled) return null;
-          const item = vault.matches(request.url).items.find((entry) => entry.id === request.id);
-          if (!item?.website) return null;
-          const epoch = mutationEpoch;
-          const icon = await websiteIcons.get(item.website);
-          return epoch === mutationEpoch && vault.snapshot().status === 'unlocked' ? icon : null;
-        }
-        return vault.fill(request.id, request.url);
+        if (request.type !== 'search') return handleRequest(request);
+        const status = vault.snapshot().status;
+        if (status !== 'unlocked') return { status, items: [] };
+        const terms = request.query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
+        const items = vault
+          .items()
+          .filter((item) => item.type === 1 && !item.restricted)
+          .filter((item) =>
+            terms.every((term) =>
+              `${item.name} ${item.username} ${item.website}`.toLocaleLowerCase().includes(term),
+            ),
+          )
+          .sort((a, b) => Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name))
+          .slice(0, 80)
+          .map(({ id, name, username, website }) => ({ id, name, username, website }));
+        return { status, items };
       },
     });
-    await bridge.start();
+    await launcherBridge.start();
+    if (existsSync(join(process.resourcesPath, '../PlugIns/LatchSafari.appex'))) {
+      try {
+        const container = await macAutoFill.sharedContainer();
+        if (!container) throw new Error('Safari shared container unavailable');
+        safariBridge = new BrowserBridge({
+          channel: 'safari',
+          schema: browserRequestSchema,
+          dataDir: container,
+          socketDirectory: container,
+          extensionId: '',
+          executable: '',
+          hostScript: '',
+          handle: handleBrowserRequest,
+        });
+        await safariBridge.start();
+      } catch {
+        await safariBridge?.stop().catch(() => undefined);
+        safariBridge = undefined;
+        // Optional browser setup must not prevent access to the desktop vault.
+        console.warn('Latch Safari connection unavailable. Check signing and App Group setup.');
+      }
+    }
     session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) =>
       callback(false),
     );
@@ -194,7 +262,20 @@ void app
       }
     });
     window.once('ready-to-show', () => window.show());
-    window.on('focus', () => void macAutoFill.status().catch(() => undefined));
+    let previousBiometrics = vault.snapshot().biometrics;
+    const refreshBiometrics = () => {
+      if (window.isDestroyed()) return;
+      const state = vault.snapshot();
+      if (state.biometrics === previousBiometrics) return;
+      previousBiometrics = state.biometrics;
+      window.webContents.send('latch:state', state);
+    };
+    window.on('focus', () => {
+      void macAutoFill.status().catch(() => undefined);
+      refreshBiometrics();
+    });
+    powerMonitor.on('resume', refreshBiometrics);
+    powerMonitor.on('unlock-screen', refreshBiometrics);
     vault.on('state', (state) => {
       nativeInteractions.cancelMenu();
       if (state.status !== 'unlocked') {
@@ -443,6 +524,8 @@ app.on('before-quit', (event) => {
   void Promise.allSettled([
     vault?.lock(false),
     bridge?.stop(),
+    launcherBridge?.stop(),
+    safariBridge?.stop(),
     macAutoFill?.stop(),
     clearCopiedSecret(),
   ])

@@ -67,8 +67,10 @@
   flex-shrink: 0;
   border: 0;
   border-radius: 50%;
-  background: var(--secondary);
-  color: var(--muted-foreground);
+  background: #145cff;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
 }
 .vault-app .sidebar nav {
   display: grid;

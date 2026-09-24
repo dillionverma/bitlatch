@@ -6,7 +6,8 @@ import {
   WarningCircle as CircleAlert,
 } from '@phosphor-icons/react';
 import type { ChallengeAnswer, LoginChallenge, Result, VaultState } from '../shared/types';
-import { Mark } from './Mark';
+import { motion, useReducedMotion } from 'motion/react';
+import appIcon from '../../assets/icon.png';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field, FieldGroup, FieldLabel, FieldDescription, FieldError } from '@/components/ui/field';
@@ -21,6 +22,7 @@ export function Auth({
   state: VaultState;
   onState: (state: VaultState) => void;
 }) {
+  const reduceMotion = useReducedMotion();
   const [email, setEmail] = useState(state.email);
   const [password, setPassword] = useState('');
   const hostedServer = ['https://vault.bitwarden.com', 'https://vault.bitwarden.eu'].includes(
@@ -34,6 +36,7 @@ export function Auth({
   const [busy, setBusy] = useState(false);
   const [biometricPending, setBiometricPending] = useState(false);
   const [error, setError] = useState('');
+  const passwordInput = useRef<HTMLInputElement>(null);
   const alive = useRef(false);
   const epoch = useRef(0);
   const working = useRef(false);
@@ -41,6 +44,9 @@ export function Auth({
   const locked = state.status === 'locked';
   const touchId = locked && state.biometrics === 'ready' && state.biometricsOn;
   const asked = useRef(false);
+  useLayoutEffect(() => {
+    if (error && !busy && !state.challenge) passwordInput.current?.focus();
+  }, [error, busy, state.challenge]);
   useLayoutEffect(() => {
     alive.current = true;
     const unsubscribe = window.latch.onState((next) => {
@@ -117,13 +123,16 @@ export function Auth({
           }}
         />
       ) : (
-        <section className="task-auth-panel">
+        <motion.section
+          className="task-auth-panel"
+          initial={{ opacity: 0, y: reduceMotion ? 0 : 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: reduceMotion ? 0 : 0.18, ease: 'easeOut' }}
+        >
           <header className="task-auth-header">
-            <div className="auth-mark" data-scanning={biometricPending}>
-              {biometricPending ? <Fingerprint size={30} aria-hidden="true" /> : <Mark size={30} />}
-            </div>
-            <h1 className="text-[17px] leading-[22px] font-semibold">
-              {locked ? 'Unlock Latch' : 'Connect your Bitwarden vault'}
+            <img className="auth-brand" src={appIcon} alt="" aria-hidden="true" draggable={false} />
+            <h1 className="auth-heading">
+              {locked ? 'Welcome back' : 'Connect your Bitwarden vault'}
             </h1>
             <p className="text-xs text-muted-foreground" role="status">
               {biometricPending
@@ -167,6 +176,7 @@ export function Auth({
                   <Input
                     className="h-8"
                     id="auth-password"
+                    ref={passwordInput}
                     placeholder={locked ? 'Master password' : undefined}
                     type="password"
                     autoComplete="current-password"
@@ -174,7 +184,7 @@ export function Auth({
                     onChange={(event) => setPassword(event.target.value)}
                     required
                     autoFocus={locked}
-                    disabled={busy}
+                    readOnly={busy}
                     aria-invalid={!!error}
                     aria-describedby={error ? 'auth-error' : undefined}
                   />
@@ -271,19 +281,23 @@ export function Auth({
             </div>
             <footer className="task-auth-actions">
               <Button
+                className="auth-submit"
+                data-loading={busy && !biometricPending}
                 size="lg"
                 type="submit"
                 disabled={busy || !!state.setupError}
                 aria-busy={busy}
               >
-                {busy && !biometricPending && <Spinner />}
-                {busy && !biometricPending
-                  ? locked
-                    ? 'Unlocking…'
-                    : 'Connecting…'
-                  : locked
-                    ? 'Unlock vault'
-                    : 'Connect your vault'}
+                {busy && !biometricPending && <Spinner aria-hidden="true" />}
+                <span role="status" aria-live="polite">
+                  {busy && !biometricPending
+                    ? locked
+                      ? 'Unlocking…'
+                      : 'Connecting…'
+                    : locked
+                      ? 'Unlock vault'
+                      : 'Connect your vault'}
+                </span>
               </Button>
               {touchId && (
                 <Button
@@ -300,6 +314,8 @@ export function Auth({
               {locked && (
                 <Button
                   variant="ghost"
+                  size="sm"
+                  className="self-center"
                   type="button"
                   onClick={() => void run(() => window.latch.logout())}
                   disabled={busy}
@@ -309,7 +325,7 @@ export function Auth({
               )}
             </footer>
           </form>
-        </section>
+        </motion.section>
       )}
     </main>
   );

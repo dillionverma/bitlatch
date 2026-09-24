@@ -1,0 +1,40 @@
+{
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "glyph.svg",
+          "name": "Latch",
+          "glass": true,
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "name": "Foreground",
+      "specular": true,
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.28
+      },
+      "blur-material": 0.15,
+      "translucency": {
+        "enabled": true,
+        "value": 0.22
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared",
+    "circles": [
+      "watchOS"
+    ]
+  },
+  "fill": {
+    "solid": "srgb:0.07843,0.36078,1.00000,1.00000"
+  }
+}

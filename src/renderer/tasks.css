@@ -144,7 +144,25 @@
   margin: auto;
 }
 .task-auth[data-locked='true'] .task-auth-panel {
-  width: 260px;
+  width: 280px;
+}
+.task-auth[data-locked='true'] {
+  --primary: #145cff;
+  --primary-foreground: #fff;
+  --ring: #145cff;
+}
+.auth-brand {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  margin-bottom: 4px;
+  user-select: none;
+}
+.auth-heading {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 26px;
+  letter-spacing: -0.4px;
 }
 .task-auth-header {
   flex: 0 0 auto;
@@ -155,15 +173,16 @@
   text-align: center;
   padding: 0 4px 20px;
 }
-.auth-mark {
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--card);
-  margin-bottom: 8px;
+.auth-submit {
+  position: relative;
+}
+.auth-submit[data-loading='true'] {
+  opacity: 1;
+  cursor: progress;
+}
+.auth-submit [data-slot='spinner'] {
+  position: absolute;
+  left: 12px;
 }
 .task-auth-header p {
   overflow-wrap: anywhere;
@@ -183,8 +202,8 @@
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px 4px 4px;
+  gap: 8px;
+  padding: 10px 4px 4px;
 }
 .task-methods {
   display: flex;

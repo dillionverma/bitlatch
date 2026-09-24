@@ -22,6 +22,12 @@ The command checks the profiles, builds both native binaries, embeds the extensi
 
 `npm run check` compiles the native code on macOS with Xcode's SDK and treats warnings as errors. `npm run package` remains unsigned; its AutoFill control explains that a signed build is required. `LATCH_DATA_DIR` disables the native integration for isolated fixtures.
 
+Use the same signing certificate for updates to retain the app's Keychain identity.
+Install one copy at `~/Applications/Latch.app`. If Xcode created a temporary app
+with either production bundle identifier to generate profiles, unregister and
+remove that app before installing Latch. Duplicate apps can make the system
+passkey chooser show the wrong provider name and icon.
+
 ## Behavior and limits
 
 - Settings → AutoFill → **Turn on…** invokes Apple's prompt. **Not Now** leaves it off. Requests are limited to one per ten seconds, including while a prompt is open.
@@ -29,7 +35,7 @@ The command checks the profiles, builds both native binaries, embeds the extensi
 - Only fillable personal password items enter Apple's suggestion index. The index contains website origins, usernames and record IDs, not passwords or URL paths. Exact/prefix URI rules stay in the picker because a selected suggestion does not include the current page URL. Apple handles the association of indexed suggestions with apps and websites. Locking queues index removal and immediately denies new credential reads.
 - A sandboxed AppKit extension offers matching logins for the service identifiers provided by macOS. Selection requests one credential through a bounded, authenticated Unix socket in the app group. Latch rechecks the current vault and URI rules before releasing it.
 - Latch must be running and unlocked. The extension tells the user to unlock Latch and retry. It cannot unlock the vault or run the Bitwarden CLI itself.
-- Passkeys: personal items with a P-256 passkey are indexed by relying party and credential ID, so the system passkey sheet lists them in Safari, Chromium browsers and apps. Sign-in and registration ask for Touch ID or the login password in the extension unless the site marks verification as discouraged. The app signs with the stored key, using the same authenticator data, `none` attestation and counter rule as Bitwarden's clients, and writes new passkeys and counter changes back through the CLI, so nothing is released or created if the write fails. Latch creates discoverable ES256 passkeys only; requests that exclude ES256 or that name an already-saved credential are refused.
+- Passkeys stay in the Bitwarden vault; Latch has no separate passkey store. Personal items with a P-256 passkey are indexed by relying party and credential ID, so the system passkey sheet lists them in Safari, Chromium browsers and apps. Sign-in and registration ask for Touch ID or the login password in the extension unless the site marks verification as discouraged. The app signs with the stored key, using the same authenticator data, `none` attestation and counter rule as Bitwarden's clients, and writes new passkeys and counter changes back through the CLI, so nothing is released or created if the write fails. Latch creates discoverable ES256 passkeys only; requests that exclude ES256 or that name an already-saved credential are refused.
 - OTPs and native save prompts are not implemented. Passkey registration does not receive the relying party's display name from macOS, so a new item is named after the relying party identifier.
 
 ## Manual acceptance (synthetic vault only)

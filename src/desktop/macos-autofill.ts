@@ -106,6 +106,11 @@ export class MacAutoFill {
     };
   }
 
+  async sharedContainer(): Promise<string | undefined> {
+    await this.status();
+    return this.container;
+  }
+
   async enable(): Promise<MacAutoFillState> {
     if (!(await this.status()).available)
       throw new UserError('Install a signed Latch build with macOS AutoFill support first.');
