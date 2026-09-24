@@ -11,7 +11,6 @@
 <p align="center">
   <a href="#highlights">Highlights</a> ·
   <a href="#installation">Installation</a> ·
-  <a href="#integrations">Integrations</a> ·
   <a href="#development">Development</a>
 </p>
 
@@ -32,31 +31,75 @@ Latch is a focused Mac companion for Bitwarden. Find a login, copy a password, o
 
 ## Installation
 
-**macOS · Apple Silicon:** [Download the preview](https://github.com/dillionverma/latch/releases/download/v0.1.0/Latch-0.1.0-macos-arm64.zip), unzip it, and move **Latch.app** to **Applications**. Install the official Bitwarden CLI, then open Latch and sign in.
+### Desktop
 
-```sh
-brew install bitwarden-cli
-```
+| Platform                  | Availability                 | Get Latch                                                                                                  |
+| :------------------------ | :--------------------------- | :--------------------------------------------------------------------------------------------------------- |
+| **macOS** · Apple Silicon | Preview                      | [Download ZIP](https://github.com/dillionverma/latch/releases/download/v0.1.0/Latch-0.1.0-macos-arm64.zip) |
+| **Linux**                 | Experimental · AppImage, deb | [Build from source](#development)                                                                          |
+| **Windows**               | In development               | No download yet                                                                                            |
 
-**Linux:** experimental AppImage and .deb builds. **Windows:** installer packaging exists; app support is still in progress. Neither has a published download yet. See [development](#development) for build commands.
+The published Mac preview is v0.1.0. For the interface shown above, [build the current app](#development). Linux and Windows support is incomplete.
 
-The macOS download is the older v0.1.0 preview, before the interface and integrations shown here. [Build from source](#development) for the current app. The preview is ad-hoc signed, not notarized.
+<details>
+<summary><strong>Set up on macOS</strong></summary>
 
-## Integrations
+1. Unzip the download and move **Latch.app** to **Applications**.
+2. Install the official Bitwarden CLI:
+
+   ```sh
+   brew install bitwarden-cli
+   ```
+
+3. Open Latch and sign in to your Bitwarden account.
+
+The preview is ad-hoc signed and not notarized.
+
+</details>
 
 ### Browser extensions
 
-Fill logins in Chrome and Aside, with the same extension available for Brave, Edge, Arc, Vivaldi, and Chromium. Firefox and Safari builds are also included; setup and verification status are in the notes below.
+Use Latch to fill logins without leaving your browser. Extensions currently require the Mac app to stay running and are installed manually.
 
-In Latch, choose **Settings → Browser → Connect browser**, then **Open folder**. Enable **Developer mode** in your browser's extensions page and choose **Load unpacked**. Keep Latch running for autofill.
+<details>
+<summary><strong>Chrome, Aside, Brave, Edge, Arc, Vivaldi & Chromium</strong></summary>
+
+1. In the current Latch app, open **Settings → Browser → Get extension**.
+2. Open your browser's extensions page and enable **Developer mode**.
+3. Choose **Load unpacked** and select the folder Latch opened.
+
+Open the extension to connect. Latch handles desktop setup automatically and shows **Connected** in Settings. Reload the extension after updating Latch.
+
+Chrome and Aside have been verified; the other Chromium browsers still need end-to-end verification.
+
+</details>
+
+<details>
+<summary><strong>Firefox</strong> · developer preview</summary>
+
+Requires Firefox 140+ and a [source checkout](#development).
+
+1. Run `pnpm run extension:build` and start the current Latch app.
+2. Open `about:debugging` → **This Firefox** → **Load Temporary Add-on**.
+3. Select `apps/extension/.output/firefox-mv3/manifest.json`.
+
+Temporary installation lasts until Firefox restarts. No signed download is available; end-to-end verification is pending.
+
+</details>
+
+<details>
+<summary><strong>Safari</strong> · signed builds</summary>
+
+Latch offers a Safari extension and native macOS AutoFill for Safari and supported Mac apps. Both require a signed build with the appropriate Apple provisioning profiles.
+
+- **Safari extension:** build with `pnpm run package:autofill` and provide `LATCH_SAFARI_PROFILE` alongside the app and AutoFill profiles. Its app group must match Latch's. End-to-end verification is pending.
+- **macOS AutoFill:** follow the [signing and setup guide](apps/desktop/native/autofill/README.md).
+
+</details>
 
 ### Raycast
 
-Search your vault, unlock with Touch ID, read secure notes, and copy credentials from your launcher. **Search Vault** and **Lock Vault** use the same Latch account. [Install the Raycast extension →](apps/raycast/README.md)
-
-### macOS AutoFill
-
-Fill logins in Safari and supported Mac apps through the system's AutoFill interface. Requires a signed build and Apple provisioning profiles. [Set up AutoFill →](apps/desktop/native/autofill/README.md)
+Search your vault, unlock with Touch ID, and copy credentials from your launcher. Uses your existing Latch account. [Install for Raycast →](apps/raycast/README.md)
 
 ## Development
 
@@ -72,7 +115,7 @@ pnpm run dev
 Run `pnpm run check` before submitting changes. It checks formatting, lint, types, and all builds. The workspace uses Electron, [Vite+](https://viteplus.dev), and WXT with one install and lockfile.
 
 <details>
-<summary>Build, browser, and release notes</summary>
+<summary>Packaging and release notes</summary>
 
 **Packages.** Run on the target operating system. Output is written to `apps/desktop/release/`.
 
@@ -83,12 +126,6 @@ pnpm run package:win    # NSIS installer
 ```
 
 Linux still needs CLI discovery and browser registration work. Windows needs a local transport port before the app can run. The manual [desktop workflow](.github/workflows/desktop.yml) builds unsigned macOS and Linux artifacts.
-
-**Browsers.** Connections currently require the Mac app. Chrome and Aside have been verified; the other Chromium registrations and Firefox/Safari still need end-to-end verification. Use `pnpm run extension:dev` for Chrome development or `pnpm run extension:zip` for browser ZIPs.
-
-For Firefox 140+, run `pnpm run extension:build`, connect the browser in Latch, and temporarily load `apps/extension/.output/firefox-mv3/manifest.json` from `about:debugging`. [Temporary installs](https://extensionworkshop.com/documentation/develop/temporary-installation-in-firefox/) last until Firefox restarts. No signed Firefox download is published yet.
-
-Safari's extension is embedded in the Mac app. The [signing script](apps/desktop/build/package-autofill.mjs) accepts `LATCH_SAFARI_PROFILE`; its app group must match Latch's. Native AutoFill has [separate provisioning requirements](apps/desktop/native/autofill/README.md).
 
 **Development builds.** Desktop hot reload reuses native and browser assets after building missing outputs. Run `pnpm --filter @latch/desktop build` and restart development after changing those assets. `pnpm run check` regenerates WXT types before checking and building the workspace.
 
