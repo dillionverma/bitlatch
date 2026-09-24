@@ -32,145 +32,72 @@ Latch is a focused Mac companion for Bitwarden. Find a login, copy a password, o
 
 ## Installation
 
-| Platform                  | Install                                                                                                                                                        | Availability          |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
-| **macOS · Apple Silicon** | [Download ZIP](https://github.com/dillionverma/latch/releases/download/v0.1.0/Latch-0.1.0-macos-arm64.zip), unzip, and move **Latch.app** to **Applications**. | Early preview, v0.1.0 |
-| **Linux · x64 / arm64**   | [Build an AppImage or .deb](#development) with `pnpm run package:linux`.                                                                                       | Experimental          |
-| **Windows**               | [Build an .exe installer](#development) with `pnpm run package:win`.                                                                                           | Runtime port pending  |
-
-The published macOS preview predates the current interface, Touch ID, and Raycast integration. [Build from source](#development) for the features shown here. Linux and Windows do not have published downloads yet. Linux still needs CLI discovery and browser integration work; Windows needs a local transport port before the app can run.
-
-On macOS, install the official Bitwarden CLI before opening Latch:
+**macOS · Apple Silicon:** [Download the preview](https://github.com/dillionverma/latch/releases/download/v0.1.0/Latch-0.1.0-macos-arm64.zip), unzip it, and move **Latch.app** to **Applications**. Install the official Bitwarden CLI, then open Latch and sign in.
 
 ```sh
 brew install bitwarden-cli
 ```
 
-Open Latch, sign in to your Bitwarden account, and unlock your vault. The current download is ad-hoc signed, not notarized; see the [release notes](https://github.com/dillionverma/latch/releases/tag/v0.1.0).
+**Linux:** experimental AppImage and .deb builds. **Windows:** installer packaging exists; app support is still in progress. Neither has a published download yet. See [development](#development) for build commands.
+
+The macOS download is the older v0.1.0 preview, before the interface and integrations shown here. [Build from source](#development) for the current app. The preview is ad-hoc signed, not notarized.
 
 ## Integrations
 
 ### Browser extensions
 
-Fill matching logins from your unlocked vault. Browser connections currently require the Mac app.
+Fill logins in Chrome and Aside, with the same extension available for Brave, Edge, Arc, Vivaldi, and Chromium. Firefox and Safari builds are also included; setup and verification status are in the notes below.
 
-| Browser                                     | Extension                                    | Availability                                                       |
-| ------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------ |
-| **Chrome · Aside**                          | Chromium extension                           | Verified with the desktop app                                      |
-| **Brave · Edge · Arc · Vivaldi · Chromium** | Same Chromium extension                      | Native bridge included; verification pending                       |
-| **Firefox 140+**                            | Firefox extension                            | Build and native bridge included; temporary development install    |
-| **Safari**                                  | Safari web extension embedded in the Mac app | Signing and provisioning required; end-to-end verification pending |
-
-For Chromium browsers, open **Settings → Browser → Connect browser** in Latch, then **Open folder**. In your browser's extensions page, enable **Developer mode**, choose **Load unpacked**, and select that folder. Keep Latch running for autofill. In source builds, the folder is `apps/desktop/dist/extension`.
-
-<details>
-<summary>Firefox and Safari setup</summary>
-
-**Firefox:** build the extension with `pnpm run extension:build` and connect the browser from Latch's Settings. Open `about:debugging`, choose **This Firefox → Load Temporary Add-on**, and select `apps/extension/.output/firefox-mv3/manifest.json`. This development installation lasts until Firefox restarts; see [Mozilla's instructions](https://extensionworkshop.com/documentation/develop/temporary-installation-in-firefox/). No signed Firefox download is published yet.
-
-**Safari:** the desktop build embeds `LatchSafari.appex`. It requires Apple signing and a Safari provisioning profile through `LATCH_SAFARI_PROFILE`; the shared app group must match Latch's. It is not installed by loading the browser ZIP. The [signing script](apps/desktop/build/package-autofill.mjs) contains the current setup requirements.
-
-</details>
+In Latch, choose **Settings → Browser → Connect browser**, then **Open folder**. Enable **Developer mode** in your browser's extensions page and choose **Load unpacked**. Keep Latch running for autofill.
 
 ### Raycast
 
-Search your vault, read secure notes, copy a username or password, and lock Latch from Raycast. Unlock with your master password or Touch ID when enabled—no second Bitwarden login.
-
-Install a current source build at `/Applications/Latch.app`, then run from the repository root:
-
-```sh
-pnpm --filter latch dev
-```
-
-Raycast imports the local extension with **Search Vault** and **Lock Vault** commands. There is no Raycast Store listing yet. See [Raycast setup and shortcuts](apps/raycast/README.md).
+Search your vault, unlock with Touch ID, read secure notes, and copy credentials from your launcher. **Search Vault** and **Lock Vault** use the same Latch account. [Install the Raycast extension →](apps/raycast/README.md)
 
 ### macOS AutoFill
 
-Native AutoFill connects Latch to Safari and supported Mac apps, separately from the browser extension. It requires a signed app and Credential Provider extension with Apple provisioning profiles. Follow the [AutoFill setup](apps/desktop/native/autofill/README.md).
-
-macOS 15+ can show the system enable prompt; macOS 14 opens System Settings instead. An unsigned build does not verify system AutoFill or passkey support.
-
-### Keyboard shortcuts
-
-| Shortcut | Action            |
-| -------- | ----------------- |
-| ⌘K       | Search your vault |
-| ⌘N       | Create a login    |
-| ⌘L       | Lock your vault   |
-| ⌘,       | Open Settings     |
+Fill logins in Safari and supported Mac apps through the system's AutoFill interface. Requires a signed build and Apple provisioning profiles. [Set up AutoFill →](apps/desktop/native/autofill/README.md)
 
 ## Development
 
-Requires Node **24.11+ or 22.18+** and pnpm **11.25.0**. Mac builds also require Xcode. Use the official Bitwarden CLI for vault access.
+Node **24.11+ or 22.18+**, pnpm **11.25.0**, and Xcode for Mac builds.
 
 ```sh
 git clone https://github.com/dillionverma/latch.git
 cd latch
 pnpm install --frozen-lockfile
+pnpm run dev
 ```
 
-One pnpm workspace and lockfile. Run commands from the repository root. Build packages on their target operating system; the Linux and Windows limitations above still apply.
-
-```sh
-pnpm run dev       # Desktop development with hot reload
-pnpm run check     # Formatting, lint, types, and all builds
-pnpm run package   # Unsigned macOS app
-```
-
-| Location                             | Purpose                                    |
-| ------------------------------------ | ------------------------------------------ |
-| [`apps/desktop`](apps/desktop)       | Electron app and native macOS integrations |
-| [`apps/extension`](apps/extension)   | Browser extension, built with WXT          |
-| [`apps/raycast`](apps/raycast)       | Raycast commands                           |
-| [`packages/shared`](packages/shared) | Shared types, protocols, and branding      |
-
-[Vite+](https://viteplus.dev) handles workspace tasks, formatting, linting, type checks, and desktop builds. WXT, Raycast CLI, and electron-builder handle their platform outputs. All tools are installed locally with the workspace.
+Run `pnpm run check` before submitting changes. It checks formatting, lint, types, and all builds. The workspace uses Electron, [Vite+](https://viteplus.dev), and WXT with one install and lockfile.
 
 <details>
-<summary>Development commands and build behavior</summary>
+<summary>Build, browser, and release notes</summary>
 
-| Command                    | Purpose                                          |
-| -------------------------- | ------------------------------------------------ |
-| `pnpm run format`          | Format source                                    |
-| `pnpm run lint`            | Lint and check types                             |
-| `pnpm run typecheck`       | Check types only                                 |
-| `pnpm run build`           | Build desktop, browser extensions, and Raycast   |
-| `pnpm run extension:dev`   | Develop the Chrome extension with reload support |
-| `pnpm run extension:build` | Build Chrome, Firefox, and Safari web extensions |
-| `pnpm run extension:zip`   | Package browser ZIPs                             |
-| `pnpm --filter latch dev`  | Develop the Raycast extension                    |
-
-Desktop development watches Electron bundles and serves the renderer with hot reload. It builds missing native AutoFill and Chrome assets, then reuses them. After native or browser changes, run `pnpm --filter @latch/desktop build` and restart development, or use the separate extension development command for browser work.
-
-The root [package manifest](package.json) pins Vite+ at `1.0.0-rc.0`. Tooling lives in the root [configuration](vite.config.mjs), with builds in the [desktop configuration](apps/desktop/vite.config.mjs). `check` regenerates WXT types, checks workspace source, then runs the full build, including native AutoFill and Safari code on macOS.
-
-The root build selects desktop and Raycast. Desktop depends on the extension build; the three WXT targets run sequentially because they share generated types. Keep this selection: recursively selecting every package also builds extensions through desktop's dependency, duplicating work in Vite+ rc.0. Caching is disabled for host- and signing-dependent tasks.
-
-To rebuild a Firefox source ZIP after extraction, run `pnpm install --frozen-lockfile` followed by `pnpm --filter @latch/extension build:firefox`.
-
-To inspect appearance variants, prefix `pnpm run dev` with `LATCH_MATERIAL=solid`, or use `LATCH_MATERIAL=glass` on the supported macOS 27.0 build. The default uses native sidebar vibrancy, with solid backgrounds when Reduce Transparency or Increase Contrast is enabled.
-
-</details>
-
-<details>
-<summary>Packaging and releases</summary>
-
-Build each platform on that platform. Configuration lives in [`apps/desktop/electron-builder.ts`](apps/desktop/electron-builder.ts).
+**Packages.** Run on the target operating system. Output is written to `apps/desktop/release/`.
 
 ```sh
 pnpm run package:mac    # DMG and ZIP, Apple Silicon
-pnpm run package:linux  # AppImage and deb, host architecture
-pnpm run package:win    # NSIS installer, host architecture
+pnpm run package:linux  # AppImage and deb
+pnpm run package:win    # NSIS installer
 ```
 
-Desktop build output goes to `apps/desktop/dist/`, browser output to `apps/extension/.output/`, and desktop packages to `apps/desktop/release/`. `pnpm run package` creates `apps/desktop/release/mac-arm64/Latch.app`, unsigned and not notarized.
+Linux still needs CLI discovery and browser registration work. Windows needs a local transport port before the app can run. The manual [desktop workflow](.github/workflows/desktop.yml) builds unsigned macOS and Linux artifacts.
 
-The manual Desktop packages workflow produces unsigned macOS arm64 and Linux x64/arm64 artifacts. Packaging success does not establish runtime support; see the platform notes above.
+**Browsers.** Connections currently require the Mac app. Chrome and Aside have been verified; the other Chromium registrations and Firefox/Safari still need end-to-end verification. Use `pnpm run extension:dev` for Chrome development or `pnpm run extension:zip` for browser ZIPs.
 
-Stable `vX.Y.Z` tags matching `apps/desktop/package.json` trigger the macOS release draft workflow. It requires Apple signing secrets and is configured to sign, notarize, and prepare a draft release with update metadata. Use `pnpm run package:release` for the same signing path locally without publishing. The workflow configuration alone does not establish successful notarization.
+For Firefox 140+, run `pnpm run extension:build`, connect the browser in Latch, and temporarily load `apps/extension/.output/firefox-mv3/manifest.json` from `about:debugging`. [Temporary installs](https://extensionworkshop.com/documentation/develop/temporary-installation-in-firefox/) last until Firefox restarts. No signed Firefox download is published yet.
+
+Safari's extension is embedded in the Mac app. The [signing script](apps/desktop/build/package-autofill.mjs) accepts `LATCH_SAFARI_PROFILE`; its app group must match Latch's. Native AutoFill has [separate provisioning requirements](apps/desktop/native/autofill/README.md).
+
+**Development builds.** Desktop hot reload reuses native and browser assets after building missing outputs. Run `pnpm --filter @latch/desktop build` and restart development after changing those assets. `pnpm run check` regenerates WXT types before checking and building the workspace.
+
+The root build selects desktop and Raycast; desktop depends on the extension build. Keep that selection to avoid duplicate extension builds in Vite+ rc.0. WXT targets run sequentially because they share generated types. Build caching is disabled for host- and signing-dependent tasks.
+
+**Releases.** `pnpm run package` creates an unsigned, non-notarized Mac app. `pnpm run package:release` requires Apple signing inputs and notarizes without publishing. Matching stable version tags trigger the [macOS draft-release workflow](.github/workflows/release.yml).
 
 </details>
 
 ## License
 
-[MIT](LICENSE). Dependency notices are generated into desktop builds; browser builds include the repository license and retained MIT attributions.
+[MIT](LICENSE). Third-party notices are included in build output.
