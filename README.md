@@ -30,6 +30,16 @@ Use `pnpm run format`, `pnpm run lint`, or `pnpm run typecheck` for individual c
 
 The app is built at `release/mac-arm64/Latch.app`. Local packages are unsigned and not notarized.
 
+Packaging is configured in `electron-builder.ts`. Build each platform on that platform:
+
+```sh
+pnpm run package:mac    # DMG and zip, Apple Silicon
+pnpm run package:linux  # AppImage and deb, host architecture
+pnpm run package:win    # NSIS installer, host architecture
+```
+
+The Desktop packages workflow builds macOS arm64 and Linux x64/arm64 packages when run manually or when a `v*` tag is pushed, and keeps them as workflow artifacts. Linux packages build, but the Bitwarden CLI lookup and browser registration are still macOS-only. The Windows package builds, but Windows cannot run Latch yet: its local connections use Unix sockets.
+
 Native macOS AutoFill needs Xcode to build and Apple provisioning profiles for the app and its Credential Provider extension. See [AutoFill setup](native/autofill/README.md). The system enable prompt requires macOS 15 or later; macOS 14 opens System Settings instead.
 
 Shortcuts: ⌘K search, ⌘N new login, ⌘L lock, ⌘, Settings.

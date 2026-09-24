@@ -3,10 +3,12 @@
   "version": "0.2.1",
   "private": true,
   "description": "A quiet, fast Mac companion for your Bitwarden vault.",
+  "homepage": "https://github.com/dillionverma/latch",
   "author": "Dillion Verma",
   "license": "GPL-3.0-only",
   "type": "module",
   "main": "dist/desktop/main.cjs",
+  "desktopName": "latch.desktop",
   "scripts": {
     "dev": "pnpm run build && electron .",
     "build": "node scripts/build.mjs",
@@ -16,6 +18,9 @@
     "format": "vp fmt",
     "format:check": "vp fmt --check",
     "package": "pnpm run build && electron-builder --mac dir --arm64",
+    "package:mac": "pnpm run build && electron-builder --mac --arm64 --publish never",
+    "package:linux": "pnpm run build && electron-builder --linux --publish never",
+    "package:win": "pnpm run build && electron-builder --win --publish never",
     "package:autofill": "node scripts/package-autofill.mjs",
     "postinstall": "wxt prepare",
     "extension:dev": "wxt -b chrome",
@@ -59,34 +64,6 @@
     "wxt": "^0.21.4",
     "zod": "^4.3.6",
     "vite-plus": "1.0.0-rc.0"
-  },
-  "build": {
-    "appId": "app.latch.vault",
-    "productName": "Latch",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "package.json",
-      "LICENSE",
-      "THIRD_PARTY.md"
-    ],
-    "asar": true,
-    "afterPack": "scripts/embed-autofill.cjs",
-    "asarUnpack": [
-      "dist/native/*.node",
-      "dist/extension/**/*",
-      "dist/desktop/native-host.cjs",
-      "node_modules/electron-liquid-glass/prebuilds/**/*"
-    ],
-    "mac": {
-      "icon": "assets/icon.icns",
-      "category": "public.app-category.productivity",
-      "target": "dir",
-      "identity": null,
-      "hardenedRuntime": true
-    }
   },
   "dependencies": {
     "electron-liquid-glass": "1.1.1",
