@@ -16,7 +16,7 @@ Run these commands from the repository root. Sign in, then use Settings to conne
 
 The root `package.json` pins pnpm. The workspace uses one root install and `pnpm-lock.yaml` for `apps/desktop`, `apps/extension`, `apps/raycast`, and `packages/shared`. `pnpm-workspace.yaml` defines the packages and the hoisted layout used by Electron packaging. Desktop and extension versions live in their app manifests (currently `0.2.1`); the root package has no version.
 
-`pnpm run dev` watches Electron bundles, restarts Electron when they change, and serves the renderer through Vite with hot reload. It builds native AutoFill and Chrome outputs when missing, then reuses them; it does not watch those targets. Run `pnpm --filter @latch/desktop build` to rebuild native code and Chrome assets, then restart development. For browser development with reload support, use `pnpm run extension:dev` separately.
+`pnpm run dev` watches Electron bundles, restarts Electron when they change, and serves the renderer through Vite with hot reload. It builds native AutoFill and Chrome outputs when missing, then reuses them; it does not watch those targets. Run `pnpm --filter @latch/desktop build` to rebuild native code and browser assets, then restart development. For browser development with reload support, use `pnpm run extension:dev` separately.
 
 ## Build
 
@@ -27,7 +27,9 @@ pnpm run package
 
 Vite+ owns renderer builds, desktop bundling (tsdown/Rolldown), formatting (Oxfmt), and type-aware lint/type checks (Oxlint/TypeScript Go). Root tooling configuration lives in `vite.config.mjs`; desktop build configuration is in `apps/desktop/vite.config.mjs`. The `1.0.0-rc.0` toolchain is pinned exactly. `pnpm run check` checks formatting and workspace source, then runs the full build: desktop, Chrome, Firefox and Safari web extensions, native AutoFill and Safari code on macOS, and Raycast.
 
-`pnpm run check` regenerates WXT types, runs one workspace-wide Vite+ check, then builds. Use `pnpm run format` for formatting, `pnpm run lint` for lint and type checks, or `pnpm run typecheck` for type checks alone. `pnpm --filter @latch/desktop build` builds desktop, native AutoFill and Chrome; `pnpm run extension:build` builds all three web-extension targets. Raycast uses `pnpm --filter latch dev` and `pnpm --filter latch build`; see [Raycast setup](apps/raycast/README.md). WXT, Raycast CLI, electron-builder, and Apple signing remain responsible for their platform-specific outputs. Vite+ is project-local; no global installation is needed.
+`pnpm run check` regenerates WXT types, runs one workspace-wide Vite+ check, then builds. Use `pnpm run format` for formatting, `pnpm run lint` for lint and type checks, or `pnpm run typecheck` for type checks alone. `pnpm run build` selects desktop and Raycast through Vite Task. Desktop depends on the extension build, then prepares native code and assets, packs Electron, and builds the renderer. WXT's three browser builds run sequentially because they share generated types; Raycast can build independently. Selecting these two apps avoids building extensions twice through recursive selection and desktop's dependency in Vite+ rc.0. Task caching is disabled for host- and signing-dependent builds.
+
+`pnpm --filter @latch/desktop build` builds desktop, all browser targets, and native AutoFill/Safari on macOS; `pnpm run extension:build` builds only the browser targets. Raycast uses `pnpm --filter latch dev` and `pnpm --filter latch build`; see [Raycast setup](apps/raycast/README.md). WXT, Raycast CLI, electron-builder, and Apple signing remain responsible for their platform-specific outputs. Vite+ is project-local; no global installation is needed.
 
 Browser ZIPs are built with `pnpm run extension:zip`. To rebuild the Firefox source ZIP after extraction, run `pnpm install --frozen-lockfile && pnpm --filter @latch/extension build:firefox`.
 

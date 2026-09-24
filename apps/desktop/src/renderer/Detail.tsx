@@ -44,11 +44,6 @@ export function Detail({
   useLayoutEffect(() => {
     alive.current = true;
     epoch.current++;
-    setRevealed(false);
-    setCopied('');
-    setCopying('');
-    setError('');
-    setDeleting(false);
     working.current = false;
     copyWorking.current = false;
     const unsubscribe = window.latch.onState((state) => {

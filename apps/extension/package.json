@@ -5,12 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "wxt -b chrome",
-    "dev:firefox": "wxt -b firefox --mv3",
-    "build": "pnpm build:chrome && pnpm build:firefox && pnpm build:safari",
-    "build:chrome": "wxt build -b chrome --mv3",
-    "build:firefox": "wxt build -b firefox --mv3",
-    "build:safari": "wxt build -b safari --mv3",
-    "zip": "cd ../.. && wxt zip apps/extension -b chrome --mv3 && wxt zip apps/extension -b firefox --mv3 && wxt zip apps/extension -b safari --mv3",
+    "dev:firefox": "wxt -b firefox",
+    "build": "vp run build:chrome && vp run build:firefox && vp run build:safari",
+    "build:chrome": "wxt build -b chrome",
+    "build:firefox": "wxt build -b firefox",
+    "build:safari": "wxt build -b safari",
+    "zip": "cd ../.. && wxt zip apps/extension -b chrome && wxt zip apps/extension -b firefox && wxt zip apps/extension -b safari",
     "typecheck": "wxt prepare && vp lint .",
     "postinstall": "wxt prepare",
     "submit": "wxt submit"

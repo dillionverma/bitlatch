@@ -4,6 +4,14 @@ import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'node:path';
 
 export default defineConfig({
+  run: {
+    tasks: {
+      bundle: {
+        dependsOn: ['@latch/extension#build'],
+        command: ['node build/prepare.mjs', 'vp pack', 'vp build'],
+      },
+    },
+  },
   // Independent bundles keep the sandboxed preload and unpacked native host self-contained.
   pack: ['main', 'preload', 'native-host'].map((name) => ({
     entry: { [name]: name === 'main' ? 'src/main/main.ts' : `src/${name}/index.ts` },

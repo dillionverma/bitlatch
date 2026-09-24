@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
+  // Native builds and signing depend on the host, provisioning profiles, and environment.
+  run: { cache: false },
   lint: {
     jsPlugins: [{ name: 'vite-plus', specifier: 'vite-plus/oxlint-plugin' }],
     rules: { 'vite-plus/prefer-vite-plus-imports': 'error' },

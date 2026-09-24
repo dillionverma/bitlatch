@@ -12,13 +12,12 @@
   "scripts": {
     "dev": "node build/dev.mjs",
     "start": "electron .",
-    "build": "pnpm --filter @latch/extension build:chrome && node build/build.mjs",
-    "build:safari": "node --input-type=module -e \"import { buildSafari } from './build/build-safari.mjs'; await buildSafari(process.cwd())\"",
+    "build": "vp run bundle",
     "typecheck": "vp lint src electron-builder.ts build vite.config.mjs",
-    "package": "pnpm build && electron-builder --mac dir --arm64",
-    "package:mac": "pnpm build && electron-builder --mac --arm64 --publish never",
-    "package:linux": "pnpm build && electron-builder --linux --publish never",
-    "package:win": "pnpm build && electron-builder --win --publish never",
+    "package": "vp run build && electron-builder --mac dir --arm64",
+    "package:mac": "vp run build && electron-builder --mac --arm64 --publish never",
+    "package:linux": "vp run build && electron-builder --linux --publish never",
+    "package:win": "vp run build && electron-builder --win --publish never",
     "package:autofill": "node build/package-autofill.mjs",
     "package:release": "node build/package-autofill.mjs --release"
   },

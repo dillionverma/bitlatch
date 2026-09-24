@@ -7,9 +7,6 @@ const identity = JSON.parse(
 );
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 export default defineConfig({
-  srcDir: '.',
-  publicDir: 'public',
-  outDir: '.output',
   imports: false,
   hooks: {
     'build:publicAssets': (_wxt, files) => {

@@ -1,5 +1,3 @@
-import { execFileSync } from 'node:child_process';
-import { build as viteBuild } from 'vite-plus';
 import { mkdir, readFile, writeFile, copyFile, rm, cp } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { createRequire } from 'node:module';
@@ -82,17 +80,9 @@ await writeFile(resolve(root, 'dist/THIRD_PARTY_NOTICES.txt'), notices.join('\n\
 // The checked-in identity is stable across installs; missing data is a build error.
 const identityPath = resolve(root, '../../packages/shared/extension.json');
 const identity = JSON.parse(await readFile(identityPath, 'utf8'));
-execFileSync('pnpm', ['exec', 'vp', 'pack'], { cwd: root, stdio: 'inherit' });
 await copyFile(identityPath, resolve(root, 'dist/desktop/extension.json'));
 await cp(resolve(root, '../extension/.output/chrome-mv3'), resolve(root, 'dist/extension'), {
   recursive: true,
 });
-if (process.env.LATCH_SAFARI_PROFILE) {
-  execFileSync('pnpm', ['--filter', '@latch/extension', 'build:safari'], {
-    cwd: root,
-    stdio: 'inherit',
-  });
-  await buildSafari(root);
-}
-await viteBuild({ configFile: resolve(root, 'vite.config.mjs') });
+await buildSafari(root);
 console.log(`Extension ID: ${identity.extensionId}`);
