@@ -910,7 +910,7 @@ export class Vault extends EventEmitter {
       const nextUris = draft.website
         ? [
             {
-              ...(previousUris[0] ?? {}),
+              ...previousUris[0],
               uri: draft.website,
               match: previousUris[0]?.match ?? null,
             },

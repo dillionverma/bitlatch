@@ -61,7 +61,7 @@ const safari = safariProfile ? profile(safariProfile, 'app.latch.vault.safari', 
 if (safari && safari.team !== host.team)
   throw new Error('Safari and Latch must use the same signing team.');
 const env = { ...process.env, LATCH_APP_GROUP: group, CSC_IDENTITY_AUTO_DISCOVERY: 'false' };
-execFileSync('npm', ['run', 'build'], { cwd: root, env, stdio: 'inherit' });
+execFileSync('pnpm', ['run', 'build'], { cwd: root, env, stdio: 'inherit' });
 execFileSync(join(root, 'node_modules/.bin/electron-builder'), ['--mac', 'dir', '--arm64'], {
   cwd: root,
   env,

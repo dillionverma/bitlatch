@@ -8,8 +8,11 @@ on:
       - 'assets/extension-public/**'
       - 'assets/extension.json'
       - 'wxt.config.ts'
+      - 'vite.config.mjs'
       - 'tsconfig.extension.json'
-      - 'package*.json'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
       - 'scripts/build-extensions.mjs'
       - '.github/workflows/extensions.yml'
 permissions:
@@ -19,13 +22,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          standalone: true
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run extension:typecheck
-      - run: npm run extension:zip
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run extension:typecheck
+      - run: pnpm run extension:zip
       - uses: actions/upload-artifact@v4
         with:
           name: browser-extensions

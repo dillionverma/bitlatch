@@ -3,11 +3,7 @@
     "target": "ES2023",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": [
-      "ES2023",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "strict": true,
     "noUnusedLocals": true,
@@ -17,20 +13,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "types": [
-      "node",
-      "chrome",
-      "vite/client"
-    ],
+    "types": ["node", "chrome", "vite/client"],
     "paths": {
-      "@/*": [
-        "./src/renderer/*"
-      ]
+      "@/*": ["./src/renderer/*"]
     }
   },
-  "include": [
-    "src",
-    "*.ts",
-    ".wxt/wxt.d.ts"
-  ]
+  "include": ["src", "*.ts", ".wxt/wxt.d.ts"]
 }

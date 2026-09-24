@@ -2,12 +2,13 @@
   "compilerOptions": {
     "target": "ES2023",
     "lib": ["ES2023", "DOM"],
-    "module": "commonjs",
+    "module": "ESNext",
     "jsx": "react-jsx",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "moduleResolution": "node"
+    "moduleResolution": "Bundler",
+    "types": ["node", "react"]
   },
   "include": ["src", "raycast-env.d.ts"]
 }

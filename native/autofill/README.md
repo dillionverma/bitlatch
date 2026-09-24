@@ -15,12 +15,12 @@ Use the same Apple team and signing certificate for both. The build uses the mac
 LATCH_SIGN_IDENTITY='Apple Development: Your Name (CERTIFICATE_ID)' \
 LATCH_APP_PROFILE='/absolute/path/Latch.provisionprofile' \
 LATCH_AUTOFILL_PROFILE='/absolute/path/LatchAutoFill.provisionprofile' \
-npm run package:autofill
+pnpm run package:autofill
 ```
 
 The command checks the profiles, builds both native binaries, embeds the extension, applies separate app/extension entitlements, and verifies the signatures. The result is `release/mac-arm64/Latch.app`. It does not install, notarize, or publish the app. Development profiles must include the target Mac. Distribution needs suitable Developer ID profiles and notarization.
 
-`npm run check` compiles the native code on macOS with Xcode's SDK and treats warnings as errors. `npm run package` remains unsigned; its AutoFill control explains that a signed build is required. `LATCH_DATA_DIR` disables the native integration for isolated fixtures.
+`pnpm run check` compiles the native code on macOS with Xcode's SDK and treats warnings as errors. `pnpm run package` remains unsigned; its AutoFill control explains that a signed build is required. `LATCH_DATA_DIR` disables the native integration for isolated fixtures.
 
 Use the same signing certificate for updates to retain the app's Keychain identity.
 Install one copy at `~/Applications/Latch.app`. If Xcode created a temporary app

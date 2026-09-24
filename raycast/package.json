@@ -33,14 +33,14 @@
   "scripts": {
     "dev": "ray develop",
     "build": "ray build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "pnpm -C .. exec vp check --no-fmt --no-lint raycast/src"
   },
   "dependencies": {
     "@raycast/api": "2.4.1"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "@types/react": "^19.2.0",
-    "typescript": "^5.9.3"
-  }
+    "@types/node": "22.19.17",
+    "@types/react": "19.0.10"
+  },
+  "packageManager": "pnpm@11.25.0"
 }

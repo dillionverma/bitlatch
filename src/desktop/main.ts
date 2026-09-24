@@ -456,7 +456,7 @@ function clearCopiedSecret() {
     .then(async () => {
       const previous = copiedValue;
       copiedValue = '';
-      if (previous && (await clipboard.readText()) === previous) await clipboard.clear();
+      if (previous && (await clipboard.readText()) === previous) clipboard.clear();
     });
   return clipboardQueue;
 }

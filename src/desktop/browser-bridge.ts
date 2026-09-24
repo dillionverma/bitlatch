@@ -17,7 +17,7 @@ export interface BridgeOptions<Request> {
   extensionId: string;
   executable: string;
   hostScript: string;
-  handle: (request: Request) => Promise<unknown> | unknown;
+  handle: (request: Request) => unknown;
 }
 
 export class BrowserBridge<Request> {
@@ -73,10 +73,7 @@ export class BrowserBridge<Request> {
     if (this.options.channel)
       throw new UserError('Only the browser bridge can be installed in a browser.');
     const launcher = join(this.options.dataDir, 'latch-native-host');
-    const configPath = join(
-      this.options.dataDir,
-      this.options.channel ? `${this.options.channel}-bridge.json` : 'bridge.json',
-    );
+    const configPath = join(this.options.dataDir, 'bridge.json');
     const script = `#!/bin/sh\nexport ELECTRON_RUN_AS_NODE=1\nexec ${shellQuote(this.options.executable)} ${shellQuote(this.options.hostScript)} ${shellQuote(configPath)} ${shellQuote(this.options.extensionId)} "$@"\n`;
     await writeFile(launcher, script, { mode: 0o700 });
     await chmod(launcher, 0o700);

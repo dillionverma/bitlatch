@@ -1,6 +1,5 @@
-import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
-import { build as viteBuild } from 'vite';
+import { build as viteBuild } from 'vite-plus';
 import { mkdir, readFile, writeFile, copyFile, rm, cp } from 'node:fs/promises';
 import { generateKeyPairSync, createHash } from 'node:crypto';
 import { resolve, join } from 'node:path';
@@ -95,7 +94,8 @@ try {
   const hex = createHash('sha256').update(bytes).digest('hex').slice(0, 32);
   identity = {
     key: bytes.toString('base64'),
-    extensionId: [...hex]
+    extensionId: hex
+      .split('')
       .map((char) => String.fromCharCode(97 + Number.parseInt(char, 16)))
       .join(''),
   };
@@ -106,18 +106,7 @@ try {
   );
 }
 
-await build({
-  entryPoints: ['main', 'preload', 'native-host'].map((name) => `src/desktop/${name}.ts`),
-  bundle: true,
-  platform: 'node',
-  target: 'node22',
-  format: 'cjs',
-  outdir: 'dist/desktop',
-  outExtension: { '.js': '.cjs' },
-  external: ['electron', 'electron-liquid-glass'],
-  sourcemap: false,
-  logLevel: 'info',
-});
+execFileSync(resolve(root, 'node_modules/.bin/vp'), ['pack'], { cwd: root, stdio: 'inherit' });
 await copyFile(
   resolve(root, 'assets/extension.json'),
   resolve(root, 'dist/desktop/extension.json'),

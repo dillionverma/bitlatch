@@ -47,14 +47,14 @@ Before declaring a browser supported, manually verify with synthetic credentials
 
 ## Implemented commands and output
 
-- `npm run extension:dev` / `extension:dev:firefox`: WXT development with reload support.
-- `npm run extension:build`: Chromium, Firefox 140+, Safari MV3 builds in `.output/{browser}-mv3`.
-- `npm run extension:zip`: browser ZIPs and a narrowly allowlisted Firefox source ZIP. Rebuild Firefox from the source archive with `npm ci && npx wxt build -b firefox --mv3`.
-- `npm run build`: also compiles the Safari native handler on macOS and keeps the Chromium install path at `dist/extension`.
-- `npm run extension:submit -- --help`: WXT submission tooling. No store accounts, signing credentials, or publication are automatically configured. The artifact workflow only builds/uploads private repository artifacts.
+- `pnpm run extension:dev` / `extension:dev:firefox`: WXT development with reload support.
+- `pnpm run extension:build`: Chromium, Firefox 140+, Safari MV3 builds in `.output/{browser}-mv3`.
+- `pnpm run extension:zip`: browser ZIPs and a narrowly allowlisted Firefox source ZIP. Rebuild Firefox from the source archive with `pnpm install --frozen-lockfile && pnpm exec wxt build -b firefox --mv3`.
+- `pnpm run build`: also compiles the Safari native handler on macOS and keeps the Chromium install path at `dist/extension`.
+- `pnpm run extension:submit -- --help`: WXT submission tooling. No store accounts, signing credentials, or publication are automatically configured. The artifact workflow only builds/uploads private repository artifacts.
 
 The native host installer now registers Chrome, Chrome for Testing, Chromium, Aside, Brave, Edge, Arc, Vivaldi, and Firefox on macOS. These are integration targets, not a claim of completed live testing in every browser. Chromium retains its existing public key and ID. Firefox's stable ID is `latch@latch.local`; temporary installations use `.output/firefox-mv3/manifest.json`, while normal distribution requires Mozilla signing. Firefox's consent declarations describe the credential and site data relayed locally to Latch, not analytics.
 
-Safari's request handler is `native/safari/Handler.m`, embedded as `LatchSafari.appex` only when `LATCH_SAFARI_PROFILE` is supplied to `npm run package:autofill`. Create a macOS profile for `app.latch.vault.safari` with the same team and App Group as the host. Keep the existing host and AutoFill profiles. This wrapper uses the same strict browser request schema through a separate app-group socket/token; it does not expose the launcher protocol. Safari's native AutoFill credential provider is a different extension.
+Safari's request handler is `native/safari/Handler.m`, embedded as `LatchSafari.appex` only when `LATCH_SAFARI_PROFILE` is supplied to `pnpm run package:autofill`. Create a macOS profile for `app.latch.vault.safari` with the same team and App Group as the host. Keep the existing host and AutoFill profiles. This wrapper uses the same strict browser request schema through a separate app-group socket/token; it does not expose the launcher protocol. Safari's native AutoFill credential provider is a different extension.
 
 A successful compile is not Safari installation verification: the signed Safari profile, Safari enablement/site permission, and a live fill/save test are still required. Keep all vault cryptography and locking in Latch/Bitwarden; the web extension only selects and relays requests. Check both iframe and navigation behavior in each browser before releasing.

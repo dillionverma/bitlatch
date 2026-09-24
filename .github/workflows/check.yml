@@ -9,10 +9,17 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          standalone: true
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run format:check
-      - run: npm run check
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            raycast/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -C raycast install --frozen-lockfile
+      - run: pnpm run check
+      - run: pnpm -C raycast run build

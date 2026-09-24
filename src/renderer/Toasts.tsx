@@ -101,12 +101,17 @@ export function useToasts() {
     publish(id, kind, message, () => owned.current.delete(id));
   }, []);
   const toasts: Toast[] = sonnerToasts.flatMap((entry) => {
-    if (typeof entry.id !== 'number' || !owned.current.has(entry.id)) return [];
+    if (
+      typeof entry.id !== 'number' ||
+      !owned.current.has(entry.id) ||
+      typeof entry.title !== 'string'
+    )
+      return [];
     return [
       {
         id: entry.id,
         kind: entry.type === 'loading' ? 'pending' : entry.type === 'error' ? 'error' : 'done',
-        message: String(entry.title),
+        message: entry.title,
       },
     ];
   });

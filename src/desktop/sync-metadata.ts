@@ -22,7 +22,8 @@ export function listingVersion(value: unknown): string | undefined {
     // The encrypted cache can retain microseconds; bw's public JSON uses Date
     // and therefore milliseconds. Compare at the precision the CLI exposes.
     const revision = Date.parse(item.revisionDate);
-    const deleted = item.deletedDate == null ? null : Date.parse(String(item.deletedDate));
+    if (item.deletedDate != null && typeof item.deletedDate !== 'string') return undefined;
+    const deleted = item.deletedDate == null ? null : Date.parse(item.deletedDate);
     if (!Number.isFinite(revision) || (deleted !== null && !Number.isFinite(deleted)))
       return undefined;
     entries.push(JSON.stringify([item.id, revision, deleted]));

@@ -170,7 +170,7 @@ export function Editor({
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) close();
+        if (!open) void close();
       }}
     >
       <DialogContent
@@ -197,7 +197,7 @@ export function Editor({
         }}
         onEscapeKeyDown={(event) => {
           event.preventDefault();
-          if (!discarding) close();
+          if (!discarding) void close();
         }}
       >
         <DialogHeader className="task-header">

@@ -43,7 +43,8 @@ export async function request<T = void>(request: Request, signal?: AbortSignal):
       finished = true;
       signal?.removeEventListener('abort', abort);
       socket.destroy();
-      error ? reject(error) : resolve(value as T);
+      if (error) reject(error);
+      else resolve(value as T);
     };
     const abort = () => finish(new Error('Request cancelled.'));
     signal?.addEventListener('abort', abort, { once: true });

@@ -31,7 +31,9 @@ export function ItemIcon({ item, large = false }: { item: ItemSummary; large?: b
   const src = enabled && logo?.id === item.id && logo.website === item.website ? logo.src : null;
   const Icon =
     item.type === 2 ? FileText : item.type === 3 ? CreditCard : item.type === 4 ? UserRound : null;
-  const tone = [...item.name].reduce((value, char) => value + char.charCodeAt(0), 0) % 5;
+  let hash = 0;
+  for (const char of item.name) hash += char.charCodeAt(0);
+  const tone = hash % 5;
   return (
     <span
       ref={element}
