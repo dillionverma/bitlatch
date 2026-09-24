@@ -12,7 +12,7 @@ await buildAutoFill(root);
 await copyFile(resolve(root, '../../LICENSE'), resolve(root, 'dist/LICENSE'));
 
 const bundledPackages = [
-  'electron-liquid-glass',
+  ...(process.platform === 'darwin' ? ['electron-liquid-glass'] : []),
   'electron-updater',
   'react',
   'react-dom',

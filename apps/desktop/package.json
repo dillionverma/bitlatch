@@ -1,7 +1,7 @@
 {
   "version": "0.2.1",
   "private": true,
-  "description": "A quiet, fast Mac companion for your Bitwarden vault.",
+  "description": "A redesigned client for your Bitwarden vault.",
   "homepage": "https://github.com/dillionverma/latch",
   "author": "Dillion Verma",
   "license": "MIT",
@@ -50,7 +50,9 @@
     "@latch/shared": "workspace:*"
   },
   "dependencies": {
-    "electron-liquid-glass": "1.1.1",
     "electron-updater": "^6.8.9"
+  },
+  "optionalDependencies": {
+    "electron-liquid-glass": "1.1.1"
   }
 }

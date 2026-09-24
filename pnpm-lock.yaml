@@ -18,9 +18,6 @@ importers:
 
   apps/desktop:
     dependencies:
-      electron-liquid-glass:
-        specifier: 1.1.1
-        version: 1.1.1
       electron-updater:
         specifier: ^6.8.9
         version: 6.8.9(supports-color@8.1.1)
@@ -103,6 +100,10 @@ importers:
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@1.0.0-rc.0
         version: '@voidzero-dev/vite-plus-core@1.0.0-rc.0(@types/node@24.13.5)(esbuild@0.28.2)(jiti@2.7.0)'
+    optionalDependencies:
+      electron-liquid-glass:
+        specifier: 1.1.1
+        version: 1.1.1
 
   apps/extension:
     devDependencies:
@@ -6174,6 +6175,7 @@ snapshots:
   bindings@1.5.0:
     dependencies:
       file-uri-to-path: 1.0.0
+    optional: true
 
   bluebird@3.7.2: {}
 
@@ -6539,6 +6541,7 @@ snapshots:
       node-addon-api: 8.9.2
     optionalDependencies:
       node-gyp-build: 4.8.4
+    optional: true
 
   electron-publish@26.15.3(supports-color@8.1.1):
     dependencies:
@@ -6693,7 +6696,8 @@ snapshots:
 
   fflate@0.8.3: {}
 
-  file-uri-to-path@1.0.0: {}
+  file-uri-to-path@1.0.0:
+    optional: true
 
   filelist@1.0.6:
     dependencies:
@@ -7210,7 +7214,8 @@ snapshots:
     dependencies:
       semver: 7.7.3
 
-  node-addon-api@8.9.2: {}
+  node-addon-api@8.9.2:
+    optional: true
 
   node-api-headers@1.9.0: {}
 

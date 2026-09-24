@@ -1,27 +1,43 @@
 name: Desktop packages
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
 permissions:
   contents: read
 jobs:
   package:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: macOS arm64
-            runner: macos-latest
+            runner: macos-26
             script: package:mac
+            artifact: mac-arm64
           - name: Linux x64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
             script: package:linux
+            artifact: linux-x64
           - name: Linux arm64
             runner: ubuntu-24.04-arm
             script: package:linux
+            artifact: linux-arm64
+          - name: Windows x64
+            runner: windows-2025
+            script: package:win
+            artifact: win-x64
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
         with:
           standalone: true
@@ -30,17 +46,18 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Unsigned packages. Signed macOS AutoFill builds use `pnpm run package:autofill`.
-      - run: pnpm run ${{ matrix.script }}
+      - name: Build unsigned preview
+        run: pnpm run ${{ matrix.script }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
         with:
-          name: latch-${{ runner.os }}-${{ runner.arch }}
+          name: release-${{ matrix.artifact }}
           path: |
             apps/desktop/release/*.dmg
             apps/desktop/release/*.zip
             apps/desktop/release/*.AppImage
             apps/desktop/release/*.deb
+            apps/desktop/release/*.exe
           if-no-files-found: error
           retention-days: 14
