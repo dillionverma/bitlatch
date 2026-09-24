@@ -6,7 +6,17 @@ export default {
   appId: 'app.latch.vault',
   productName: 'Latch',
   directories: { output: 'release' },
-  files: ['dist/**/*', 'package.json', 'LICENSE', 'THIRD_PARTY.md'],
+  files: [
+    'dist/**/*',
+    // afterPack embeds the macOS extensions from dist/native; app.asar needs only the addon.
+    '!dist/native/{*.appex,Icons.xcassets}{,/**}',
+    '!dist/native/icon-info.plist',
+    'package.json',
+    'LICENSE',
+    'THIRD_PARTY.md',
+  ],
+  // Latch is English-only; other Chromium locales are about 45 MB per app.
+  electronLanguages: ['en', 'en-US'],
   asar: true,
   asarUnpack: [
     'dist/native/*.node',
