@@ -139,4 +139,4 @@ The root build selects desktop and Raycast; desktop depends on the extension bui
 
 ## License
 
-[MIT](LICENSE). Platform and browser icons from [SVGL](https://svgl.app/). Third-party notices are included in build output.
+[MIT](LICENSE).
