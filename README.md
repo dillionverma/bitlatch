@@ -33,11 +33,11 @@ Latch is an alternative client for your existing Bitwarden vault, designed aroun
 
 ### Desktop
 
-| Platform                                                                                                                                                                                                          | Availability                 | Get Latch                                                                                                  |
-| :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------- | :--------------------------------------------------------------------------------------------------------- |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/icons/apple_dark.svg" /><img src="assets/readme/icons/apple.svg" width="20" height="20" alt="" /></picture> **macOS** · Apple Silicon | Preview                      | [Download ZIP](https://github.com/dillionverma/latch/releases/download/v0.1.0/Latch-0.1.0-macos-arm64.zip) |
-| <img src="assets/readme/icons/linux.svg" width="20" height="20" alt="" /> **Linux**                                                                                                                               | Experimental · AppImage, deb | [Build from source](#development)                                                                          |
-| <img src="assets/readme/icons/windows.svg" width="20" height="20" alt="" /> **Windows**                                                                                                                           | In development               | No download yet                                                                                            |
+| Platform                                                                                                                                                                                                                                                                                                                                                                    | Availability                 | Get Latch                                                                                                  |
+| :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------- | :--------------------------------------------------------------------------------------------------------- |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/apple_dark.svg" /><img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/apple.svg" width="20" height="20" alt="" /></picture> **macOS** · Apple Silicon | Preview                      | [Download ZIP](https://github.com/dillionverma/latch/releases/download/v0.1.0/Latch-0.1.0-macos-arm64.zip) |
+| <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/linux.svg" width="20" height="20" alt="" /> **Linux**                                                                                                                                                                                                            | Experimental · AppImage, deb | [Build from source](#development)                                                                          |
+| <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/windows.svg" width="20" height="20" alt="" /> **Windows**                                                                                                                                                                                                        | In development               | No download yet                                                                                            |
 
 The published Mac preview is v0.1.0. For the interface shown above, [build the current app](#development). Linux and Windows support is incomplete.
 
@@ -62,9 +62,9 @@ The preview is ad-hoc signed and not notarized.
 Use Latch to fill logins without leaving your browser. Extensions currently require the Mac app to stay running and are installed manually.
 
 <details>
-<summary><img src="assets/readme/icons/chrome.svg" width="20" height="20" alt="" /> <strong>Chrome & Chromium browsers</strong></summary>
+<summary><img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/chrome.svg" width="20" height="20" alt="" /> <strong>Chrome & Chromium browsers</strong></summary>
 
-<img src="assets/readme/icons/chrome.svg" width="20" height="20" alt="" /> Chrome · <img src="assets/readme/icons/brave.svg" width="20" height="20" alt="" /> Brave · <img src="assets/readme/icons/edge.svg" width="20" height="20" alt="" /> Edge · <img src="assets/readme/icons/arc_browser.svg" width="20" height="20" alt="" /> Arc · <img src="assets/readme/icons/vivaldi.svg" width="20" height="20" alt="" /> Vivaldi · <img src="assets/readme/icons/chromium.svg" width="20" height="20" alt="" /> Chromium · Aside
+<img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/chrome.svg" width="20" height="20" alt="" /> Chrome · <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/brave.svg" width="20" height="20" alt="" /> Brave · <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/edge.svg" width="20" height="20" alt="" /> Edge · <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/arc_browser.svg" width="20" height="20" alt="" /> Arc · <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/vivaldi.svg" width="20" height="20" alt="" /> Vivaldi · <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/chromium.svg" width="20" height="20" alt="" /> Chromium · Aside
 
 1. In the current Latch app, open **Settings → Browser → Get extension**.
 2. Open your browser's extensions page and enable **Developer mode**.
@@ -77,7 +77,7 @@ Chrome and Aside have been verified; the other Chromium browsers still need end-
 </details>
 
 <details>
-<summary><img src="assets/readme/icons/firefox.svg" width="20" height="20" alt="" /> <strong>Firefox</strong> · developer preview</summary>
+<summary><img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/firefox.svg" width="20" height="20" alt="" /> <strong>Firefox</strong> · developer preview</summary>
 
 Requires Firefox 140+ and a [source checkout](#development).
 
@@ -90,7 +90,7 @@ Temporary installation lasts until Firefox restarts. No signed download is avail
 </details>
 
 <details>
-<summary><img src="assets/readme/icons/safari.svg" width="20" height="20" alt="" /> <strong>Safari</strong> · signed builds</summary>
+<summary><img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/safari.svg" width="20" height="20" alt="" /> <strong>Safari</strong> · signed builds</summary>
 
 Latch offers a Safari extension and native macOS AutoFill for Safari and supported Mac apps. Both require a signed build with the appropriate Apple provisioning profiles.
 
@@ -101,7 +101,7 @@ Latch offers a Safari extension and native macOS AutoFill for Safari and support
 
 ### Raycast
 
-<img src="assets/readme/icons/raycast.svg" width="20" height="20" alt="" /> **Latch for Raycast** brings vault search, unlocking, and copying to your launcher on Mac. [Install the extension →](apps/raycast/README.md)
+<img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/raycast.svg" width="20" height="20" alt="" /> **Latch for Raycast** brings vault search, unlocking, and copying to your launcher on Mac. [Install the extension →](apps/raycast/README.md)
 
 ## Development
 
