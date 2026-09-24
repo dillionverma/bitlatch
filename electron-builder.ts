@@ -1,4 +1,19 @@
-import type { Configuration } from 'electron-builder';
+import { execFileSync } from 'node:child_process';
+import { renameSync } from 'node:fs';
+import type { BuildResult, Configuration } from 'electron-builder';
+
+/**
+ * Recompresses each DMG with LZMA, about 24% smaller than the default zlib. Remove this
+ * once electron-builder 27 is stable and offers `dmg: { format: 'ULMO' }`.
+ */
+function compressDmgs({ artifactPaths }: BuildResult) {
+  for (const dmg of artifactPaths.filter((path) => path.endsWith('.dmg'))) {
+    const packed = dmg.replace(/\.dmg$/, '.ulmo.dmg');
+    execFileSync('hdiutil', ['convert', dmg, '-format', 'ULMO', '-ov', '-quiet', '-o', packed]);
+    renameSync(packed, dmg);
+  }
+  return [];
+}
 
 // Signing stays outside this file: macOS AutoFill builds are signed by
 // scripts/package-autofill.mjs, and other packages are unsigned for now.
@@ -33,8 +48,10 @@ export default {
     identity: null,
     hardenedRuntime: true,
   },
-  // bzip2 is about 9 MB smaller than the default zlib. Switch to LZMA (`ULMO`) with electron-builder 27.
-  dmg: { format: 'UDBZ' },
+  // The updater downloads the zip, so the DMG needs no update metadata that
+  // compressDmgs would invalidate.
+  dmg: { writeUpdateInfo: false },
+  afterAllArtifactBuild: compressDmgs,
   linux: {
     target: ['AppImage', 'deb'],
     icon: 'assets/icon.png',
