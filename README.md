@@ -1,56 +1,132 @@
-# Latch
+<p align="center">
+  <img src="assets/brand/macos/icon-256.png" alt="Latch icon" width="88" />
+</p>
 
-A private macOS app and Chrome/Aside extension for Bitwarden vaults.
+<h1 align="center">Latch</h1>
 
-## Run
+<p align="center">
+  <strong>Your Bitwarden vault, at home on Mac.</strong>
+</p>
 
-Requires Apple Silicon macOS, Node 24.11+ (or 22.18+), pnpm 11.25.0, and the official Bitwarden CLI.
+<p align="center">
+  <a href="#highlights">Highlights</a> ·
+  <a href="#getting-started">Getting started</a> ·
+  <a href="#development">Development</a>
+</p>
+
+<p align="center">
+  <img src="assets/readme/vault.png" alt="Latch in dark mode: a sidebar, a list of vault items, and a selected login with its password hidden. All accounts shown are demo data." width="1080" />
+</p>
+
+Latch is a focused Mac companion for Bitwarden. Find a login, copy a password, or fill it in your browser. Your existing vault stays with Bitwarden; Latch uses the official CLI for authentication and vault cryptography.
+
+## Highlights
+
+- ⚡ **A shortcut to your vault.** Press ⌘K to search logins and secure notes from the keyboard.
+- 🍎 **At home on macOS.** System colors, light and dark appearance, sidebar vibrancy, and native menus.
+- 👆 **Touch ID unlock.** Enable biometrics to unlock without retyping your master password.
+- 🌐 **Browser autofill.** Connect Chrome or Aside to fill matching logins from your unlocked vault.
+- 🚀 **Raycast, too.** Search, unlock, and copy credentials without opening the main window.
+- 🔑 **Your existing Bitwarden account.** Keep using your vault and the official Bitwarden CLI.
+
+## Getting started
+
+The current app targets **Apple Silicon macOS**. Start from source with Node **24.11+ or 22.18+**, pnpm **11.25.0**, and Xcode for the native components.
 
 ```sh
 brew install bitwarden-cli
+git clone https://github.com/dillionverma/latch.git
+cd latch
 pnpm install --frozen-lockfile
 pnpm run dev
 ```
 
-Run these commands from the repository root. Sign in, then use Settings to connect the browser. Load `apps/desktop/dist/extension` as an unpacked extension from `chrome://extensions`.
+Sign in to your Bitwarden account, then unlock your vault.
 
-The root `package.json` pins pnpm. The workspace uses one root install and `pnpm-lock.yaml` for `apps/desktop`, `apps/extension`, `apps/raycast`, and `packages/shared`. `pnpm-workspace.yaml` defines the packages and the hoisted layout used by Electron packaging. Desktop and extension versions live in their app manifests (currently `0.2.1`); the root package has no version.
+**Connect your browser:** use Latch's Settings to register the browser connection, then load `apps/desktop/dist/extension` as an unpacked extension from `chrome://extensions`.
 
-`pnpm run dev` watches Electron bundles, restarts Electron when they change, and serves the renderer through Vite with hot reload. It builds native AutoFill and Chrome outputs when missing, then reuses them; it does not watch those targets. Run `pnpm --filter @latch/desktop build` to rebuild native code and browser assets, then restart development. For browser development with reload support, use `pnpm run extension:dev` separately.
+**Connect Raycast:** follow the [Raycast setup](apps/raycast/README.md).
 
-## Build
+| Shortcut | Action            |
+| -------- | ----------------- |
+| ⌘K       | Search your vault |
+| ⌘N       | Create a login    |
+| ⌘L       | Lock your vault   |
+| ⌘,       | Open Settings     |
+
+<details>
+<summary>Platform support and macOS AutoFill</summary>
+
+Linux and Windows packaging is experimental. Linux packages build, but CLI discovery and browser registration still use macOS-specific paths. Windows packages build, but the app's local connections currently depend on Unix sockets. Neither platform is ready for everyday use.
+
+Native macOS AutoFill requires Apple provisioning profiles for both the app and its Credential Provider extension. Follow the [AutoFill setup](apps/desktop/native/autofill/README.md). macOS 15+ can show the system enable prompt; macOS 14 opens System Settings instead. A successful unsigned build does not verify system AutoFill or passkey support.
+
+</details>
+
+## Development
+
+One pnpm workspace and lockfile. Run commands from the repository root.
 
 ```sh
-pnpm run check
-pnpm run package
+pnpm run dev       # Desktop development with hot reload
+pnpm run check     # Formatting, lint, types, and all builds
+pnpm run package   # Unsigned macOS app
 ```
 
-Vite+ owns renderer builds, desktop bundling (tsdown/Rolldown), formatting (Oxfmt), and type-aware lint/type checks (Oxlint/TypeScript Go). Root tooling configuration lives in `vite.config.mjs`; desktop build configuration is in `apps/desktop/vite.config.mjs`. The `1.0.0-rc.0` toolchain is pinned exactly. `pnpm run check` checks formatting and workspace source, then runs the full build: desktop, Chrome, Firefox and Safari web extensions, native AutoFill and Safari code on macOS, and Raycast.
+| Location                             | Purpose                                    |
+| ------------------------------------ | ------------------------------------------ |
+| [`apps/desktop`](apps/desktop)       | Electron app and native macOS integrations |
+| [`apps/extension`](apps/extension)   | Browser extension, built with WXT          |
+| [`apps/raycast`](apps/raycast)       | Raycast commands                           |
+| [`packages/shared`](packages/shared) | Shared types, protocols, and branding      |
 
-`pnpm run check` regenerates WXT types, runs one workspace-wide Vite+ check, then builds. Use `pnpm run format` for formatting, `pnpm run lint` for lint and type checks, or `pnpm run typecheck` for type checks alone. `pnpm run build` selects desktop and Raycast through Vite Task. Desktop depends on the extension build, then prepares native code and assets, packs Electron, and builds the renderer. WXT's three browser builds run sequentially because they share generated types; Raycast can build independently. Selecting these two apps avoids building extensions twice through recursive selection and desktop's dependency in Vite+ rc.0. Task caching is disabled for host- and signing-dependent builds.
+[Vite+](https://viteplus.dev) handles workspace tasks, formatting, linting, type checks, and desktop builds. WXT, Raycast CLI, and electron-builder handle their platform outputs. All tools are installed locally with the workspace.
 
-`pnpm --filter @latch/desktop build` builds desktop, all browser targets, and native AutoFill/Safari on macOS; `pnpm run extension:build` builds only the browser targets. Raycast uses `pnpm --filter latch dev` and `pnpm --filter latch build`; see [Raycast setup](apps/raycast/README.md). WXT, Raycast CLI, electron-builder, and Apple signing remain responsible for their platform-specific outputs. Vite+ is project-local; no global installation is needed.
+<details>
+<summary>Development commands and build behavior</summary>
 
-Browser ZIPs are built with `pnpm run extension:zip`. To rebuild the Firefox source ZIP after extraction, run `pnpm install --frozen-lockfile && pnpm --filter @latch/extension build:firefox`.
+| Command                    | Purpose                                          |
+| -------------------------- | ------------------------------------------------ |
+| `pnpm run format`          | Format source                                    |
+| `pnpm run lint`            | Lint and check types                             |
+| `pnpm run typecheck`       | Check types only                                 |
+| `pnpm run build`           | Build desktop, browser extensions, and Raycast   |
+| `pnpm run extension:dev`   | Develop the Chrome extension with reload support |
+| `pnpm run extension:build` | Build Chrome, Firefox, and Safari web extensions |
+| `pnpm run extension:zip`   | Package browser ZIPs                             |
+| `pnpm --filter latch dev`  | Develop the Raycast extension                    |
 
-Desktop build output is in `apps/desktop/dist/`, browser output in `apps/extension/.output/`, and desktop packages in `apps/desktop/release/`. `pnpm run package` produces `apps/desktop/release/mac-arm64/Latch.app`, unsigned and not notarized.
+Desktop development watches Electron bundles and serves the renderer with hot reload. It builds missing native AutoFill and Chrome assets, then reuses them. After native or browser changes, run `pnpm --filter @latch/desktop build` and restart development, or use the separate extension development command for browser work.
 
-Packaging is configured in `apps/desktop/electron-builder.ts`. Build each platform on that platform:
+The root [package manifest](package.json) pins Vite+ at `1.0.0-rc.0`. Tooling lives in the root [configuration](vite.config.mjs), with builds in the [desktop configuration](apps/desktop/vite.config.mjs). `check` regenerates WXT types, checks workspace source, then runs the full build, including native AutoFill and Safari code on macOS.
+
+The root build selects desktop and Raycast. Desktop depends on the extension build; the three WXT targets run sequentially because they share generated types. Keep this selection: recursively selecting every package also builds extensions through desktop's dependency, duplicating work in Vite+ rc.0. Caching is disabled for host- and signing-dependent tasks.
+
+To rebuild a Firefox source ZIP after extraction, run `pnpm install --frozen-lockfile` followed by `pnpm --filter @latch/extension build:firefox`.
+
+To inspect appearance variants, prefix `pnpm run dev` with `LATCH_MATERIAL=solid`, or use `LATCH_MATERIAL=glass` on the supported macOS 27.0 build. The default uses native sidebar vibrancy, with solid backgrounds when Reduce Transparency or Increase Contrast is enabled.
+
+</details>
+
+<details>
+<summary>Packaging and releases</summary>
+
+Build each platform on that platform. Configuration lives in [`apps/desktop/electron-builder.ts`](apps/desktop/electron-builder.ts).
 
 ```sh
-pnpm run package:mac    # DMG and zip, Apple Silicon
+pnpm run package:mac    # DMG and ZIP, Apple Silicon
 pnpm run package:linux  # AppImage and deb, host architecture
 pnpm run package:win    # NSIS installer, host architecture
 ```
 
-The Desktop packages workflow builds unsigned macOS arm64 and Linux x64/arm64 packages when run manually, and keeps them as workflow artifacts. Linux packages build, but the Bitwarden CLI lookup and browser registration are still macOS-only. The Windows package builds, but Windows cannot run Latch yet: its local connections use Unix sockets.
+Desktop build output goes to `apps/desktop/dist/`, browser output to `apps/extension/.output/`, and desktop packages to `apps/desktop/release/`. `pnpm run package` creates `apps/desktop/release/mac-arm64/Latch.app`, unsigned and not notarized.
 
-Stable `vX.Y.Z` tags matching `apps/desktop/package.json` run the separate macOS release draft workflow. It requires Apple signing secrets and is configured to sign, notarize, and create a draft release with update metadata; that configuration does not establish a successful notarization. `pnpm run package:release` runs the same signing/notarization path locally without publishing.
+The manual Desktop packages workflow produces unsigned macOS arm64 and Linux x64/arm64 artifacts. Packaging success does not establish runtime support; see the platform notes above.
 
-Native macOS AutoFill needs Xcode to build and Apple provisioning profiles for the app and its Credential Provider extension. See [AutoFill setup](apps/desktop/native/autofill/README.md). The system enable prompt requires macOS 15 or later; macOS 14 opens System Settings instead.
+Stable `vX.Y.Z` tags matching `apps/desktop/package.json` trigger the macOS release draft workflow. It requires Apple signing secrets and is configured to sign, notarize, and prepare a draft release with update metadata. Use `pnpm run package:release` for the same signing path locally without publishing. The workflow configuration alone does not establish successful notarization.
 
-Shortcuts: ⌘K search, ⌘N new login, ⌘L lock, ⌘, Settings.
+</details>
 
-The desktop uses Electron's native sidebar vibrancy, macOS system colors, native text context menus, and confirmation sheets. Content panes stay opaque. Light/dark appearance, accent colors, and inactive selections follow macOS. Reduce Transparency or Increase Contrast uses a solid background. `LATCH_MATERIAL=solid pnpm run dev` forces a solid background. The existing glass addon is optional: `LATCH_MATERIAL=glass pnpm run dev` enables it on the supported macOS 27.0 build.
+## License
 
-See the [MIT license](LICENSE). Dependency notices are generated into desktop build output; browser builds include the repository license and retained MIT attributions.
+[MIT](LICENSE). Dependency notices are generated into desktop builds; browser builds include the repository license and retained MIT attributions.
