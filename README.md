@@ -10,7 +10,8 @@
 
 <p align="center">
   <a href="#highlights">Highlights</a> ·
-  <a href="#getting-started">Getting started</a> ·
+  <a href="#installation">Installation</a> ·
+  <a href="#integrations">Integrations</a> ·
   <a href="#development">Development</a>
 </p>
 
@@ -25,27 +26,71 @@ Latch is a focused Mac companion for Bitwarden. Find a login, copy a password, o
 - ⚡ **A shortcut to your vault.** Press ⌘K to search logins and secure notes from the keyboard.
 - 🍎 **At home on macOS.** System colors, light and dark appearance, sidebar vibrancy, and native menus.
 - 👆 **Touch ID unlock.** Enable biometrics to unlock without retyping your master password.
-- 🌐 **Browser autofill.** Connect Chrome or Aside to fill matching logins from your unlocked vault.
-- 🚀 **Raycast, too.** Search, unlock, and copy credentials without opening the main window.
+- 🌐 **Bring your browser.** One extension for Chrome, Aside, Brave, Edge, Arc, Vivaldi, and Chromium, plus Firefox and Safari build targets. [Setup and availability](#browser-extensions).
+- 🚀 **Raycast, too.** Search, unlock with Touch ID, read secure notes, and copy credentials from your launcher. [Set it up](#raycast).
 - 🔑 **Your existing Bitwarden account.** Keep using your vault and the official Bitwarden CLI.
 
-## Getting started
+## Installation
 
-The current app targets **Apple Silicon macOS**. Start from source with Node **24.11+ or 22.18+**, pnpm **11.25.0**, and Xcode for the native components.
+| Platform                  | Install                                                                                                                                                        | Availability          |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| **macOS · Apple Silicon** | [Download ZIP](https://github.com/dillionverma/latch/releases/download/v0.1.0/Latch-0.1.0-macos-arm64.zip), unzip, and move **Latch.app** to **Applications**. | Early preview, v0.1.0 |
+| **Linux · x64 / arm64**   | [Build an AppImage or .deb](#development) with `pnpm run package:linux`.                                                                                       | Experimental          |
+| **Windows**               | [Build an .exe installer](#development) with `pnpm run package:win`.                                                                                           | Runtime port pending  |
+
+The published macOS preview predates the current interface, Touch ID, and Raycast integration. [Build from source](#development) for the features shown here. Linux and Windows do not have published downloads yet. Linux still needs CLI discovery and browser integration work; Windows needs a local transport port before the app can run.
+
+On macOS, install the official Bitwarden CLI before opening Latch:
 
 ```sh
 brew install bitwarden-cli
-git clone https://github.com/dillionverma/latch.git
-cd latch
-pnpm install --frozen-lockfile
-pnpm run dev
 ```
 
-Sign in to your Bitwarden account, then unlock your vault.
+Open Latch, sign in to your Bitwarden account, and unlock your vault. The current download is ad-hoc signed, not notarized; see the [release notes](https://github.com/dillionverma/latch/releases/tag/v0.1.0).
 
-**Connect your browser:** use Latch's Settings to register the browser connection, then load `apps/desktop/dist/extension` as an unpacked extension from `chrome://extensions`.
+## Integrations
 
-**Connect Raycast:** follow the [Raycast setup](apps/raycast/README.md).
+### Browser extensions
+
+Fill matching logins from your unlocked vault. Browser connections currently require the Mac app.
+
+| Browser                                     | Extension                                    | Availability                                                       |
+| ------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------ |
+| **Chrome · Aside**                          | Chromium extension                           | Verified with the desktop app                                      |
+| **Brave · Edge · Arc · Vivaldi · Chromium** | Same Chromium extension                      | Native bridge included; verification pending                       |
+| **Firefox 140+**                            | Firefox extension                            | Build and native bridge included; temporary development install    |
+| **Safari**                                  | Safari web extension embedded in the Mac app | Signing and provisioning required; end-to-end verification pending |
+
+For Chromium browsers, open **Settings → Browser → Connect browser** in Latch, then **Open folder**. In your browser's extensions page, enable **Developer mode**, choose **Load unpacked**, and select that folder. Keep Latch running for autofill. In source builds, the folder is `apps/desktop/dist/extension`.
+
+<details>
+<summary>Firefox and Safari setup</summary>
+
+**Firefox:** build the extension with `pnpm run extension:build` and connect the browser from Latch's Settings. Open `about:debugging`, choose **This Firefox → Load Temporary Add-on**, and select `apps/extension/.output/firefox-mv3/manifest.json`. This development installation lasts until Firefox restarts; see [Mozilla's instructions](https://extensionworkshop.com/documentation/develop/temporary-installation-in-firefox/). No signed Firefox download is published yet.
+
+**Safari:** the desktop build embeds `LatchSafari.appex`. It requires Apple signing and a Safari provisioning profile through `LATCH_SAFARI_PROFILE`; the shared app group must match Latch's. It is not installed by loading the browser ZIP. The [signing script](apps/desktop/build/package-autofill.mjs) contains the current setup requirements.
+
+</details>
+
+### Raycast
+
+Search your vault, read secure notes, copy a username or password, and lock Latch from Raycast. Unlock with your master password or Touch ID when enabled—no second Bitwarden login.
+
+Install a current source build at `/Applications/Latch.app`, then run from the repository root:
+
+```sh
+pnpm --filter latch dev
+```
+
+Raycast imports the local extension with **Search Vault** and **Lock Vault** commands. There is no Raycast Store listing yet. See [Raycast setup and shortcuts](apps/raycast/README.md).
+
+### macOS AutoFill
+
+Native AutoFill connects Latch to Safari and supported Mac apps, separately from the browser extension. It requires a signed app and Credential Provider extension with Apple provisioning profiles. Follow the [AutoFill setup](apps/desktop/native/autofill/README.md).
+
+macOS 15+ can show the system enable prompt; macOS 14 opens System Settings instead. An unsigned build does not verify system AutoFill or passkey support.
+
+### Keyboard shortcuts
 
 | Shortcut | Action            |
 | -------- | ----------------- |
@@ -54,18 +99,17 @@ Sign in to your Bitwarden account, then unlock your vault.
 | ⌘L       | Lock your vault   |
 | ⌘,       | Open Settings     |
 
-<details>
-<summary>Platform support and macOS AutoFill</summary>
-
-Linux and Windows packaging is experimental. Linux packages build, but CLI discovery and browser registration still use macOS-specific paths. Windows packages build, but the app's local connections currently depend on Unix sockets. Neither platform is ready for everyday use.
-
-Native macOS AutoFill requires Apple provisioning profiles for both the app and its Credential Provider extension. Follow the [AutoFill setup](apps/desktop/native/autofill/README.md). macOS 15+ can show the system enable prompt; macOS 14 opens System Settings instead. A successful unsigned build does not verify system AutoFill or passkey support.
-
-</details>
-
 ## Development
 
-One pnpm workspace and lockfile. Run commands from the repository root.
+Requires Node **24.11+ or 22.18+** and pnpm **11.25.0**. Mac builds also require Xcode. Use the official Bitwarden CLI for vault access.
+
+```sh
+git clone https://github.com/dillionverma/latch.git
+cd latch
+pnpm install --frozen-lockfile
+```
+
+One pnpm workspace and lockfile. Run commands from the repository root. Build packages on their target operating system; the Linux and Windows limitations above still apply.
 
 ```sh
 pnpm run dev       # Desktop development with hot reload
