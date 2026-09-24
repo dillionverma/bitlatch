@@ -5,7 +5,7 @@
 <h1 align="center">Latch</h1>
 
 <p align="center">
-  <strong>Your Bitwarden vault, at home on Mac.</strong>
+  <strong>Your Bitwarden vault. A better way to use it.</strong>
 </p>
 
 <p align="center">
@@ -18,26 +18,26 @@
   <img src="assets/readme/vault.png" alt="Latch with a glass window over a macOS wallpaper: a clean sidebar, vault items, and a selected login with its password hidden. All accounts shown are demo data." width="1080" />
 </p>
 
-Latch is a focused Mac companion for Bitwarden. Find a login, copy a password, or fill it in your browser. Your existing vault stays with Bitwarden; Latch uses the official CLI for authentication and vault cryptography.
+Latch is an alternative client for your existing Bitwarden vault, designed around a cleaner interface and quicker workflows. Search from the keyboard, fill logins in your browser, and access credentials from Raycast. Keep your account and vault; there's nothing to migrate.
 
 ## Highlights
 
-- ⚡ **A shortcut to your vault.** Press ⌘K to search logins and secure notes from the keyboard.
-- 🍎 **At home on macOS.** System colors, light and dark appearance, sidebar vibrancy, and native menus.
-- 👆 **Touch ID unlock.** Enable biometrics to unlock without retyping your master password.
-- 🌐 **Bring your browser.** One extension for Chrome, Aside, Brave, Edge, Arc, Vivaldi, and Chromium, plus Firefox and Safari build targets. [Setup and availability](#browser-extensions).
-- 🚀 **Raycast, too.** Search, unlock with Touch ID, read secure notes, and copy credentials from your launcher. [Set it up](#raycast).
-- 🔑 **Your existing Bitwarden account.** Keep using your vault and the official Bitwarden CLI.
+- ✨ **A more considered interface.** Clear layouts, light and dark themes, and a glass finish on macOS.
+- ⚡ **Keep your hands on the keyboard.** Jump to search with ⌘K / Ctrl+K, find a login, and copy what you need.
+- 🌐 **Fill where you browse.** Bring Latch to Chrome, Aside, and other browsers. [See browser availability](#browser-extensions).
+- 🚀 **Your vault in Raycast.** Search, unlock, and copy credentials straight from your launcher on Mac.
+- 👆 **Less typing, more control.** Unlock with Touch ID on Mac, choose when your vault locks, and configure generated passwords.
+- 🔑 **Keep Bitwarden underneath.** Your existing account and vault, with authentication and cryptography handled by the official Bitwarden CLI.
 
 ## Installation
 
 ### Desktop
 
-| Platform                  | Availability                 | Get Latch                                                                                                  |
-| :------------------------ | :--------------------------- | :--------------------------------------------------------------------------------------------------------- |
-| **macOS** · Apple Silicon | Preview                      | [Download ZIP](https://github.com/dillionverma/latch/releases/download/v0.1.0/Latch-0.1.0-macos-arm64.zip) |
-| **Linux**                 | Experimental · AppImage, deb | [Build from source](#development)                                                                          |
-| **Windows**               | In development               | No download yet                                                                                            |
+| Platform                                                                                                                                                                                                          | Availability                 | Get Latch                                                                                                  |
+| :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------- | :--------------------------------------------------------------------------------------------------------- |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/icons/apple_dark.svg" /><img src="assets/readme/icons/apple.svg" width="20" height="20" alt="" /></picture> **macOS** · Apple Silicon | Preview                      | [Download ZIP](https://github.com/dillionverma/latch/releases/download/v0.1.0/Latch-0.1.0-macos-arm64.zip) |
+| <img src="assets/readme/icons/linux.svg" width="20" height="20" alt="" /> **Linux**                                                                                                                               | Experimental · AppImage, deb | [Build from source](#development)                                                                          |
+| <img src="assets/readme/icons/windows.svg" width="20" height="20" alt="" /> **Windows**                                                                                                                           | In development               | No download yet                                                                                            |
 
 The published Mac preview is v0.1.0. For the interface shown above, [build the current app](#development). Linux and Windows support is incomplete.
 
@@ -62,7 +62,9 @@ The preview is ad-hoc signed and not notarized.
 Use Latch to fill logins without leaving your browser. Extensions currently require the Mac app to stay running and are installed manually.
 
 <details>
-<summary><strong>Chrome, Aside, Brave, Edge, Arc, Vivaldi & Chromium</strong></summary>
+<summary><img src="assets/readme/icons/chrome.svg" width="20" height="20" alt="" /> <strong>Chrome & Chromium browsers</strong></summary>
+
+<img src="assets/readme/icons/chrome.svg" width="20" height="20" alt="" /> Chrome · <img src="assets/readme/icons/brave.svg" width="20" height="20" alt="" /> Brave · <img src="assets/readme/icons/edge.svg" width="20" height="20" alt="" /> Edge · <img src="assets/readme/icons/arc_browser.svg" width="20" height="20" alt="" /> Arc · <img src="assets/readme/icons/vivaldi.svg" width="20" height="20" alt="" /> Vivaldi · <img src="assets/readme/icons/chromium.svg" width="20" height="20" alt="" /> Chromium · Aside
 
 1. In the current Latch app, open **Settings → Browser → Get extension**.
 2. Open your browser's extensions page and enable **Developer mode**.
@@ -75,7 +77,7 @@ Chrome and Aside have been verified; the other Chromium browsers still need end-
 </details>
 
 <details>
-<summary><strong>Firefox</strong> · developer preview</summary>
+<summary><img src="assets/readme/icons/firefox.svg" width="20" height="20" alt="" /> <strong>Firefox</strong> · developer preview</summary>
 
 Requires Firefox 140+ and a [source checkout](#development).
 
@@ -88,7 +90,7 @@ Temporary installation lasts until Firefox restarts. No signed download is avail
 </details>
 
 <details>
-<summary><strong>Safari</strong> · signed builds</summary>
+<summary><img src="assets/readme/icons/safari.svg" width="20" height="20" alt="" /> <strong>Safari</strong> · signed builds</summary>
 
 Latch offers a Safari extension and native macOS AutoFill for Safari and supported Mac apps. Both require a signed build with the appropriate Apple provisioning profiles.
 
@@ -99,7 +101,7 @@ Latch offers a Safari extension and native macOS AutoFill for Safari and support
 
 ### Raycast
 
-Search your vault, unlock with Touch ID, and copy credentials from your launcher. Uses your existing Latch account. [Install for Raycast →](apps/raycast/README.md)
+<img src="assets/readme/icons/raycast.svg" width="20" height="20" alt="" /> **Latch for Raycast** brings vault search, unlocking, and copying to your launcher on Mac. [Install the extension →](apps/raycast/README.md)
 
 ## Development
 
@@ -137,4 +139,4 @@ The root build selects desktop and Raycast; desktop depends on the extension bui
 
 ## License
 
-[MIT](LICENSE). Third-party notices are included in build output.
+[MIT](LICENSE). Platform and browser icons from [SVGL](https://svgl.app/). Third-party notices are included in build output.
