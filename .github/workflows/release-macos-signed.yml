@@ -1,4 +1,4 @@
-name: Signed macOS release draft
+name: Signed macOS packages
 on:
   workflow_dispatch:
     inputs:
@@ -51,6 +51,7 @@ jobs:
           LATCH_CERTIFICATE_PASSWORD: ${{ secrets.LATCH_CERTIFICATE_PASSWORD }}
           LATCH_APP_PROFILE_BASE64: ${{ secrets.LATCH_APP_PROFILE_BASE64 }}
           LATCH_AUTOFILL_PROFILE_BASE64: ${{ secrets.LATCH_AUTOFILL_PROFILE_BASE64 }}
+          LATCH_SAFARI_PROFILE_BASE64: ${{ secrets.LATCH_SAFARI_PROFILE_BASE64 }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -66,6 +67,10 @@ jobs:
           ]) {
             if (!process.env[key]) throw new Error(`Missing ${key}`);
             writeFileSync(join(process.env.RUNNER_TEMP, file), Buffer.from(process.env[key], 'base64'), { mode: 0o600 });
+          }
+          if (process.env.LATCH_SAFARI_PROFILE_BASE64) {
+            writeFileSync(join(process.env.RUNNER_TEMP, 'LatchSafari.provisionprofile'), Buffer.from(process.env.LATCH_SAFARI_PROFILE_BASE64, 'base64'), { mode: 0o600 });
+            writeFileSync(process.env.GITHUB_ENV, `LATCH_SAFARI_PROFILE=${join(process.env.RUNNER_TEMP, 'LatchSafari.provisionprofile')}\n`, { flag: 'a' });
           }
           for (const key of ['APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID'])
             if (!process.env[key]) throw new Error(`Missing ${key}`);
@@ -103,22 +108,4 @@ jobs:
         run: |
           security default-keychain -d user -s "$HOME/Library/Keychains/login.keychain-db"
           security delete-keychain "$RUNNER_TEMP/latch-signing.keychain-db" || true
-          rm -f "$RUNNER_TEMP/latch.p12" "$RUNNER_TEMP/Latch.provisionprofile" "$RUNNER_TEMP/LatchAutoFill.provisionprofile"
-  draft:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: notarized-macos
-          path: release
-      - name: Create draft release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-        run: |
-          test -s release/latest-mac.yml
-          gh release create "$RELEASE_TAG" release/* --verify-tag --draft --title "Latch $RELEASE_TAG" --generate-notes
+          rm -f "$RUNNER_TEMP/latch.p12" "$RUNNER_TEMP/Latch.provisionprofile" "$RUNNER_TEMP/LatchAutoFill.provisionprofile" "$RUNNER_TEMP/LatchSafari.provisionprofile"
