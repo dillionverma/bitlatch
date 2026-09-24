@@ -33,7 +33,7 @@
   "scripts": {
     "dev": "ray develop",
     "build": "ray build",
-    "typecheck": "vp lint --tsconfig tsconfig.json --max-warnings 0 src"
+    "typecheck": "vp lint src"
   },
   "dependencies": {
     "@raycast/api": "2.4.1",

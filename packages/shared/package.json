@@ -13,7 +13,7 @@
     "./extension.json": "./extension.json"
   },
   "scripts": {
-    "typecheck": "vp lint --tsconfig tsconfig.json --max-warnings 0 src"
+    "typecheck": "vp lint src"
   },
   "dependencies": {
     "zod": "^4.3.6"

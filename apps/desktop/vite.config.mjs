@@ -1,11 +1,9 @@
-import workspace from '../../vite.config.mjs';
 import { defineConfig, lazyPlugins } from 'vite-plus';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'node:path';
 
 export default defineConfig({
-  ...workspace,
   // Independent bundles keep the sandboxed preload and unpacked native host self-contained.
   pack: ['main', 'preload', 'native-host'].map((name) => ({
     entry: { [name]: name === 'main' ? 'src/main/main.ts' : `src/${name}/index.ts` },

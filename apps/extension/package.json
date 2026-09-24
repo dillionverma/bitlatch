@@ -11,7 +11,7 @@
     "build:firefox": "wxt build -b firefox --mv3",
     "build:safari": "wxt build -b safari --mv3",
     "zip": "cd ../.. && wxt zip apps/extension -b chrome --mv3 && wxt zip apps/extension -b firefox --mv3 && wxt zip apps/extension -b safari --mv3",
-    "typecheck": "wxt prepare && vp lint --tsconfig tsconfig.json --max-warnings 0 .",
+    "typecheck": "wxt prepare && vp lint .",
     "postinstall": "wxt prepare",
     "submit": "wxt submit"
   },

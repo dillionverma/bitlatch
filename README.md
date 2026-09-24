@@ -27,7 +27,7 @@ pnpm run package
 
 Vite+ owns renderer builds, desktop bundling (tsdown/Rolldown), formatting (Oxfmt), and type-aware lint/type checks (Oxlint/TypeScript Go). Root tooling configuration lives in `vite.config.mjs`; desktop build configuration is in `apps/desktop/vite.config.mjs`. The `1.0.0-rc.0` toolchain is pinned exactly. `pnpm run check` checks formatting and workspace source, then runs the full build: desktop, Chrome, Firefox and Safari web extensions, native AutoFill and Safari code on macOS, and Raycast.
 
-Use `pnpm run format`, `pnpm run lint`, or `pnpm run typecheck` for individual checks. `pnpm --filter @latch/desktop build` builds desktop, native AutoFill and Chrome; `pnpm run extension:build` builds all three web-extension targets. Raycast uses `pnpm --filter latch dev` and `pnpm --filter latch build`; see [Raycast setup](apps/raycast/README.md). WXT, Raycast CLI, electron-builder, and Apple signing remain responsible for their platform-specific outputs. Vite+ is project-local; no global installation is needed.
+`pnpm run check` regenerates WXT types, runs one workspace-wide Vite+ check, then builds. Use `pnpm run format` for formatting, `pnpm run lint` for lint and type checks, or `pnpm run typecheck` for type checks alone. `pnpm --filter @latch/desktop build` builds desktop, native AutoFill and Chrome; `pnpm run extension:build` builds all three web-extension targets. Raycast uses `pnpm --filter latch dev` and `pnpm --filter latch build`; see [Raycast setup](apps/raycast/README.md). WXT, Raycast CLI, electron-builder, and Apple signing remain responsible for their platform-specific outputs. Vite+ is project-local; no global installation is needed.
 
 Browser ZIPs are built with `pnpm run extension:zip`. To rebuild the Firefox source ZIP after extraction, run `pnpm install --frozen-lockfile && pnpm --filter @latch/extension build:firefox`.
 
@@ -51,4 +51,4 @@ Shortcuts: ⌘K search, ⌘N new login, ⌘L lock, ⌘, Settings.
 
 The desktop uses Electron's native sidebar vibrancy, macOS system colors, native text context menus, and confirmation sheets. Content panes stay opaque. Light/dark appearance, accent colors, and inactive selections follow macOS. Reduce Transparency or Increase Contrast uses a solid background. `LATCH_MATERIAL=solid pnpm run dev` forces a solid background. The existing glass addon is optional: `LATCH_MATERIAL=glass pnpm run dev` enables it on the supported macOS 27.0 build.
 
-See [security limits](SECURITY.md) and the [MIT license](LICENSE). Dependency notices are generated into desktop build output; browser builds include the repository license and retained MIT attributions.
+See the [MIT license](LICENSE). Dependency notices are generated into desktop build output; browser builds include the repository license and retained MIT attributions.
