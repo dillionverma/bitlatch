@@ -41,7 +41,7 @@ export default {
   afterPack: 'build/embed-autofill.cjs',
   mac: {
     target: ['dmg', 'zip'],
-    icon: '../../assets/brand/macos/Latch.icns',
+    icon: 'dist/native/LatchAutoFill.appex/Contents/Resources/Latch.icns',
     category: 'public.app-category.productivity',
     identity: null,
     hardenedRuntime: true,

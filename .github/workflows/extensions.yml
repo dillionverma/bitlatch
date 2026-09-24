@@ -8,6 +8,8 @@ on:
       - 'vite.config.mjs'
       - 'tsconfig.json'
       - 'package.json'
+      - 'LICENSE'
+      - 'README.md'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
       - '.github/workflows/extensions.yml'

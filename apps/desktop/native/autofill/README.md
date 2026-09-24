@@ -46,7 +46,7 @@ LATCH_AUTOFILL_PROFILE='/absolute/path/LatchAutoFill.provisionprofile' \
 pnpm run package:autofill
 ```
 
-The command delegates to `apps/desktop/build/package-autofill.mjs`: it checks the profiles, builds both native binaries, embeds the extension, applies separate app/extension entitlements, and verifies the signatures. The result is `apps/desktop/release/mac-arm64/Latch.app`. It does not install, notarize, or publish the app. Development profiles must include the target Mac. Distribution needs suitable Developer ID profiles and notarization; see [release setup](../../../../docs/releases.md).
+The command delegates to `apps/desktop/build/package-autofill.mjs`: it checks the profiles, builds both native binaries, embeds the extension, applies separate app/extension entitlements, and verifies the signatures. The result is `apps/desktop/release/mac-arm64/Latch.app`. It does not install, notarize, or publish the app. Development profiles must include the target Mac. Distribution needs suitable Developer ID profiles and notarization. Use `pnpm run package:release` with `LATCH_NOTARY_PROFILE` and Developer ID signing inputs.
 
 Root `pnpm run check` checks formatting and workspace source, then builds desktop, Chrome/Firefox/Safari web extensions, native AutoFill/Safari on macOS, and Raycast. Native compilation uses Xcode's SDK and treats warnings as errors. `pnpm run package` remains unsigned; its AutoFill control explains that a signed build is required. `LATCH_DATA_DIR` disables the native integration for isolated fixtures.
 

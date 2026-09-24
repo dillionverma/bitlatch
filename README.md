@@ -29,6 +29,8 @@ Vite+ owns renderer builds, desktop bundling (tsdown/Rolldown), formatting (Oxfm
 
 Use `pnpm run format`, `pnpm run lint`, or `pnpm run typecheck` for individual checks. `pnpm --filter @latch/desktop build` builds desktop, native AutoFill and Chrome; `pnpm run extension:build` builds all three web-extension targets. Raycast uses `pnpm --filter latch dev` and `pnpm --filter latch build`; see [Raycast setup](apps/raycast/README.md). WXT, Raycast CLI, electron-builder, and Apple signing remain responsible for their platform-specific outputs. Vite+ is project-local; no global installation is needed.
 
+Browser ZIPs are built with `pnpm run extension:zip`. To rebuild the Firefox source ZIP after extraction, run `pnpm install --frozen-lockfile && pnpm --filter @latch/extension build:firefox`.
+
 Desktop build output is in `apps/desktop/dist/`, browser output in `apps/extension/.output/`, and desktop packages in `apps/desktop/release/`. `pnpm run package` produces `apps/desktop/release/mac-arm64/Latch.app`, unsigned and not notarized.
 
 Packaging is configured in `apps/desktop/electron-builder.ts`. Build each platform on that platform:
@@ -41,7 +43,7 @@ pnpm run package:win    # NSIS installer, host architecture
 
 The Desktop packages workflow builds unsigned macOS arm64 and Linux x64/arm64 packages when run manually, and keeps them as workflow artifacts. Linux packages build, but the Bitwarden CLI lookup and browser registration are still macOS-only. The Windows package builds, but Windows cannot run Latch yet: its local connections use Unix sockets.
 
-Stable `vX.Y.Z` tags matching `apps/desktop/package.json` run the separate macOS release draft workflow. It requires Apple signing secrets and is configured to sign, notarize, and create a draft release with update metadata; that configuration does not establish a successful notarization. See [release setup and acceptance](docs/releases.md). `pnpm run package:release` runs the same signing/notarization path locally without publishing.
+Stable `vX.Y.Z` tags matching `apps/desktop/package.json` run the separate macOS release draft workflow. It requires Apple signing secrets and is configured to sign, notarize, and create a draft release with update metadata; that configuration does not establish a successful notarization. `pnpm run package:release` runs the same signing/notarization path locally without publishing.
 
 Native macOS AutoFill needs Xcode to build and Apple provisioning profiles for the app and its Credential Provider extension. See [AutoFill setup](apps/desktop/native/autofill/README.md). The system enable prompt requires macOS 15 or later; macOS 14 opens System Settings instead.
 
@@ -49,4 +51,4 @@ Shortcuts: ⌘K search, ⌘N new login, ⌘L lock, ⌘, Settings.
 
 The desktop uses Electron's native sidebar vibrancy, macOS system colors, native text context menus, and confirmation sheets. Content panes stay opaque. Light/dark appearance, accent colors, and inactive selections follow macOS. Reduce Transparency or Increase Contrast uses a solid background. `LATCH_MATERIAL=solid pnpm run dev` forces a solid background. The existing glass addon is optional: `LATCH_MATERIAL=glass pnpm run dev` enables it on the supported macOS 27.0 build.
 
-See [security limits](SECURITY.md) and [third-party notices](THIRD_PARTY.md).
+See [security limits](SECURITY.md) and the [MIT license](LICENSE). Dependency notices are generated into desktop build output; browser builds include the repository license and retained MIT attributions.

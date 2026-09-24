@@ -5,7 +5,7 @@
   "description": "Unlock and search your Latch logins and secure notes.",
   "icon": "icon.png",
   "author": "dillionverma",
-  "license": "GPL-3.0-only",
+  "license": "MIT",
   "private": true,
   "platforms": [
     "macOS"

@@ -11,6 +11,14 @@ export default defineConfig({
   publicDir: 'public',
   outDir: '.output',
   imports: false,
+  hooks: {
+    'build:publicAssets': (_wxt, files) => {
+      files.push({
+        absoluteSrc: fileURLToPath(new URL('../../LICENSE', import.meta.url)),
+        relativeDest: 'LICENSE',
+      });
+    },
+  },
   zip: {
     name: 'latch',
     sourcesRoot: fileURLToPath(new URL('../..', import.meta.url)),
@@ -25,7 +33,7 @@ export default defineConfig({
       'tsconfig.json',
       'vite.config.mjs',
       'LICENSE',
-      'docs/cross-browser.md',
+      'README.md',
     ],
     excludeSources: ['**/node_modules/**', '**/.output/**', '**/.wxt/**'],
   },

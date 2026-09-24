@@ -4,7 +4,7 @@
   "description": "A quiet, fast Mac companion for your Bitwarden vault.",
   "homepage": "https://github.com/dillionverma/latch",
   "author": "Dillion Verma",
-  "license": "GPL-3.0-only",
+  "license": "MIT",
   "type": "module",
   "main": "dist/desktop/main.cjs",
   "desktopName": "latch.desktop",
