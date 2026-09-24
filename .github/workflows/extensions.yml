@@ -3,17 +3,13 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - 'src/extension/**'
-      - 'src/shared/**'
-      - 'assets/extension-public/**'
-      - 'assets/extension.json'
-      - 'wxt.config.ts'
+      - 'apps/extension/**'
+      - 'packages/shared/**'
       - 'vite.config.mjs'
-      - 'tsconfig.extension.json'
+      - 'tsconfig.json'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
-      - 'scripts/build-extensions.mjs'
       - '.github/workflows/extensions.yml'
 permissions:
   contents: read
@@ -35,5 +31,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: browser-extensions
-          path: .output/*.zip
+          path: apps/extension/.output/*.zip
           retention-days: 14

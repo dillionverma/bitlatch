@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing stable version tag (must match package.json)
+        description: Existing stable version tag (must match apps/desktop/package.json)
         required: true
         type: string
 permissions:
@@ -32,9 +32,9 @@ jobs:
           import { readFileSync } from 'node:fs';
           import { execFileSync } from 'node:child_process';
           const tag = process.env.RELEASE_TAG;
-          const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
+          const { version } = JSON.parse(readFileSync('apps/desktop/package.json', 'utf8'));
           if (!/^v\d+\.\d+\.\d+$/.test(tag) || tag !== `v${version}`)
-            throw new Error('A stable version tag matching package.json is required.');
+            throw new Error('A stable version tag matching apps/desktop/package.json is required.');
           const rev = (ref) => execFileSync('git', ['rev-parse', ref], { encoding: 'utf8' }).trim();
           if (rev(`refs/tags/${tag}^{commit}`) !== rev('HEAD'))
             throw new Error('The checked-out commit must match the release tag.');
@@ -46,11 +46,7 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            raycast/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      - run: pnpm -C raycast install --frozen-lockfile
       - run: pnpm run check
       - name: Prepare Apple signing
         env:
@@ -99,10 +95,10 @@ jobs:
         with:
           name: notarized-macos
           path: |
-            release/distribution/*.dmg
-            release/distribution/*.zip
-            release/distribution/*.blockmap
-            release/distribution/latest-mac.yml
+            apps/desktop/release/distribution/*.dmg
+            apps/desktop/release/distribution/*.zip
+            apps/desktop/release/distribution/*.blockmap
+            apps/desktop/release/distribution/latest-mac.yml
           if-no-files-found: error
           retention-days: 14
       - name: Remove signing material

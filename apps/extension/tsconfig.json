@@ -1,0 +1,10 @@
+{
+  "extends": "./.wxt/tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noUncheckedIndexedAccess": true
+  },
+  "include": ["entrypoints", "content", "content.ts", "popup.ts", "wxt.config.ts", ".wxt/wxt.d.ts"]
+}

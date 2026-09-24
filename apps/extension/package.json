@@ -1,0 +1,25 @@
+{
+  "name": "@latch/extension",
+  "version": "0.2.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wxt -b chrome",
+    "dev:firefox": "wxt -b firefox --mv3",
+    "build": "pnpm build:chrome && pnpm build:firefox && pnpm build:safari",
+    "build:chrome": "wxt build -b chrome --mv3",
+    "build:firefox": "wxt build -b firefox --mv3",
+    "build:safari": "wxt build -b safari --mv3",
+    "zip": "cd ../.. && wxt zip apps/extension -b chrome --mv3 && wxt zip apps/extension -b firefox --mv3 && wxt zip apps/extension -b safari --mv3",
+    "typecheck": "wxt prepare && vp lint --tsconfig tsconfig.json --max-warnings 0 .",
+    "postinstall": "wxt prepare",
+    "submit": "wxt submit"
+  },
+  "devDependencies": {
+    "@latch/shared": "workspace:*",
+    "@types/chrome": "^0.1.36",
+    "@types/node": "^24.0.0",
+    "wxt": "^0.21.4",
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0-rc.0"
+  }
+}

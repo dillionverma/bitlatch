@@ -1,0 +1,21 @@
+{
+  "name": "@latch/shared",
+  "version": "0.2.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./types": "./src/types.ts",
+    "./protocol": "./src/protocol.ts",
+    "./brand": "./src/brand.ts",
+    "./browser-targets": "./src/browser-targets.ts",
+    "./urls": "./src/urls.ts",
+    "./theme.css": "./src/theme.css",
+    "./extension.json": "./extension.json"
+  },
+  "scripts": {
+    "typecheck": "vp lint --tsconfig tsconfig.json --max-warnings 0 src"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  }
+}

@@ -6,6 +6,12 @@
 
 The objective is fewer maintained behaviors, dependencies and duplicate sources. A file move is not a deletion, and splitting a large function into ten forwarding modules is not simplification.
 
+## Implementation status — 2026-09-24
+
+Implemented against the reconciled baseline `cbe18c4`: three app workspaces and one shared package, one lockfile/install, scoped checks/builds, renderer and extension cleanup, explicit desktop transport/lifecycle ownership, shared launcher types and URL policy, and canonical brand assets. Removed 3,649,264 asset bytes and reduced resolved package versions from 974 to 769. Total maintained source lines are approximately flat: deleted UI/build code offsets the new development runner, lifecycle code, and expanded formatting of extracted CSS.
+
+Validation: clean frozen install, full check/build, unsigned macOS packaging and native addon loading, isolated synthetic packaged UI/bridge checks, development reload/restart, and an independently rebuilt Firefox source ZIP. Real browser installation, provisioned AutoFill/Safari, notarization, Gatekeeper, and signed upgrades remain release acceptance work. Release-hook consolidation stays deferred until that signed path is proven; optional feature cuts and an electron-vite migration were not made.
+
 ## Audit baseline
 
 The audited clone is at `27baed7`, matching GitHub `main` when checked. It also contains the uncommitted release/updater changes from this thread, which this plan includes. The other checkout at `/Users/dillion/src/personal/latch` is at `c45ceb3` with unfinished Swift AutoFill and Raycast work. Reconcile these changes before broad moves; do not use this clone's older Objective-C sources as the final native architecture.

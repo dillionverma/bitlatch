@@ -1,8 +1,8 @@
 # macOS releases
 
 The supported release target is Apple Silicon macOS. The **macOS release draft**
-workflow checks the tagged source, signs and notarizes the app, packages a DMG
-and updater ZIP, and creates a **draft** GitHub Release. It never publishes the
+workflow is configured to check the tagged source, sign and notarize the app, package a DMG
+and updater ZIP, and create a **draft** GitHub Release. It never publishes the
 release or changes repository visibility. The separate **Desktop packages**
 workflow is for manually requested unsigned development artifacts.
 
@@ -30,6 +30,11 @@ The workflow uses a temporary keychain and removes the imported files and keycha
 after building. Safari is omitted from this initial release workflow. Local
 builds may include it with `LATCH_SAFARI_PROFILE` and a matching distribution profile.
 
+Install once from the workspace root with `pnpm install --frozen-lockfile`.
+The root lockfile covers desktop, extension, Raycast, and shared packages.
+`pnpm run check` checks formatting and workspace source and runs the full build,
+including Chrome, Firefox, Safari, native macOS code, and Raycast.
+
 For a local release, save notarization credentials with
 `xcrun notarytool store-credentials latch-notary` (interactive), then run:
 
@@ -41,22 +46,34 @@ LATCH_NOTARY_PROFILE='latch-notary' \
 pnpm run package:release
 ```
 
-The build signs the app and extensions, notarizes a temporary ZIP, staples the
+Run the command from the workspace root. It delegates to
+`apps/desktop/build/package-autofill.mjs --release`; packaging configuration is
+`apps/desktop/electron-builder.ts` and notarization is handled by
+`apps/desktop/build/notarize-release.mjs`.
+
+The release path signs the app and extensions, notarizes a temporary ZIP, staples the
 app, and checks Gatekeeper acceptance. It then archives that exact app, generating
 `latest-mac.yml` and the ZIP blockmap. Finally it signs, notarizes and staples the
 compressed DMG. The DMG is excluded from updater metadata because compression and
-stapling change its bytes. Final artifacts are in `release/distribution/`.
+stapling change its bytes. The staged app is
+`apps/desktop/release/mac-arm64/Latch.app`; final artifacts are in
+`apps/desktop/release/distribution/`. These steps describe the configured workflow,
+not a completed notarization or release acceptance result.
 
 ## Draft and publish
 
-1. Finish the app changes and bump `package.json` to a new stable version.
-2. Push the corresponding `vX.Y.Z` tag. The workflow requires the tag and package
-   version to match. It can also be run manually with an existing tag.
+1. Finish the app changes and bump `apps/desktop/package.json` to a new stable
+   version. Desktop and extension manifests currently each declare `0.2.1`;
+   browser release versions belong to `apps/extension/package.json`. The root
+   package has no version.
+2. Push the corresponding `vX.Y.Z` tag. The workflow reads
+   `apps/desktop/package.json` and requires that version and the tag to match,
+   with the tagged commit checked out. It can also run manually with an existing tag.
 3. Review the draft's DMG, ZIP, blockmap and `latest-mac.yml`. An existing release
    is never overwritten; reruns require resolving the existing draft explicitly.
 4. Download the DMG on another Mac and verify Gatekeeper, launch, CLI discovery,
    sign-in and [browser acceptance](cross-browser.md), plus the
-   [native AutoFill checklist](../native/autofill/README.md#manual-acceptance-synthetic-vault-only).
+   [native AutoFill checklist](../apps/desktop/native/autofill/README.md#manual-acceptance-synthetic-vault-only).
    Use synthetic credentials. Verify offline launch after installation too.
 5. Test an upgrade between two signed versions: background/manual checks,
    download failure, restart, quitting with an unlocked synthetic vault, and

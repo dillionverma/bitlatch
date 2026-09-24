@@ -16,10 +16,5 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            raycast/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      - run: pnpm -C raycast install --frozen-lockfile
       - run: pnpm run check
-      - run: pnpm -C raycast run build

@@ -1,0 +1,330 @@
+* {
+  box-sizing: border-box;
+}
+:host {
+  font: 13px/18px var(--font-ui);
+  color: var(--foreground);
+  text-align: left;
+  -webkit-font-smoothing: antialiased;
+}
+button {
+  font: inherit;
+  cursor: default;
+  color: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+button:disabled,
+button[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.5;
+}
+button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+svg {
+  flex: none;
+}
+.trigger {
+  position: fixed;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--primary);
+  box-shadow:
+    0 0 0 1px var(--border),
+    0 1px 2px light-dark(rgb(0 0 0/6%), rgb(0 0 0/30%));
+  pointer-events: auto;
+}
+.trigger svg {
+  width: 18px;
+  height: 18px;
+}
+.trigger:hover {
+  background: var(--accent);
+}
+.trigger:active {
+  background: var(--selection);
+}
+.panel,
+.save {
+  position: fixed;
+  display: none;
+  width: 300px;
+  color: var(--popover-foreground);
+  background: color-mix(in srgb, var(--popover) 94%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-overlay);
+  box-shadow:
+    0 0 0 0.5px light-dark(rgb(0 0 0/10%), rgb(0 0 0/70%)),
+    0 12px 32px light-dark(rgb(0 0 0/16%), rgb(0 0 0/55%)),
+    0 2px 6px light-dark(rgb(0 0 0/6%), rgb(0 0 0/30%)),
+    inset 0 0 0 1px light-dark(transparent, rgb(255 255 255/4%));
+  pointer-events: auto;
+  font: 13px/18px var(--font-ui);
+}
+.panel {
+  flex-direction: column;
+  max-height: 400px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 12px 3px;
+  flex: none;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 500;
+}
+.brand-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.brand svg {
+  width: 14px;
+  height: 14px;
+  color: var(--primary);
+}
+.results {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  flex: 1 1 auto;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  text-align: left;
+  padding: 5px 8px;
+  background: transparent;
+  min-height: 44px;
+  color: var(--foreground);
+}
+.row:hover {
+  background: var(--accent);
+}
+.row:active {
+  background: var(--selection);
+}
+.row:focus-visible {
+  background: var(--selection);
+  outline: 0;
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+.row > svg {
+  width: 18px;
+  height: 18px;
+  color: var(--muted-foreground);
+}
+.initial {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: inset 0 0 0 1px var(--border);
+  overflow: hidden;
+}
+.initial img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  border-radius: 4px;
+  display: block;
+}
+.text {
+  flex: 1;
+  min-width: 0;
+}
+.name,
+.sub {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.name {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+}
+.sub {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+}
+.key {
+  flex: none;
+  min-width: 20px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--secondary);
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 17px;
+  text-align: center;
+}
+.hint {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+  padding: 10px 12px;
+  overflow-wrap: anywhere;
+}
+.group {
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  padding: 8px 8px 2px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.foot {
+  border-top: 1px solid var(--border);
+  padding: 5px 6px 5px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: none;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
+}
+.origin {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.action {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--foreground);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  min-height: 26px;
+  flex: none;
+}
+.action:hover {
+  background: var(--accent);
+}
+.action:active {
+  background: var(--selection);
+}
+.error {
+  color: var(--destructive);
+  background: var(--destructive-surface);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding: 8px 10px;
+  margin: 4px 8px 8px;
+  flex: none;
+}
+.save {
+  padding: 12px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.save .brand {
+  padding: 0 0 10px;
+}
+.save-title {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  margin: 0 0 2px;
+}
+.save-sub {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.save .error {
+  margin: 8px 0 0;
+}
+.save-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.save-actions button {
+  border-radius: 6px;
+  padding: 4px 12px;
+  min-height: 28px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: 0 1px 1px light-dark(rgb(0 0 0/4%), rgb(0 0 0/20%));
+}
+.save-actions button:hover {
+  background: var(--accent);
+}
+.save-actions .go {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+}
+.save-actions .go:hover {
+  background: var(--primary-hover);
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .panel,
+  .save {
+    background: var(--popover);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@media (prefers-contrast: more) {
+  .panel,
+  .save {
+    border-color: var(--input);
+  }
+}
+@media (forced-colors: active) {
+  .row:focus-visible,
+  button:focus-visible {
+    outline: 2px solid Highlight;
+  }
+}

@@ -38,9 +38,9 @@ jobs:
         with:
           name: latch-${{ runner.os }}-${{ runner.arch }}
           path: |
-            release/*.dmg
-            release/*.zip
-            release/*.AppImage
-            release/*.deb
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
           if-no-files-found: error
           retention-days: 14

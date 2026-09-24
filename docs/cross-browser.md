@@ -4,7 +4,7 @@ Research checked 2026-09-24 against WXT, Mozilla, Chrome, and Apple documentatio
 
 ## Shared WXT build
 
-- Keep one implementation with small browser-specific transport adapters. Use WXT entrypoints (`defineBackground`, `defineContentScript`) and explicit imports. Move manifest metadata into `wxt.config.ts`, preserve production permissions, and compare generated manifests after migration. Generate WXT types with `wxt prepare`; run this in installation/CI before typechecking. [Migration guide](https://wxt.dev/guide/resources/migrate.html)
+- Keep one implementation with small browser-specific transport adapters in `apps/extension`, using `packages/shared` for shared contracts and identity. WXT entrypoints (`defineBackground`, `defineContentScript`) use explicit imports; manifest metadata lives in `apps/extension/wxt.config.ts` and the version comes from `apps/extension/package.json` (currently `0.2.1`). Preserve production permissions and compare generated manifests after changes. The root install runs the extension's `wxt prepare`; its typecheck also regenerates WXT types. [Migration guide](https://wxt.dev/guide/resources/migrate.html)
 - Explicitly select MV3 for each supported build. WXT defaults Firefox and Safari to MV2, so the browser flag alone does not mean MV3. Target-specific outputs should remain separate. [Browser targets](https://wxt.dev/guide/essentials/target-different-browsers.html)
 - Import `browser` and `Browser` from `wxt/browser`. This selects the native namespace; it does not make every API exist. Feature-detect cosmetic optional methods such as badge text color. Register browser listeners inside the WXT entrypoint, synchronously before asynchronous setup. WXT evaluates entrypoints outside the browser during builds. [Extension APIs](https://wxt.dev/guide/essentials/extension-apis.html)
 - Chromium MV3 uses a service worker; Firefox MV3 uses a nonpersistent background script/event page. Let WXT generate the appropriate manifest. Losing background memory must fail pending requests safely, never preserve a previously unlocked state as authority. [Background environments](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/background)
@@ -31,7 +31,7 @@ Latch security invariants during migration:
 
 ## Safari is a separate native integration
 
-Build web files with WXT, then package them in a native Safari extension. Apple's `xcrun safari-web-extension-packager` can generate an Xcode app/extension wrapper; it does not implement Latch's native bridge. Latch instead compiles the small wrapper directly alongside its existing AutoFill extension in `scripts/build-safari.mjs`, embedding WXT's output as resources. [Apple packaging](https://developer.apple.com/documentation/safariservices/packaging-a-web-extension-for-safari)
+Build web files with WXT, then package them in a native Safari extension. Apple's `xcrun safari-web-extension-packager` can generate an Xcode app/extension wrapper; it does not implement Latch's native bridge. Latch instead compiles the small wrapper directly in `apps/desktop/build/build-safari.mjs`, embedding `apps/extension/.output/safari-mv3` as resources in `apps/desktop/dist/native/LatchSafari.appex`. [Apple packaging](https://developer.apple.com/documentation/safariservices/packaging-a-web-extension-for-safari)
 
 Safari JavaScript-to-native requests use `runtime.sendNativeMessage` and an `NSExtensionRequestHandling.beginRequest` handler. Safari ignores the application ID argument and routes to its containing native extension. Apple's `connectNative` example handles containing-app-to-JavaScript notifications, so Chromium's bidirectional stdio port request code cannot be assumed compatible. Data sharing between app and extension uses App Groups. [Apple messaging](https://developer.apple.com/documentation/safariservices/messaging-between-the-app-and-javascript-in-a-safari-web-extension)
 
@@ -47,14 +47,25 @@ Before declaring a browser supported, manually verify with synthetic credentials
 
 ## Implemented commands and output
 
-- `pnpm run extension:dev` / `extension:dev:firefox`: WXT development with reload support.
-- `pnpm run extension:build`: Chromium, Firefox 140+, Safari MV3 builds in `.output/{browser}-mv3`.
-- `pnpm run extension:zip`: browser ZIPs and a narrowly allowlisted Firefox source ZIP. Rebuild Firefox from the source archive with `pnpm install --frozen-lockfile && pnpm exec wxt build -b firefox --mv3`.
-- `pnpm run build`: also compiles the Safari native handler on macOS and keeps the Chromium install path at `dist/extension`.
-- `pnpm run extension:submit -- --help`: WXT submission tooling. No store accounts, signing credentials, or publication are automatically configured. The artifact workflow only builds/uploads private repository artifacts.
+Run these commands from the workspace root after one `pnpm install --frozen-lockfile`; all apps share the root lockfile.
 
-The native host installer now registers Chrome, Chrome for Testing, Chromium, Aside, Brave, Edge, Arc, Vivaldi, and Firefox on macOS. These are integration targets, not a claim of completed live testing in every browser. Chromium retains its existing public key and ID. Firefox's stable ID is `latch@latch.local`; temporary installations use `.output/firefox-mv3/manifest.json`, while normal distribution requires Mozilla signing. Firefox's consent declarations describe the credential and site data relayed locally to Latch, not analytics.
+- `pnpm run extension:dev` / `pnpm run extension:dev:firefox`: WXT development with reload support.
+- `pnpm run extension:build`: Chrome, Firefox 140+, and Safari MV3 builds in `apps/extension/.output/{browser}-mv3`.
+- `pnpm run extension:zip`: browser ZIPs and an allowlisted Firefox source ZIP in `apps/extension/.output/`.
+- `pnpm --filter @latch/desktop build`: rebuilds desktop, native AutoFill on macOS, and Chrome; copies Chrome assets to `apps/desktop/dist/extension` for installation.
+- `pnpm run build`: full desktop, Chrome/Firefox/Safari web, native AutoFill/Safari on macOS, and Raycast build. `pnpm run check` also checks formatting and workspace source.
+- `pnpm --filter @latch/extension exec wxt submit --help`: WXT submission help. `pnpm run extension:submit` invokes submission; accounts, credentials, and first listings need separate setup. The artifact workflow only builds/uploads private repository artifacts.
 
-Safari's request handler is `native/safari/Handler.m`, embedded as `LatchSafari.appex` only when `LATCH_SAFARI_PROFILE` is supplied to `pnpm run package:autofill`. Create a macOS profile for `app.latch.vault.safari` with the same team and App Group as the host. Keep the existing host and AutoFill profiles. This wrapper uses the same strict browser request schema through a separate app-group socket/token; it does not expose the launcher protocol. Safari's native AutoFill credential provider is a different extension.
+The Firefox source ZIP includes extension source/config, `packages/shared`, root workspace configuration and lockfile, and desktop/Raycast package manifests needed to reconstruct that workspace. It excludes unrelated desktop/Raycast implementation and native assets. Extract into a clean directory and run from the extracted workspace root:
+
+```sh
+pnpm install --frozen-lockfile && pnpm --filter @latch/extension build:firefox
+```
+
+Compare `apps/extension/.output/firefox-mv3` with the submitted build. The archive's inclusion rules and rebuild command do not replace that verification.
+
+The native host installer now registers Chrome, Chrome for Testing, Chromium, Aside, Brave, Edge, Arc, Vivaldi, and Firefox on macOS. These are integration targets, not a claim of completed live testing in every browser. Chromium retains its existing public key and ID. Firefox's stable ID is `latch@latch.local`; temporary installations use `apps/extension/.output/firefox-mv3/manifest.json`, while normal distribution requires Mozilla signing. Firefox's consent declarations describe the credential and site data relayed locally to Latch, not analytics.
+
+Safari's request handler is `apps/desktop/native/safari/Handler.m`, embedded as `LatchSafari.appex` only when `LATCH_SAFARI_PROFILE` is supplied to `pnpm run package:autofill`. Create a macOS profile for `app.latch.vault.safari` with the same team and App Group as the host. Keep the existing host and AutoFill profiles. This wrapper uses the same strict browser request schema through a separate app-group socket/token; it does not expose the launcher protocol. Safari's native AutoFill credential provider is a different extension.
 
 A successful compile is not Safari installation verification: the signed Safari profile, Safari enablement/site permission, and a live fill/save test are still required. Keep all vault cryptography and locking in Latch/Bitwarden; the web extension only selects and relays requests. Check both iframe and navigation behavior in each browser before releasing.
