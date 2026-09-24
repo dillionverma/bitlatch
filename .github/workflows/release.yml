@@ -1,4 +1,4 @@
-name: macOS release draft
+name: Release
 on:
   push:
     tags:
@@ -6,39 +6,57 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing stable version tag (must match apps/desktop/package.json)
+        description: Version tag matching the app (created after successful builds if absent)
         required: true
         type: string
 permissions:
   contents: read
 concurrency:
-  group: macos-release-${{ inputs.tag || github.ref_name }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 jobs:
-  build:
-    runs-on: macos-latest
-    timeout-minutes: 90
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      sha: ${{ steps.version.outputs.sha }}
     steps:
+      - name: Require main for manual releases
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: echo 'Run manual releases from main.' && exit 1
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Validate release tag
+      - name: Validate release version
+        id: version
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           node --input-type=module <<'NODE'
-          import { readFileSync } from 'node:fs';
-          import { execFileSync } from 'node:child_process';
+          import { readFileSync, appendFileSync } from 'node:fs';
+          import { execFileSync, spawnSync } from 'node:child_process';
           const tag = process.env.RELEASE_TAG;
-          const { version } = JSON.parse(readFileSync('apps/desktop/package.json', 'utf8'));
-          if (!/^v\d+\.\d+\.\d+$/.test(tag) || tag !== `v${version}`)
-            throw new Error('A stable version tag matching apps/desktop/package.json is required.');
-          const rev = (ref) => execFileSync('git', ['rev-parse', ref], { encoding: 'utf8' }).trim();
-          if (rev(`refs/tags/${tag}^{commit}`) !== rev('HEAD'))
-            throw new Error('The checked-out commit must match the release tag.');
+          const packages = ['apps/desktop', 'apps/extension', 'packages/shared'];
+          if (!/^v\d+\.\d+\.\d+$/.test(tag)) throw new Error('Use a stable version tag, e.g. v0.2.1.');
+          for (const directory of packages) {
+            const { version } = JSON.parse(readFileSync(`${directory}/package.json`, 'utf8'));
+            if (tag !== `v${version}`) throw new Error(`Version mismatch: ${directory}`);
+          }
+          const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+          const existing = spawnSync('git', ['rev-parse', '--verify', `refs/tags/${tag}^{commit}`], { encoding: 'utf8' });
+          if (existing.status === 0 && existing.stdout.trim() !== sha)
+            throw new Error('The tag already points to a different commit.');
+          appendFileSync(process.env.GITHUB_OUTPUT, `tag=${tag}\nsha=${sha}\n`);
           NODE
+  check:
+    needs: prepare
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
         with:
           standalone: true
@@ -48,80 +66,88 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run check
-      - name: Prepare Apple signing
-        env:
-          LATCH_CERTIFICATE_P12: ${{ secrets.LATCH_CERTIFICATE_P12 }}
-          LATCH_CERTIFICATE_PASSWORD: ${{ secrets.LATCH_CERTIFICATE_PASSWORD }}
-          LATCH_APP_PROFILE_BASE64: ${{ secrets.LATCH_APP_PROFILE_BASE64 }}
-          LATCH_AUTOFILL_PROFILE_BASE64: ${{ secrets.LATCH_AUTOFILL_PROFILE_BASE64 }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          umask 077
-          node --input-type=module <<'NODE'
-          import { writeFileSync } from 'node:fs';
-          import { join } from 'node:path';
-          for (const [key, file] of [
-            ['LATCH_CERTIFICATE_P12', 'latch.p12'],
-            ['LATCH_APP_PROFILE_BASE64', 'Latch.provisionprofile'],
-            ['LATCH_AUTOFILL_PROFILE_BASE64', 'LatchAutoFill.provisionprofile'],
-          ]) {
-            if (!process.env[key]) throw new Error(`Missing ${key}`);
-            writeFileSync(join(process.env.RUNNER_TEMP, file), Buffer.from(process.env[key], 'base64'), { mode: 0o600 });
-          }
-          for (const key of ['APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID'])
-            if (!process.env[key]) throw new Error(`Missing ${key}`);
-          NODE
-          keychain="$RUNNER_TEMP/latch-signing.keychain-db"
-          keychain_password="$(uuidgen)"
-          echo "::add-mask::$keychain_password"
-          security create-keychain -p "$keychain_password" "$keychain"
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p "$keychain_password" "$keychain"
-          security list-keychains -d user -s "$keychain" "$HOME/Library/Keychains/login.keychain-db"
-          security default-keychain -d user -s "$keychain"
-          security import "$RUNNER_TEMP/latch.p12" -k "$keychain" -P "$LATCH_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -k "$keychain_password" "$keychain" >/dev/null
-          xcrun notarytool store-credentials latch-notary --keychain "$keychain" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD"
-      - name: Sign, notarize and package
-        run: pnpm run package:release
-        env:
-          LATCH_SIGN_IDENTITY: ${{ secrets.LATCH_SIGN_IDENTITY }}
-          LATCH_APP_PROFILE: ${{ runner.temp }}/Latch.provisionprofile
-          LATCH_AUTOFILL_PROFILE: ${{ runner.temp }}/LatchAutoFill.provisionprofile
-          LATCH_NOTARY_PROFILE: latch-notary
-      - uses: actions/upload-artifact@v4
-        with:
-          name: notarized-macos
-          path: |
-            apps/desktop/release/distribution/*.dmg
-            apps/desktop/release/distribution/*.zip
-            apps/desktop/release/distribution/*.blockmap
-            apps/desktop/release/distribution/latest-mac.yml
-          if-no-files-found: error
-          retention-days: 14
-      - name: Remove signing material
-        if: always()
-        run: |
-          security default-keychain -d user -s "$HOME/Library/Keychains/login.keychain-db"
-          security delete-keychain "$RUNNER_TEMP/latch-signing.keychain-db" || true
-          rm -f "$RUNNER_TEMP/latch.p12" "$RUNNER_TEMP/Latch.provisionprofile" "$RUNNER_TEMP/LatchAutoFill.provisionprofile"
-  draft:
-    needs: build
+  desktop:
+    needs: prepare
+    uses: ./.github/workflows/desktop.yml
+    with:
+      ref: ${{ needs.prepare.outputs.sha }}
+  extensions:
+    needs: prepare
+    uses: ./.github/workflows/extensions.yml
+    with:
+      ref: ${{ needs.prepare.outputs.sha }}
+  publish:
+    needs: [prepare, check, desktop, extensions]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: notarized-macos
+          pattern: release-*
           path: release
-      - name: Create draft release
+          merge-multiple: true
+      - name: Verify complete asset set and write checksums
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+          import { createHash } from 'node:crypto';
+          const version = process.env.RELEASE_TAG.slice(1);
+          const expected = [
+            `Latch-${version}-mac-arm64.dmg`, `Latch-${version}-mac-arm64.zip`,
+            `Latch-${version}-linux-x64.AppImage`, `Latch-${version}-linux-x64.deb`,
+            `Latch-${version}-linux-arm64.AppImage`, `Latch-${version}-linux-arm64.deb`,
+            `Latch-${version}-win-x64.exe`,
+            ...['chrome', 'firefox', 'safari', 'sources'].map(target => `latch-${version}-${target}.zip`),
+          ];
+          const files = readdirSync('release').sort();
+          if (files.length !== expected.length || expected.some(name => !files.includes(name)))
+            throw new Error(`Incomplete or unexpected release assets: ${files.join(', ')}`);
+          const sums = files.map(name => {
+            const bytes = readFileSync(`release/${name}`);
+            if (!bytes.length) throw new Error(`Empty asset: ${name}`);
+            return `${createHash('sha256').update(bytes).digest('hex')}  ${name}`;
+          });
+          writeFileSync('release/SHA256SUMS', sums.join('\n') + '\n');
+          NODE
+      - name: Publish preview release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
         run: |
-          test -s release/latest-mac.yml
-          gh release create "$RELEASE_TAG" release/* --verify-tag --draft --title "Latch $RELEASE_TAG" --generate-notes
+          cat > notes.md <<'NOTES'
+          Desktop packages for macOS (Apple Silicon), Windows (x64), and Linux (x64 / arm64). Install the official Bitwarden CLI separately.
+
+          Browser downloads:
+          - **chrome.zip** — Chrome, Aside, Brave, Edge, Arc, Vivaldi, and Chromium. Extract and load unpacked.
+          - **firefox.zip** — unsigned developer build; load temporarily through about:debugging. Sources are included separately.
+          - **safari.zip** — Safari web-extension assets for a signed native wrapper; not a standalone installable Safari extension.
+
+          These are unsigned preview builds. macOS AutoFill and the Safari integration require Apple signing and provisioning. Windows/Linux packages are experimental; build success does not establish full platform feature parity. SHA256SUMS covers every download.
+          NOTES
+          if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > draft.txt 2>/dev/null; then
+            test "$(cat draft.txt)" = true || { echo 'Release already published; use a new version.'; exit 1; }
+            gh release edit "$RELEASE_TAG" --target "$RELEASE_SHA"
+          else
+            gh release create "$RELEASE_TAG" --target "$RELEASE_SHA" --draft --prerelease --title "Latch $RELEASE_TAG" --notes-file notes.md
+          fi
+          gh release upload "$RELEASE_TAG" release/* --clobber
+          gh release view "$RELEASE_TAG" --json assets > assets.json
+          node --input-type=module <<'NODE'
+          import { readFileSync, readdirSync } from 'node:fs';
+          const expected = readdirSync('release').sort();
+          const actual = JSON.parse(readFileSync('assets.json', 'utf8')).assets.map(asset => asset.name).sort();
+          if (JSON.stringify(expected) !== JSON.stringify(actual))
+            throw new Error('Draft contains unexpected assets. Remove them before retrying.');
+          NODE
+          gh api "repos/$GH_REPO/git/matching-refs/tags/$RELEASE_TAG" \
+            --jq ".[] | select(.ref == \"refs/tags/$RELEASE_TAG\") | .ref" > tag.txt
+          if test -s tag.txt; then
+            test "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" = "$RELEASE_SHA" \
+              || { echo 'Remote tag changed during the build.'; exit 1; }
+          fi
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false --notes-file notes.md

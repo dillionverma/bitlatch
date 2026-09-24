@@ -1,6 +1,11 @@
 name: Browser extension artifacts
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
   pull_request:
     paths:
       - 'apps/extension/**'
@@ -20,6 +25,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
         with:
           standalone: true
@@ -32,6 +40,8 @@ jobs:
       - run: pnpm run extension:zip
       - uses: actions/upload-artifact@v4
         with:
-          name: browser-extensions
+          name: release-browser-extensions
           path: apps/extension/.output/*.zip
+          include-hidden-files: true
+          if-no-files-found: error
           retention-days: 14

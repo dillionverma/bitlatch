@@ -20,6 +20,8 @@ function compressDmgs({ artifactPaths }: BuildResult) {
 export default {
   appId: 'app.latch.vault',
   productName: 'Latch',
+  artifactName: 'Latch-${version}-${os}-${arch}.${ext}',
+  publish: null,
   directories: { output: 'release' },
   files: [
     'dist/**/*',

@@ -10,7 +10,7 @@
     "build:chrome": "wxt build -b chrome",
     "build:firefox": "wxt build -b firefox",
     "build:safari": "wxt build -b safari",
-    "zip": "cd ../.. && wxt zip apps/extension -b chrome && wxt zip apps/extension -b firefox && wxt zip apps/extension -b safari",
+    "zip": "cd .. && cd .. && wxt zip apps/extension -b chrome && wxt zip apps/extension -b firefox && wxt zip apps/extension -b safari",
     "typecheck": "wxt prepare && vp lint .",
     "postinstall": "wxt prepare",
     "submit": "wxt submit"
