@@ -33,6 +33,8 @@ export default {
     identity: null,
     hardenedRuntime: true,
   },
+  // bzip2 is about 9 MB smaller than the default zlib. Switch to LZMA (`ULMO`) with electron-builder 27.
+  dmg: { format: 'UDBZ' },
   linux: {
     target: ['AppImage', 'deb'],
     icon: 'assets/icon.png',
