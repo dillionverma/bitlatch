@@ -7,7 +7,7 @@ export default defineConfig({
   run: {
     tasks: {
       bundle: {
-        dependsOn: ['@latch/extension#build'],
+        dependsOn: ['@latch/extension#build:chrome'],
         command: ['node build/prepare.mjs', 'vp pack', 'vp build'],
       },
     },

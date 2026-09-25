@@ -6,14 +6,15 @@
   "scripts": {
     "dev": "wxt -b chrome",
     "dev:firefox": "wxt -b firefox",
-    "build": "vp run build:chrome && vp run build:firefox && vp run build:safari",
+    "build": "vp run build:chrome && vp run build:extras",
     "build:chrome": "wxt build -b chrome",
     "build:firefox": "wxt build -b firefox",
     "build:safari": "wxt build -b safari",
     "zip": "cd .. && cd .. && wxt zip apps/extension -b chrome && wxt zip apps/extension -b firefox && wxt zip apps/extension -b safari",
     "typecheck": "wxt prepare && vp lint .",
     "postinstall": "wxt prepare",
-    "submit": "wxt submit"
+    "submit": "wxt submit",
+    "build:extras": "vp run build:firefox && vp run build:safari"
   },
   "devDependencies": {
     "@latch/shared": "workspace:*",

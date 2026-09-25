@@ -14,12 +14,12 @@
     "start": "electron .",
     "build": "vp run bundle",
     "typecheck": "vp lint src electron-builder.ts build vite.config.mjs",
-    "package": "vp run build && electron-builder --mac dir --arm64",
     "package:mac": "vp run build && electron-builder --mac --arm64 --publish never",
     "package:linux": "vp run build && electron-builder --linux --publish never",
     "package:win": "vp run build && electron-builder --win --publish never",
     "package:autofill": "node build/package-autofill.mjs",
-    "package:release": "node build/package-autofill.mjs --release"
+    "package:dir": "vp run build && electron-builder --mac dir --arm64 --publish never",
+    "package:mac:signed": "node build/package-autofill.mjs --release"
   },
   "devDependencies": {
     "@electron/osx-sign": "^2.7.0",

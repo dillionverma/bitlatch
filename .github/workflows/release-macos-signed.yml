@@ -45,6 +45,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run check
+      - run: pnpm run build
       - name: Prepare Apple signing
         env:
           LATCH_CERTIFICATE_P12: ${{ secrets.LATCH_CERTIFICATE_P12 }}
@@ -87,7 +88,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -k "$keychain_password" "$keychain" >/dev/null
           xcrun notarytool store-credentials latch-notary --keychain "$keychain" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD"
       - name: Sign, notarize and package
-        run: pnpm run package:release
+        run: pnpm run package:mac:signed
         env:
           LATCH_SIGN_IDENTITY: ${{ secrets.LATCH_SIGN_IDENTITY }}
           LATCH_APP_PROFILE: ${{ runner.temp }}/Latch.provisionprofile

@@ -1,7 +1,6 @@
 import { mkdir, readFile, writeFile, copyFile, rm, cp } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { createRequire } from 'node:module';
-import { buildSafari } from './build-safari.mjs';
 import { buildAutoFill } from './build-autofill.mjs';
 
 const root = resolve(import.meta.dirname, '..');
@@ -84,5 +83,4 @@ await copyFile(identityPath, resolve(root, 'dist/desktop/extension.json'));
 await cp(resolve(root, '../extension/.output/chrome-mv3'), resolve(root, 'dist/extension'), {
   recursive: true,
 });
-await buildSafari(root);
 console.log(`Extension ID: ${identity.extensionId}`);

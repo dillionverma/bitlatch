@@ -1,9 +1,13 @@
 import { execFileSync } from 'node:child_process';
 import { mkdir, cp, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import * as plist from 'plist';
 
-export async function buildSafari(root) {
+export async function buildSafari(
+  root,
+  group = process.env.LATCH_APP_GROUP ?? 'UNCONFIGURED.app.latch.vault',
+) {
   if (process.platform !== 'darwin') return;
   const contents = resolve(root, 'dist/native/LatchSafari.appex/Contents');
   await mkdir(resolve(contents, 'MacOS'), { recursive: true });
@@ -32,7 +36,6 @@ export async function buildSafari(root) {
     { stdio: 'inherit' },
   );
   const { version } = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
-  const group = process.env.LATCH_APP_GROUP ?? 'UNCONFIGURED.app.latch.vault';
   await writeFile(
     resolve(contents, 'Info.plist'),
     plist.build({
@@ -54,3 +57,6 @@ export async function buildSafari(root) {
     }),
   );
 }
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  await buildSafari(resolve(import.meta.dirname, '..'));

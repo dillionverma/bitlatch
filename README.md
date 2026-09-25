@@ -109,7 +109,7 @@ pnpm install --frozen-lockfile
 pnpm run dev
 ```
 
-Run `pnpm run check` before submitting changes. It checks formatting, lint, types, and all builds. The workspace uses Electron, [Vite+](https://viteplus.dev), and WXT with one install and lockfile.
+Run `pnpm run check` and `pnpm run build` before submitting changes. The first checks formatting, lint, and types; the second builds all targets. The workspace uses Electron, [Vite+](https://viteplus.dev), and WXT with one install and lockfile.
 
 <details>
 <summary>Packaging and release notes</summary>
@@ -124,11 +124,20 @@ pnpm run package:win    # NSIS installer
 
 The [desktop workflow](.github/workflows/desktop.yml) builds macOS arm64, Windows x64, and Linux x64 / arm64 packages on their native runners.
 
-**Development builds.** Desktop hot reload reuses native and browser assets after building missing outputs. Run `pnpm --filter @latch/desktop build` and restart development after changing those assets. `pnpm run check` regenerates WXT types before checking and building the workspace.
+**Development builds.** Desktop hot reload reuses native and browser assets after building missing outputs. Run `pnpm --filter @latch/desktop build` and restart development after changing those assets. `pnpm run check` regenerates WXT types before checking the workspace.
 
-The root build selects desktop and Raycast; desktop depends on the extension build. Keep that selection to avoid duplicate extension builds in Vite+ rc.0. WXT targets run sequentially because they share generated types. Build caching is disabled for host- and signing-dependent tasks.
+Desktop builds depend only on Chrome assets. The root build adds Firefox, Safari, the native Safari wrapper on macOS, and Raycast. WXT targets run sequentially because they share generated types. Signed packaging builds Safari only when its profile is supplied. Build caching remains disabled for host- and signing-dependent tasks.
 
-**Releases.** `pnpm run package` creates an unsigned, non-notarized Mac app. `pnpm run package:release` requires Apple signing inputs and notarizes without publishing. The [release workflow](.github/workflows/release.yml) checks, builds, and publishes all desktop and browser packages with SHA-256 checksums. Push a matching `vX.Y.Z` tag or run it manually with the version; manual runs create the tag only after successful builds. The separate [signed macOS workflow](.github/workflows/release-macos-signed.yml) produces notarized artifacts for an existing tag without modifying published releases. Add `LATCH_SAFARI_PROFILE_BASE64` to include Safari.
+**Releases.** `pnpm run package:dir` creates an unsigned, non-notarized Mac app. `pnpm run package:mac:signed` requires Apple signing inputs and notarizes without publishing. The [release workflow](.github/workflows/release.yml) checks, builds, and publishes all desktop and browser packages with SHA-256 checksums. Push a matching `vX.Y.Z` tag or run it manually with the version; manual runs create the tag only after successful builds. The separate [signed macOS workflow](.github/workflows/release-macos-signed.yml) produces notarized artifacts for an existing tag without modifying published releases. Add `LATCH_SAFARI_PROFILE_BASE64` to include Safari.
+
+Release logic lives in `scripts/release.mjs`; `.github/release-notes.md` holds the preview notes. Artifact checks run locally without publishing:
+
+```sh
+node scripts/release.mjs validate v0.2.1
+node scripts/release.mjs verify v0.2.1 /path/to/collected-artifacts
+```
+
+Validation requires matching desktop/extension versions and rejects a local tag pointing at another commit. Artifact verification requires all eleven expected payloads, rejects empty or unexpected files, and writes `SHA256SUMS`. Publication is a separate workflow step that preserves draft and tag checks. The internal shared package is not release-versioned with the apps.
 
 **Browser packages.** Run `pnpm run extension:zip` for Chrome, Firefox, Safari web assets, and Firefox sources. To rebuild the downloaded sources archive, extract it and run from its root:
 

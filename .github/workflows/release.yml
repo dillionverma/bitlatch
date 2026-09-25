@@ -32,40 +32,12 @@ jobs:
         id: version
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-        run: |
-          node --input-type=module <<'NODE'
-          import { readFileSync, appendFileSync } from 'node:fs';
-          import { execFileSync, spawnSync } from 'node:child_process';
-          const tag = process.env.RELEASE_TAG;
-          const packages = ['apps/desktop', 'apps/extension', 'packages/shared'];
-          if (!/^v\d+\.\d+\.\d+$/.test(tag)) throw new Error('Use a stable version tag, e.g. v0.2.1.');
-          for (const directory of packages) {
-            const { version } = JSON.parse(readFileSync(`${directory}/package.json`, 'utf8'));
-            if (tag !== `v${version}`) throw new Error(`Version mismatch: ${directory}`);
-          }
-          const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-          const existing = spawnSync('git', ['rev-parse', '--verify', `refs/tags/${tag}^{commit}`], { encoding: 'utf8' });
-          if (existing.status === 0 && existing.stdout.trim() !== sha)
-            throw new Error('The tag already points to a different commit.');
-          appendFileSync(process.env.GITHUB_OUTPUT, `tag=${tag}\nsha=${sha}\n`);
-          NODE
+        run: node scripts/release.mjs validate "$RELEASE_TAG"
   check:
     needs: prepare
-    runs-on: macos-26
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.prepare.outputs.sha }}
-          persist-credentials: false
-      - uses: pnpm/action-setup@v4
-        with:
-          standalone: true
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run check
+    uses: ./.github/workflows/check.yml
+    with:
+      ref: ${{ needs.prepare.outputs.sha }}
   desktop:
     needs: prepare
     uses: ./.github/workflows/desktop.yml
@@ -82,6 +54,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           pattern: release-*
@@ -90,64 +67,11 @@ jobs:
       - name: Verify complete asset set and write checksums
         env:
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
-        run: |
-          node --input-type=module <<'NODE'
-          import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
-          import { createHash } from 'node:crypto';
-          const version = process.env.RELEASE_TAG.slice(1);
-          const expected = [
-            `Latch-${version}-mac-arm64.dmg`, `Latch-${version}-mac-arm64.zip`,
-            `Latch-${version}-linux-x86_64.AppImage`, `Latch-${version}-linux-amd64.deb`,
-            `Latch-${version}-linux-arm64.AppImage`, `Latch-${version}-linux-arm64.deb`,
-            `Latch-${version}-win-x64.exe`,
-            ...['chrome', 'firefox', 'safari', 'sources'].map(target => `latch-${version}-${target}.zip`),
-          ];
-          const files = readdirSync('release').sort();
-          if (files.length !== expected.length || expected.some(name => !files.includes(name)))
-            throw new Error(`Incomplete or unexpected release assets: ${files.join(', ')}`);
-          const sums = files.map(name => {
-            const bytes = readFileSync(`release/${name}`);
-            if (!bytes.length) throw new Error(`Empty asset: ${name}`);
-            return `${createHash('sha256').update(bytes).digest('hex')}  ${name}`;
-          });
-          writeFileSync('release/SHA256SUMS', sums.join('\n') + '\n');
-          NODE
+        run: node scripts/release.mjs verify "$RELEASE_TAG" release
       - name: Publish preview release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
           RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
-        run: |
-          cat > notes.md <<'NOTES'
-          Desktop packages for macOS (Apple Silicon), Windows (x64), and Linux (x64 / arm64). Install the official Bitwarden CLI separately.
-
-          Browser downloads:
-          - **chrome.zip** — Chrome, Aside, Brave, Edge, Arc, Vivaldi, and Chromium. Extract and load unpacked.
-          - **firefox.zip** — unsigned developer build; load temporarily through about:debugging. Sources are included separately.
-          - **safari.zip** — Safari web-extension assets for a signed native wrapper; not a standalone installable Safari extension.
-
-          These are unsigned preview builds. macOS AutoFill and the Safari integration require Apple signing and provisioning. Windows/Linux packages are experimental; build success does not establish full platform feature parity. SHA256SUMS covers every download.
-          NOTES
-          if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > draft.txt 2>/dev/null; then
-            test "$(cat draft.txt)" = true || { echo 'Release already published; use a new version.'; exit 1; }
-            gh release edit "$RELEASE_TAG" --target "$RELEASE_SHA"
-          else
-            gh release create "$RELEASE_TAG" --target "$RELEASE_SHA" --draft --prerelease --title "Latch $RELEASE_TAG" --notes-file notes.md
-          fi
-          gh release upload "$RELEASE_TAG" release/* --clobber
-          gh release view "$RELEASE_TAG" --json assets > assets.json
-          node --input-type=module <<'NODE'
-          import { readFileSync, readdirSync } from 'node:fs';
-          const expected = readdirSync('release').sort();
-          const actual = JSON.parse(readFileSync('assets.json', 'utf8')).assets.map(asset => asset.name).sort();
-          if (JSON.stringify(expected) !== JSON.stringify(actual))
-            throw new Error('Draft contains unexpected assets. Remove them before retrying.');
-          NODE
-          gh api "repos/$GH_REPO/git/matching-refs/tags/$RELEASE_TAG" \
-            --jq ".[] | select(.ref == \"refs/tags/$RELEASE_TAG\") | .ref" > tag.txt
-          if test -s tag.txt; then
-            test "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" = "$RELEASE_SHA" \
-              || { echo 'Remote tag changed during the build.'; exit 1; }
-          fi
-          gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false --notes-file notes.md
+        run: node scripts/release.mjs publish "$RELEASE_TAG" release

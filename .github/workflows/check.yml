@@ -1,14 +1,27 @@
 name: Check
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
 permissions:
   contents: read
+concurrency:
+  group: check-${{ github.workflow }}-${{ inputs.ref || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
 jobs:
   check:
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
         with:
           standalone: true
@@ -18,3 +31,4 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run check
+      - run: pnpm run build

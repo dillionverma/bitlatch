@@ -3,6 +3,7 @@ import { copyFile, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { sign } from '@electron/osx-sign';
 import * as plist from 'plist';
+import { buildSafari } from './build-safari.mjs';
 
 // Explicit signing inputs keep an unsigned development build from claiming a
 // restricted capability, or silently choosing a different Apple team.
@@ -74,6 +75,14 @@ const env = {
   CSC_IDENTITY_AUTO_DISCOVERY: 'false',
 };
 execFileSync('pnpm', ['run', 'build'], { cwd: root, env, stdio: 'inherit' });
+if (safari) {
+  execFileSync('pnpm', ['--filter', '@latch/extension', 'build:safari'], {
+    cwd: root,
+    env,
+    stdio: 'inherit',
+  });
+  await buildSafari(root, group);
+}
 execFileSync(
   'pnpm',
   ['exec', 'electron-builder', '--mac', 'dir', '--arm64', '--publish', 'never'],
@@ -120,21 +129,24 @@ await copyFile(resolve(extensionProfile), join(appex, 'Contents/embedded.provisi
 const development = !identity.startsWith('Developer ID Application:');
 // electron-builder does not sign our hand-built appex. Sign it first, then
 // exclude it from Electron's signing pass so its entitlements stay intact.
-execFileSync(
-  'codesign',
-  [
-    '--force',
-    '--sign',
-    identity,
-    '--options',
-    'runtime',
-    ...(development ? ['--timestamp=none'] : ['--timestamp']),
-    '--entitlements',
-    extensionEntitlements,
-    appex,
-  ],
-  { stdio: 'inherit' },
-);
+function signExtension(path, entitlements) {
+  execFileSync(
+    'codesign',
+    [
+      '--force',
+      '--sign',
+      identity,
+      '--options',
+      'runtime',
+      ...(development ? ['--timestamp=none'] : ['--timestamp']),
+      '--entitlements',
+      entitlements,
+      path,
+    ],
+    { stdio: 'inherit' },
+  );
+}
+signExtension(appex, extensionEntitlements);
 const safariApp = join(app, 'Contents/PlugIns/LatchSafari.appex');
 if (safari && safariProfile) {
   const safariEntitlements = join(signing, 'safari.plist');
@@ -149,21 +161,7 @@ if (safari && safariProfile) {
     }),
   );
   await copyFile(resolve(safariProfile), join(safariApp, 'Contents/embedded.provisionprofile'));
-  execFileSync(
-    'codesign',
-    [
-      '--force',
-      '--sign',
-      identity,
-      '--options',
-      'runtime',
-      ...(development ? ['--timestamp=none'] : ['--timestamp']),
-      '--entitlements',
-      safariEntitlements,
-      safariApp,
-    ],
-    { stdio: 'inherit' },
-  );
+  signExtension(safariApp, safariEntitlements);
 }
 await sign({
   app,

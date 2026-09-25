@@ -10,24 +10,24 @@
   "scripts": {
     "dev": "vp run @latch/desktop#dev",
     "start": "vp run @latch/desktop#start",
-    "build": "vp run --filter @latch/desktop --filter latch --fail-if-no-match build",
-    "check": "vp run @latch/extension#postinstall && vp check && vp run build",
+    "build": "vp run --filter @latch/desktop --filter latch --fail-if-no-match build && vp run @latch/extension#build:extras && node apps/desktop/build/build-safari.mjs",
+    "check": "vp run @latch/extension#postinstall && vp check",
     "format": "vp fmt",
     "format:check": "vp fmt --check",
     "lint": "vp lint",
     "typecheck": "vp check --no-fmt --no-lint",
-    "package": "vp run @latch/desktop#package",
     "package:mac": "vp run @latch/desktop#package:mac",
     "package:linux": "vp run @latch/desktop#package:linux",
     "package:win": "vp run @latch/desktop#package:win",
     "package:autofill": "vp run @latch/desktop#package:autofill",
-    "package:release": "vp run @latch/desktop#package:release",
     "extension:dev": "vp run @latch/extension#dev",
     "extension:build": "vp run @latch/extension#build",
     "extension:zip": "vp run @latch/extension#zip",
     "extension:typecheck": "vp run @latch/extension#typecheck",
     "extension:submit": "vp run @latch/extension#submit",
-    "extension:dev:firefox": "vp run @latch/extension#dev:firefox"
+    "extension:dev:firefox": "vp run @latch/extension#dev:firefox",
+    "package:dir": "vp run @latch/desktop#package:dir",
+    "package:mac:signed": "vp run @latch/desktop#package:mac:signed"
   },
   "devDependencies": {
     "vite-plus": "1.0.0-rc.0"
