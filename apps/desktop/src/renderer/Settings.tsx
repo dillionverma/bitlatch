@@ -13,6 +13,8 @@ import {
 } from '@phosphor-icons/react';
 import {
   lockTimeoutMinutes,
+  type Browser,
+  type BrowserSetup,
   type BrowserConnection,
   type LockTimeoutMinutes,
   type MacAutoFillState,
@@ -67,6 +69,16 @@ const sections = [
     description: 'A quiet companion for your Bitwarden vault.',
   },
 ] as const;
+const browsers = [
+  { id: 'safari', name: 'Safari', description: 'Enable Latch in Safari settings.' },
+  {
+    id: 'chrome',
+    name: 'Chrome',
+    description: 'Also works with Aside, Brave, Edge and other Chromium browsers.',
+  },
+  { id: 'firefox', name: 'Firefox', description: 'Install the signed Latch extension in Firefox.' },
+] as const;
+
 type Section = (typeof sections)[number]['id'];
 
 export function Settings({
@@ -83,10 +95,11 @@ export function Settings({
   biometricsBusy?: boolean;
 }) {
   const icons = useWebsiteIcons();
+  const [browserSetup, setBrowserSetup] = useState<BrowserSetup | null>(null);
   const [connection, setConnection] = useState<BrowserConnection | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<
-    'folder' | 'biometrics' | 'icons' | 'autofill' | 'autofillSettings' | 'timeout' | null
+    Browser | 'folder' | 'biometrics' | 'icons' | 'autofill' | 'autofillSettings' | 'timeout' | null
   >(null);
   const [autoFill, setAutoFill] = useState<MacAutoFillState | null>(null);
   const [timeout, setTimeoutMinutes] = useState<LockTimeoutMinutes | null>(null);
@@ -168,8 +181,24 @@ export function Settings({
       clearTimeout(timer);
     };
   }, [section]);
+  useEffect(() => {
+    if (section !== 'browser') return;
+    let current = true;
+    const refresh = async () => {
+      const result = await window.latch.browserSetup().catch(() => null);
+      if (!current || !alive.current) return;
+      if (result?.ok) setBrowserSetup(result.value);
+      else setError('Could not check browser setup. Reopen Settings to try again.');
+    };
+    void refresh();
+    window.addEventListener('focus', refresh);
+    return () => {
+      current = false;
+      window.removeEventListener('focus', refresh);
+    };
+  }, [section]);
   async function run(
-    kind: 'folder' | 'biometrics' | 'icons' | 'autofill' | 'autofillSettings' | 'timeout',
+    kind: Browser | 'folder' | 'biometrics' | 'icons' | 'autofill' | 'autofillSettings' | 'timeout',
     minutes?: LockTimeoutMinutes,
   ) {
     if (working.current || biometricsBusy || !alive.current) return;
@@ -178,7 +207,11 @@ export function Settings({
     setError('');
     const request = ++epoch.current;
     try {
-      if (kind === 'timeout' && minutes !== undefined) {
+      if (kind === 'safari' || kind === 'chrome' || kind === 'firefox') {
+        const result = await window.latch.connectBrowser(kind);
+        if (!alive.current || request !== epoch.current) return;
+        if (!result.ok) setError(result.error);
+      } else if (kind === 'timeout' && minutes !== undefined) {
         const result = await window.latch.setLockTimeout(minutes);
         if (!alive.current || request !== epoch.current) return;
         if (result.ok) setTimeoutMinutes(result.value);
@@ -381,11 +414,44 @@ export function Settings({
                           : 'Not detected'}
                   </Badge>
                 </div>
-                <div className="settings-row">
-                  <div>
-                    <strong>Add Latch to your browser</strong>
-                    <p>Chrome, Aside, Brave, Edge, Arc and other Chromium browsers.</p>
+                {browsers.map((browser) => (
+                  <div className="settings-row" key={browser.id}>
+                    <div>
+                      <strong>{browser.name}</strong>
+                      <p id={`browser-${browser.id}-description`}>
+                        {browserSetup?.[browser.id].reason ?? browser.description}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      aria-label={
+                        browser.id === 'safari'
+                          ? 'Open Safari extension settings'
+                          : `Install ${browser.name} extension`
+                      }
+                      aria-describedby={`browser-${browser.id}-description`}
+                      onClick={() => void run(browser.id)}
+                      disabled={pending || !browserSetup?.[browser.id].available}
+                    >
+                      {busy === browser.id ? <Spinner /> : <ArrowUpRight data-icon="inline-end" />}
+                      {browser.id === 'safari' ? 'Open settings' : 'Install extension'}
+                    </Button>
                   </div>
+                ))}
+              </div>
+              <p className="settings-caption">
+                Approve the extension in your browser, then open it to connect. Keep Latch running
+                for autofill. The connection above updates automatically.
+              </p>
+              <details className="settings-caption">
+                <summary>Developer installation</summary>
+                <div className="flex flex-col gap-3 pt-3">
+                  <p>
+                    For Chrome, Aside and other Chromium browsers: open the extension folder, enable
+                    Developer mode on your browser’s extensions page, then choose Load unpacked and
+                    select that folder. Reload it after updating Latch.
+                  </p>
                   <Button
                     type="button"
                     variant="outline"
@@ -393,24 +459,10 @@ export function Settings({
                     disabled={pending}
                   >
                     {busy === 'folder' ? <Spinner /> : <ArrowUpRight data-icon="inline-end" />}
-                    Get extension
+                    Open extension folder
                   </Button>
                 </div>
-              </div>
-              <ol className="settings-caption list-decimal space-y-2 pl-5">
-                <li>
-                  Choose <strong>Get extension</strong> to open its folder.
-                </li>
-                <li>
-                  In your browser’s extensions page, turn on <strong>Developer mode</strong>, then
-                  choose <strong>Load unpacked</strong> and select that folder.
-                </li>
-                <li>Open the Latch extension. The status above updates automatically.</li>
-              </ol>
-              <p className="settings-caption">
-                Already installed? Reload the extension after updating Latch. Keep Latch running for
-                autofill.
-              </p>
+              </details>
             </section>
           )}
           {section === 'security' && (

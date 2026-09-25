@@ -21,6 +21,7 @@ import { localEngine } from './engine';
 import { Vault, generatePassword } from './vault';
 import { touchIdSessionStore } from './biometrics';
 import { AccountHints } from './account-hint';
+import { browserSetup, connectBrowser } from './browser-setup';
 import { startBridges } from './bridges';
 import { DesktopLifecycle } from './lifecycle';
 import { MacAutoFill } from './macos-autofill';
@@ -287,6 +288,10 @@ async function handleRequest(request: DesktopRequest): Promise<unknown> {
       return vault.detail(request.id);
     case 'generate':
       return generatePassword(request.options);
+    case 'browserSetup':
+      return browserSetup(macAutoFill);
+    case 'connectBrowser':
+      return connectBrowser(request.browser, macAutoFill);
     case 'browserConnection':
       return bridges.browserConnection();
     case 'openExtensionFolder': {

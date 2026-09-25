@@ -1,5 +1,6 @@
 import AuthenticationServices
 import Foundation
+import SafariServices
 
 // Runs inside Electron: Apple checks the containing app's bundle/entitlements.
 @_cdecl("latch_invoke")
@@ -13,6 +14,27 @@ func invoke(
   DispatchQueue.main.async {
     if operation == "settings" {
       ASSettingsHelper.openCredentialProviderAppSettings { finish(["ok": $0 == nil]) }
+      return
+    }
+    if operation == "safariStatus" || operation == "safariSettings" {
+      guard let extensionURL = Bundle.main.builtInPlugInsURL?.appendingPathComponent("LatchSafari.appex"),
+        FileManager.default.fileExists(atPath: extensionURL.path)
+      else {
+        finish(["ok": operation == "safariStatus", "available": false, "enabled": false])
+        return
+      }
+      let identifier = "app.latch.vault.safari"
+      SFSafariExtensionManager.getStateOfSafariExtension(withIdentifier: identifier) { state, _ in
+        if operation == "safariStatus" {
+          finish(["ok": true, "available": state != nil, "enabled": state?.isEnabled ?? false])
+        } else if state != nil {
+          SFSafariApplication.showPreferencesForExtension(withIdentifier: identifier) {
+            finish(["ok": $0 == nil])
+          }
+        } else {
+          finish(["ok": false])
+        }
+      }
       return
     }
     let bundle = Bundle.main

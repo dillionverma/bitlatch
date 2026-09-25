@@ -132,6 +132,21 @@ export class MacAutoFill {
     await this.call('settings');
   }
 
+  async safariStatus() {
+    const state = await this.call('safariStatus');
+    return { available: !!state.available, enabled: !!state.enabled };
+  }
+
+  async safariSettings() {
+    if (!(await this.safariStatus()).available)
+      throw new UserError('Install a signed Latch app with the Safari extension first.');
+    try {
+      await this.call('safariSettings');
+    } catch {
+      throw new UserError('Could not open Safari settings. Open Safari → Settings → Extensions.');
+    }
+  }
+
   update() {
     // Cancel reads already in progress as soon as the vault locks.
     if (this.vault.snapshot().status !== 'unlocked')

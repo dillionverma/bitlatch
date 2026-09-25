@@ -107,6 +107,10 @@ export const desktopRequestSchema = z.discriminatedUnion('type', [
     })
     .strict(),
   z.object({ type: z.literal('generate'), options: passwordOptionsSchema }).strict(),
+  z.object({ type: z.literal('browserSetup') }).strict(),
+  z
+    .object({ type: z.literal('connectBrowser'), browser: z.enum(['safari', 'chrome', 'firefox']) })
+    .strict(),
   z.object({ type: z.literal('browserConnection') }).strict(),
   z.object({ type: z.literal('openExtensionFolder') }).strict(),
 ]);

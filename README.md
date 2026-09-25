@@ -54,14 +54,14 @@ Keep `bw` on your PATH, or point `LATCH_BW_PATH` to it. Mac previews are not not
 
 ### Browser extensions
 
-Use Latch to fill logins without leaving your browser. Keep the desktop app running. Extensions are installed manually.
+Use Latch to fill logins without leaving your browser. Keep the desktop app running. **Settings → Browser** has separate Safari, Chrome, and Firefox setup buttons. Safari opens its extension settings in supported signed builds. Chrome and Firefox installation buttons become available when their published install links are configured; the current preview still uses the developer setup below.
 
 <details>
 <summary><img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/chrome.svg" width="20" height="20" alt="" /> <strong>Chrome & Chromium browsers</strong></summary>
 
 <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/chrome.svg" width="20" height="20" alt="" /> Chrome · <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/brave.svg" width="20" height="20" alt="" /> Brave · <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/edge.svg" width="20" height="20" alt="" /> Edge · <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/arc_browser.svg" width="20" height="20" alt="" /> Arc · <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/vivaldi.svg" width="20" height="20" alt="" /> Vivaldi · <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/chromium.svg" width="20" height="20" alt="" /> Chromium · Aside
 
-1. In Latch, open **Settings → Browser → Get extension**, or extract the [Chrome ZIP](https://github.com/dillionverma/latch/releases/download/v0.2.1/latch-0.2.1-chrome.zip).
+1. In Latch, open **Settings → Browser → Developer installation → Open extension folder**, or extract the [Chrome ZIP](https://github.com/dillionverma/latch/releases/download/v0.2.1/latch-0.2.1-chrome.zip).
 2. Open your browser's extensions page and enable **Developer mode**.
 3. Choose **Load unpacked** and select the folder Latch opened.
 
@@ -138,6 +138,8 @@ node scripts/release.mjs verify v0.2.1 /path/to/collected-artifacts
 ```
 
 Validation requires matching desktop/extension versions and rejects a local tag pointing at another commit. Artifact verification requires all eleven expected payloads, rejects empty or unexpected files, and writes `SHA256SUMS`. Publication is a separate workflow step that preserves draft and tag checks. The internal shared package is not release-versioned with the apps.
+
+**Browser install buttons.** Set `extensionUrls` in `apps/desktop/src/main/browser-setup.ts` to the published Chrome Web Store listing and Firefox listing or Mozilla-signed HTTPS XPI download. Keep the Chrome store ID aligned with `packages/shared/extension.json` and Firefox's ID with `packages/shared/src/browser-targets.ts` so native messaging remains authorized. URLs stay in the main process; buttons open the selected browser, not the default browser. Safari uses Apple's extension-settings API and is available only when Safari recognizes the bundled extension. Connection status remains shared across browsers.
 
 **Browser packages.** Run `pnpm run extension:zip` for Chrome, Firefox, Safari web assets, and Firefox sources. To rebuild the downloaded sources archive, extract it and run from its root:
 

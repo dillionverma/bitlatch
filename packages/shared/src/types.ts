@@ -171,6 +171,9 @@ export interface MacAutoFillState {
   reason?: string;
 }
 
+export type Browser = 'safari' | 'chrome' | 'firefox';
+export type BrowserSetup = Record<Browser, { available: boolean; reason?: string }>;
+
 export type BrowserConnection = 'connected' | 'not-detected' | 'setup-error';
 
 export interface LatchApi {
@@ -202,6 +205,8 @@ export interface LatchApi {
   restore(id: string): Promise<Result<VaultState>>;
   copy(id: string, field: 'username' | 'password'): Promise<Result<void>>;
   generate(options: PasswordOptions): Promise<Result<string>>;
+  browserSetup(): Promise<Result<BrowserSetup>>;
+  connectBrowser(browser: Browser): Promise<Result<void>>;
   browserConnection(): Promise<Result<BrowserConnection>>;
   openExtensionFolder(): Promise<Result<void>>;
   onState(listener: (state: VaultState) => void): () => void;
