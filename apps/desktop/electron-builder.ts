@@ -37,7 +37,6 @@ export default {
     'dist/desktop/native-host.cjs',
     'node_modules/electron-liquid-glass/prebuilds/**/*',
   ],
-  // Copies Mac icons and embeds extensions only for provisioned builds.
   afterPack: 'build/embed-autofill.cjs',
   mac: {
     target: ['dmg', 'zip'],
