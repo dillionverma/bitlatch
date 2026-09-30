@@ -237,6 +237,8 @@ export class Vault extends EventEmitter {
       server,
     };
     await this.load(generation);
+    await this.rememberForTouchId(session, generation);
+    this.assertGeneration(generation);
     return this.publish();
   }
 
@@ -351,9 +353,27 @@ export class Vault extends EventEmitter {
     this.session = session;
     await this.load(generation);
     // The old key died with the lock, so replace what Touch ID will hand back.
-    if (this.sessions?.enabled()) await this.sessions.keep(session);
+    await this.rememberForTouchId(session, generation);
     this.assertGeneration(generation);
     return this.publish();
+  }
+
+  /**
+   * Touch ID is on by default: a password unlock keeps the session key while
+   * macOS offers Touch ID, unless the user turned it off in Settings. Failing
+   * to keep it only costs Touch ID, so it never fails the unlock.
+   */
+  private async rememberForTouchId(session: string, generation: number) {
+    if (!this.sessions) return;
+    this.assertGeneration(generation);
+    if (
+      this.sessions.enabled() ||
+      (!this.sessions.declined() && this.sessions.status() === 'ready')
+    ) {
+      await this.sessions.keep(session).catch(() => undefined);
+      if (generation !== this.generation) await this.sessions.forget();
+      this.assertGeneration(generation);
+    }
   }
 
   /** Reopens the vault with the session key Touch ID just released. */
@@ -384,7 +404,7 @@ export class Vault extends EventEmitter {
     if (enabled && this.sessions.status() !== 'ready')
       throw new UserError('macOS is not offering Touch ID right now.');
     if (!enabled) {
-      await this.sessions.forget();
+      await this.sessions.forget(true);
       // The stored session is no longer usable after bw lock. Keep the UI and
       // its cached credentials locked too, then prepare a password-only worker.
       return this.lock();

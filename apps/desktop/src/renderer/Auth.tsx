@@ -89,10 +89,27 @@ export function Auth({
     }
   }
   useEffect(() => {
-    if (!touchId || asked.current) return;
-    asked.current = true;
-    void run(() => window.latch.unlockWithBiometrics(), true);
-    // The biometric prompt opens once for this lock screen.
+    if (!touchId) return;
+    // Ask for Touch ID whenever Latch comes to the front while locked. A lock
+    // that happens in the background, such as at the screen lock, must not
+    // spend the prompt before anyone is looking.
+    const ask = () => {
+      if (asked.current || working.current || !document.hasFocus()) return;
+      asked.current = true;
+      void run(() => window.latch.unlockWithBiometrics(), true);
+    };
+    // Leaving Latch re-arms the prompt. The Touch ID sheet itself can take
+    // focus, so a blur while it is open does not, and cancelling cannot loop.
+    const leave = () => {
+      if (!working.current) asked.current = false;
+    };
+    ask();
+    window.addEventListener('focus', ask);
+    window.addEventListener('blur', leave);
+    return () => {
+      window.removeEventListener('focus', ask);
+      window.removeEventListener('blur', leave);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [touchId]);
   function submit(event: FormEvent) {

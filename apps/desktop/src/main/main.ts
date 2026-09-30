@@ -371,7 +371,11 @@ function installMenu() {
         { role: 'about' },
         { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => sendCommand('settings') },
         { type: 'separator' },
-        { label: 'Lock vault', accelerator: 'CmdOrCtrl+L', click: lifecycle.lockInBackground },
+        {
+          label: 'Lock vault',
+          accelerator: 'CmdOrCtrl+L',
+          click: () => void lifecycle.lock().catch(() => undefined),
+        },
         { type: 'separator' },
         { role: 'hide' },
         { role: 'hideOthers' },

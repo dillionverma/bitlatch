@@ -489,15 +489,15 @@ export function Settings({
                     {timeout === null && <NativeSelectOption value="">Loading…</NativeSelectOption>}
                     {lockTimeoutMinutes.map((minutes) => (
                       <NativeSelectOption key={minutes} value={minutes}>
-                        {minutes === 0 ? 'On sleep or screen lock' : `${minutes} minutes`}
+                        {minutes === 0 ? 'Never' : `${minutes} minutes`}
                       </NativeSelectOption>
                     ))}
                   </NativeSelect>
                 </Field>
               </FieldGroup>
               <p id="lock-timeout-limits" className="settings-caption">
-                Your vault always locks when your Mac sleeps or the screen locks. Lock anytime with
-                ⌘L.
+                Timed locking also locks on sleep or screen lock. Never keeps the vault unlocked
+                until you lock it or quit Latch. Lock anytime with ⌘L.
               </p>
               <h3>Unlock</h3>
               <FieldGroup className="settings-group">

@@ -1,5 +1,5 @@
 import { isLocalHost } from '@latch/shared/urls';
-import { getDomain } from 'tldts';
+import { parse } from 'tldts';
 
 export interface CipherUri {
   uri: string | null;
@@ -8,10 +8,20 @@ export interface CipherUri {
 
 /** A web address Latch is willing to store on an item. */
 export function webUrl(input: string): URL | null {
+  return parsedWebUrl(input)?.url ?? null;
+}
+
+function parsedWebUrl(input: string): { url: URL; explicitPort: boolean } | null {
+  // Reject repairs that URL would silently make to malformed authorities.
+  if (/[\s\p{Cc}\\]/u.test(input)) return null;
+  const authority = /^https?:\/\/([^/?#]+)/i.exec(input)?.[1];
+  if (!authority) return null;
+  const host = /^(?:\[[0-9a-f:.]+\]|[^:@[\]]+)(?::(\d+))?$/i.exec(authority);
+  if (!host) return null;
   try {
     const url = new URL(input);
     if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) return null;
-    return url;
+    return { url, explicitPort: host[1] !== undefined };
   } catch {
     return null;
   }
@@ -31,23 +41,42 @@ export function fillableUrl(input: string): URL | null {
 }
 
 export function matchesUri(entry: CipherUri, target: string): boolean {
-  if (!entry.uri || entry.match === 5 || entry.match === 4) return false;
+  const mode = entry.match ?? 1;
+  if (!entry.uri || ![0, 1, 2, 3].includes(mode)) return false;
   const destination = fillableUrl(target);
-  const saved = webUrl(entry.uri.includes('://') ? entry.uri : `https://${entry.uri}`);
-  if (!destination || !saved || saved.protocol !== destination.protocol) return false;
-  if (entry.match === 3) return saved.href === destination.href;
-  if (entry.match === 2)
+  if (!destination) return false;
+  const hasScheme = /^[a-z][a-z\d+.-]*:\/\//i.test(entry.uri);
+  // Single-label host:port is ambiguous with URI schemes. Require HTTP(S),
+  // except for localhost; dotted hosts and bracketed IPv6 are unambiguous here.
+  const schemeLike = /^[a-z][a-z\d+.-]*:/i.exec(entry.uri)?.[0];
+  if (
+    !hasScheme &&
+    schemeLike &&
+    !schemeLike.includes('.') &&
+    schemeLike.toLowerCase() !== 'localhost:'
+  )
+    return false;
+  const scheme = mode === 2 || mode === 3 ? 'https:' : destination.protocol;
+  const parsed = parsedWebUrl(hasScheme ? entry.uri : `${scheme}//${entry.uri}`);
+  if (!parsed || parsed.url.protocol !== destination.protocol) return false;
+  const saved = parsed.url;
+  if (mode === 3) return saved.href === destination.href;
+  if (mode === 2)
     return saved.origin === destination.origin && destination.href.startsWith(saved.href);
-  // The CLI does not expose each client's default URI setting. Use a strict host
-  // fallback; only an explicit base-domain rule may include sibling subdomains.
-  if (entry.match === 1 || entry.match === undefined || entry.match === null)
-    return saved.host === destination.host;
-  if (entry.match !== 0) return false;
-  if (saved.port !== destination.port) return false;
-  const savedDomain = getDomain(saved.hostname, { allowPrivateDomains: true }) ?? saved.hostname;
-  const targetDomain =
-    getDomain(destination.hostname, { allowPrivateDomains: true }) ?? destination.hostname;
-  return savedDomain === targetDomain;
+  // URL removes explicit default ports, so retain their presence from the input.
+  if (parsed.explicitPort && saved.port !== destination.port) return false;
+  if (saved.hostname === destination.hostname) return true;
+  // The CLI does not expose the client's default rule. Only an explicit base-
+  // domain rule may include sibling subdomains, and only under a known suffix.
+  if (mode !== 0) return false;
+  const savedDomain = registrableDomain(saved.hostname);
+  return savedDomain !== null && savedDomain === registrableDomain(destination.hostname);
+}
+
+function registrableDomain(hostname: string): string | null {
+  const result = parse(hostname, { allowPrivateDomains: true });
+  if (!result.domain || (!result.isIcann && !result.isPrivate)) return null;
+  return result.domain + (hostname.endsWith('.') ? '.' : '');
 }
 
 export function normalizeServer(input: string): string {

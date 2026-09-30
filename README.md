@@ -111,6 +111,10 @@ pnpm run dev
 
 Run `pnpm run check` and `pnpm run build` before submitting changes. The first checks formatting, lint, and types; the second builds all targets. The workspace uses Electron, [Vite+](https://viteplus.dev), and WXT with one install and lockfile.
 
+`pnpm run test:matcher` runs the synthetic URL-matching suite and is included in `pnpm run check`. Default and Host matching require the same hostname. Base domain also includes subdomains under recognized public or private suffixes. An omitted port matches any port; an explicit port stays restrictive, including `:443` and `:80`. Explicit schemes must match. Scheme-less host/domain entries allow HTTPS or approved local HTTP. Ambiguous single-label names with ports need an explicit scheme, except `localhost:port`. Exact and Starts with retain full-URL and same-origin restrictions. Regex and Never do not autofill.
+
+On supported Macs, a password unlock enables Touch ID unless it was turned off in Settings. The locked app requests Touch ID when brought to the front. Auto-lock defaults to Never, including sleep and screen lock; manual lock and quitting still lock immediately. Selecting an idle timeout also enables locking on sleep and screen lock.
+
 <details>
 <summary>Packaging and release notes</summary>
 

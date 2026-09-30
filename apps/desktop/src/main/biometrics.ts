@@ -24,20 +24,31 @@ export interface SessionStore {
   load(): Promise<void>;
   /** Whether a session key is currently being kept. */
   enabled(): boolean;
+  /** Whether the user turned Touch ID off, which stops it being kept by default. */
+  declined(): boolean;
   keep(session: string): Promise<void>;
   /** Asks for Touch ID, then returns the stored session key. */
   recall(): Promise<string>;
-  forget(): Promise<void>;
+  /** Removes the stored key; `decline` also remembers that the user turned it off. */
+  forget(decline?: boolean): Promise<void>;
 }
 
 export function touchIdSessionStore(dataDir: string): SessionStore {
   const file = join(dataDir, 'touch-id-session');
+  const declinedFile = join(dataDir, 'touch-id-off');
   let stored: Buffer | undefined;
+  let off = false;
   let loaded = false;
 
   async function read() {
     if (!loaded) {
-      stored = await readFile(file).catch(() => undefined);
+      [stored, off] = await Promise.all([
+        readFile(file).catch(() => undefined),
+        readFile(declinedFile).then(
+          () => true,
+          () => false,
+        ),
+      ]);
       loaded = true;
     }
     return stored;
@@ -59,11 +70,16 @@ export function touchIdSessionStore(dataDir: string): SessionStore {
     enabled() {
       return Boolean(stored);
     },
+    declined() {
+      return off;
+    },
     async keep(session: string) {
       await mkdir(dirname(file), { recursive: true, mode: 0o700 });
       const encrypted = safeStorage.encryptString(session);
       await writeFile(file, encrypted, { mode: 0o600 });
+      await rm(declinedFile, { force: true });
       stored = encrypted;
+      off = false;
       loaded = true;
     },
     async recall() {
@@ -72,10 +88,15 @@ export function touchIdSessionStore(dataDir: string): SessionStore {
       await systemPreferences.promptTouchID('unlock your Latch vault');
       return safeStorage.decryptString(encrypted);
     },
-    async forget() {
+    async forget(decline = false) {
       stored = undefined;
       loaded = true;
       await rm(file, { force: true });
+      if (decline) {
+        await mkdir(dirname(declinedFile), { recursive: true, mode: 0o700 });
+        await writeFile(declinedFile, '', { mode: 0o600 });
+        off = true;
+      }
     },
   };
 }

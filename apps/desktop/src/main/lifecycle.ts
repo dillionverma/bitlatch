@@ -22,7 +22,7 @@ export class DesktopLifecycle {
   private copiedValue = '';
   private clipboardTimer?: NodeJS.Timeout;
   private clipboardQueue: Promise<void> = Promise.resolve();
-  lockTimeoutMinutes: LockTimeoutMinutes = 5;
+  lockTimeoutMinutes: LockTimeoutMinutes = 0;
   private preferencePath = '';
   private preferenceQueue: Promise<unknown> = Promise.resolve();
 
@@ -55,7 +55,7 @@ export class DesktopLifecycle {
       const parsed = lockTimeoutSchema.safeParse(stored.lockTimeoutMinutes);
       if (parsed.success) this.lockTimeoutMinutes = parsed.data;
     } catch {
-      // Missing or damaged preferences retain the five-minute default.
+      // Missing or damaged preferences retain manual locking.
     }
   }
 
@@ -117,6 +117,7 @@ export class DesktopLifecycle {
   }
 
   readonly lockInBackground = () => {
+    if (this.lockTimeoutMinutes === 0) return;
     void this.lock().catch(() => undefined);
   };
 
