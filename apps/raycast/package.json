@@ -32,15 +32,20 @@
   ],
   "scripts": {
     "dev": "ray develop",
-    "build": "ray build",
-    "typecheck": "vp lint src"
+    "build": "ray build -e dist",
+    "typecheck": "vp lint src",
+    "lint": "ray lint"
   },
   "dependencies": {
-    "@raycast/api": "2.4.1",
+    "@raycast/api": "2.6.0",
     "@latch/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "22.19.17",
-    "@types/react": "19.0.10"
+    "@types/react": "19.0.10",
+    "@raycast/eslint-config": "2.2.0",
+    "eslint": "10.11.0",
+    "prettier": "3.9.9",
+    "typescript": "5.9.3"
   }
 }

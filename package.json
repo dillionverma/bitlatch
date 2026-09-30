@@ -28,7 +28,8 @@
     "extension:submit": "vp run @latch/extension#submit",
     "extension:dev:firefox": "vp run @latch/extension#dev:firefox",
     "package:dir": "vp run @latch/desktop#package:dir",
-    "package:mac:signed": "vp run @latch/desktop#package:mac:signed"
+    "package:mac:signed": "vp run @latch/desktop#package:mac:signed",
+    "package:raycast": "node scripts/package-raycast.mjs"
   },
   "devDependencies": {
     "vite-plus": "1.0.0-rc.0"

@@ -1,24 +1,39 @@
 # Latch for Raycast
 
-Private macOS extension. Commands: **Search Vault** and **Lock Vault**.
+Search your Latch vault, copy credentials and secure notes, and lock your vault from Raycast.
 
-Install the latest Latch app in `/Applications/Latch.app`, then run from the repository root:
+## Setup
+
+1. [Download Latch](https://github.com/dillionverma/latch/releases) for macOS 14 or later on Apple Silicon.
+2. Install Latch in `/Applications`, open it, and complete sign-in.
+3. Keep Latch running, then open **Search Vault** in Raycast.
+
+Unlock with your master password or use Touch ID when enabled in Latch. No separate Bitwarden login is needed.
+
+## Commands
+
+- **Search Vault** searches personal logins and secure notes. Open an item to view details or copy a field.
+- **Lock Vault** locks Latch immediately.
+
+Latch clears copied values after 30 seconds or when locked, if the clipboard still contains that value. The extension connects to Latch locally and does not save a vault cache. Website logos use Bitwarden's icon service when enabled in Latch.
+
+## Install from source
+
+With Node.js 22.22.2 or later installed, open the standalone source download and run:
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm --filter latch dev
+npm ci
+npm run dev
 ```
 
-The extension lives in `apps/raycast`; its package name remains `latch` for
-Raycast. It uses the root pnpm install and lockfile alongside desktop, browser,
-and `packages/shared`; no second install is needed.
+Raycast imports the extension. You can stop the development command after the initial build.
 
-Raycast imports the development extension. No Store publication or second Bitwarden login is needed. Unlock directly in Raycast using your master password, or choose Touch ID from the actions when it is available and enabled. First-time sign-in still happens in Latch. Enter opens an item detail page. Logins show compact field rows: Enter copies the selected username/password or opens the website. Nonempty notes open a full-width reading view, and secure notes use that view directly; Command-P copies a password, Command-U a username, Command-N the note, and Command-Shift-C the website. Command-Shift-L locks the vault. Latch clears copied values after 30 seconds, or when locked, provided the clipboard still contains that value.
+From the Latch repository, use `pnpm install --frozen-lockfile` and `pnpm --filter latch dev` instead.
 
-Search runs against Latch's in-memory personal login and secure-note index. Queries debounce for 100 ms, return at most 80 matches, and refresh every two seconds while open. Search/detail requests time out after five seconds; unlocking allows up to two minutes for the CLI or system authentication. Superseded requests are cancelled. Existing rows stay visible during typing; the loading indicator is only shown for the initial connection. No CLI process is started per search; no persistent vault cache is written by the extension. Unlock passwords stay in the non-draft form until submission succeeds or the form closes. Locked/disconnected states clear displayed results on the next refresh; every copy is checked immediately by Latch.
+## Prepare a Store submission
 
-Website logos use Bitwarden’s icon service and follow Latch’s website-icon setting. Only public website hostnames are sent, never paths, usernames, IP addresses, or local hostnames. Raycast handles image loading/caching with a key icon as fallback; logo requests do not delay search results.
+From the Latch repository, run `pnpm run package:raycast`. This creates a standalone extension in `release/raycast/latch` and a source ZIP in `release`. It installs locked dependencies, builds, and lints the exported extension without publishing it.
 
-The separate Raycast socket and rotating token are readable only by the current macOS user. This is a local-user trust boundary, not cryptographic verification of Raycast's process identity. The browser socket retains its own token and request schema. Raycast can unlock through the existing Latch authentication path and read selected note content, but cannot export, edit, or receive saved login passwords through this protocol. Detail pages refresh every two seconds and clear on lock/disconnect; note content is rendered literally, without fetching embedded Markdown images. It asks Latch to copy the chosen field using the desktop app's existing clipboard lifecycle.
+When dependencies change, run `pnpm run package:raycast --update-lock` and commit `apps/raycast/store/package-lock.json` with the manifest and pnpm lockfile.
 
-From the repository root, use `pnpm --filter latch typecheck` and `pnpm --filter latch build` for Raycast alone. Root `pnpm run check` includes Raycast checks and its production build alongside the other apps. No automated test suite. To manually check: inline unlock, incorrect-password retry, login/note search, detail pages, each copy action, lock while details are visible, then attempt another copy; restart Latch and check reconnection.
+Before submitting, make the Latch download accessible, capture Raycast screenshots using synthetic data, and manually check unlock, search, copy, lock, and reconnection. After reviewing the exported files, run `npm run publish` from `release/raycast/latch` to open the public Raycast Store pull request.
