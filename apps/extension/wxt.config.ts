@@ -36,7 +36,7 @@ export default defineConfig({
       'tsconfig.json',
       'vite.config.mjs',
       'LICENSE',
-      '{README,INSTALL,CONTRIBUTING}.md',
+      'README.md',
     ],
     excludeSources: ['**/node_modules/**', '**/.output/**', '**/.wxt/**'],
   },
