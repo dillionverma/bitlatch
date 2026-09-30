@@ -63,6 +63,10 @@ brew install --cask dillionverma/tap/latch
 
 [Download source ZIP](https://github.com/dillionverma/latch/releases/download/v0.3.0/latch-0.3.0-raycast.zip) · [Setup](apps/raycast/README.md#install-from-source). Store installation coming soon.
 
+<p align="center">
+  <img src="assets/readme/raycast.png" alt="Latch vault search in Raycast with synthetic demo accounts on the macOS Golden Gate wallpaper." width="720" />
+</p>
+
 ## Development
 
 ```sh
