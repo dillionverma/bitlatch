@@ -85,7 +85,16 @@ if (safari) {
 }
 execFileSync(
   'pnpm',
-  ['exec', 'electron-builder', '--mac', 'dir', '--arm64', '--publish', 'never'],
+  [
+    'exec',
+    'electron-builder',
+    '--mac',
+    'dir',
+    '--arm64',
+    '--publish',
+    'never',
+    '--config.mac.identity=null',
+  ],
   {
     cwd: root,
     env,

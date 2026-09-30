@@ -13,7 +13,7 @@
    - Windows x64: [installer](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-win-x64.exe).
    - Linux: use the AppImage or deb for x64 or arm64 from the assets below.
 2. Install the [official Bitwarden CLI](https://bitwarden.com/help/cli/) separately. Use `brew install bitwarden-cli` on Mac, or `npm install -g @bitwarden/cli` with Node.js and npm on Windows or Linux.
-3. Open Latch and sign in. On Mac, try opening Latch once, then use **System Settings → Privacy & Security → Open Anyway** if macOS blocks the unsigned app. Confirm **Open**.
+3. Open Latch and sign in. On Mac, try opening Latch once, then use **System Settings → Privacy & Security → Open Anyway** if macOS blocks the non-notarized app. Confirm **Open**.
 4. For Chrome or Aside, open **Settings → Browser → Developer installation → Open extension folder** in Latch. Enable **Developer mode** on your browser's extensions page, choose **Load unpacked**, and select that folder. Keep Latch running and open the extension to connect.
 
 The standalone [Chrome ZIP](https://github.com/dillionverma/latch/releases/download/v0.3.0/latch-0.3.0-chrome.zip) also works. Extract it to a permanent folder before loading it. [Full installation instructions](https://github.com/dillionverma/latch/blob/v0.3.0/README.md#installation) cover each platform. `SHA256SUMS` covers every release download.
@@ -24,7 +24,7 @@ Preview releases do not update automatically. Quit Latch and replace the install
 
 ## Preview limits
 
-- Mac packages are not notarized. Windows packages are not code-signed. Windows and Linux still need end-to-end verification.
+- Mac packages are ad-hoc signed, not Developer ID signed or notarized. Windows packages are not code-signed. Windows and Linux still need end-to-end verification.
 - Chrome and Aside have been verified. Other Chromium browsers still need end-to-end verification. Developer mode is required for unpacked installation.
 - Firefox 140+ can load the unsigned Firefox ZIP through **about:debugging → This Firefox → Load Temporary Add-on** after extraction. Select `manifest.json`. Repeat after restarting Firefox. End-to-end verification is pending.
 - Safari and native macOS AutoFill require Apple signing and provisioning. The Safari ZIP contains developer web assets, not an installable extension.

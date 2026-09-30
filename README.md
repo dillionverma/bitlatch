@@ -39,7 +39,7 @@ Latch is an alternative client for your existing Bitwarden vault, designed aroun
 | <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/linux.svg" width="20" height="20" alt="" /> **Linux**                                                                                                                                                                                                                | Experimental · AppImage, deb | [x64](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-linux-x86_64.AppImage) · [arm64](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-linux-arm64.AppImage) · [deb](https://github.com/dillionverma/latch/releases/tag/v0.3.0) |
 | <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/windows.svg" width="20" height="20" alt="" /> **Windows**                                                                                                                                                                                                            | Experimental · x64           | [Installer](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-win-x64.exe)                                                                                                                                                                                   |
 
-Unsigned previews. Linux and Windows are experimental. [All downloads and checksums →](https://github.com/dillionverma/latch/releases/tag/v0.3.0)
+Preview builds. Mac packages are ad-hoc signed and not notarized. Windows packages are unsigned. Linux and Windows are experimental. [All downloads and checksums →](https://github.com/dillionverma/latch/releases/tag/v0.3.0)
 
 While this repository is private, sign in to a GitHub account with repository access to download releases.
 
@@ -48,7 +48,7 @@ While this repository is private, sign in to a GitHub account with repository ac
 
 1. Install the [official Bitwarden CLI](https://bitwarden.com/help/cli/) separately. On Mac, run `brew install bitwarden-cli`. On Windows or Linux with Node.js and npm installed, run `npm install -g @bitwarden/cli`.
 2. Install Latch for your platform:
-   - **Mac:** open the DMG and drag Latch to **Applications**, or extract the ZIP and move `Latch.app` there. Open Latch once. If macOS blocks the unsigned app, open **System Settings → Privacy & Security → Open Anyway**, then confirm **Open**. See [Apple's instructions](https://support.apple.com/en-us/102445).
+   - **Mac:** open the DMG and drag Latch to **Applications**, or extract the ZIP and move `Latch.app` there. Open Latch once. If macOS blocks the non-notarized app, open **System Settings → Privacy & Security → Open Anyway**, then confirm **Open**. See [Apple's instructions](https://support.apple.com/en-us/102445).
    - **Windows:** run the x64 installer. This preview is not code-signed, so Windows may show an unrecognized-app warning.
    - **Linux:** install the deb for your architecture with your package manager. For an AppImage, run `chmod +x Latch-0.3.0-linux-*.AppImage`, then open the downloaded file.
 3. Start Latch and sign in to your Bitwarden account. If Latch was already open when you installed the CLI, quit and reopen it first.
@@ -95,7 +95,7 @@ Temporary installation lasts until Firefox restarts. Repeat these steps after ea
 <details>
 <summary><img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/safari.svg" width="20" height="20" alt="" /> <strong>Safari</strong> · signed builds</summary>
 
-The unsigned preview does not include a working Safari integration. Safari and native macOS AutoFill require a signed app with matching Apple provisioning profiles. The [Safari ZIP](https://github.com/dillionverma/latch/releases/download/v0.3.0/latch-0.3.0-safari.zip) contains web assets for developers, not an installable app.
+The non-notarized preview does not include a working Safari integration. Safari and native macOS AutoFill require a signed app with matching Apple provisioning profiles. The [Safari ZIP](https://github.com/dillionverma/latch/releases/download/v0.3.0/latch-0.3.0-safari.zip) contains web assets for developers, not an installable app.
 
 - **Safari extension:** build with `pnpm run package:autofill` and provide `LATCH_SAFARI_PROFILE` alongside the app and AutoFill profiles. Its app group must match Latch's. End-to-end verification is pending.
 - **macOS AutoFill:** follow the [signing and setup guide](apps/desktop/native/autofill/README.md).
@@ -140,7 +140,7 @@ The [desktop workflow](.github/workflows/desktop.yml) builds macOS arm64, Window
 
 Desktop builds depend only on Chrome assets. The root build adds Firefox, Safari, the native Safari wrapper on macOS, and Raycast. WXT targets run sequentially because they share generated types. Signed packaging builds Safari only when its profile is supplied. Build caching remains disabled for host- and signing-dependent tasks.
 
-**Releases.** `pnpm run package:dir` creates an unsigned, non-notarized Mac app. `pnpm run package:mac:signed` requires Apple signing inputs and notarizes without publishing. The [release workflow](.github/workflows/release.yml) checks, builds, and publishes all desktop and browser packages with SHA-256 checksums. Push a matching `vX.Y.Z` tag or run it manually with the version; manual runs create the tag only after successful builds. The separate [signed macOS workflow](.github/workflows/release-macos-signed.yml) produces notarized artifacts for an existing tag without modifying published releases. Add `LATCH_SAFARI_PROFILE_BASE64` to include Safari.
+**Releases.** `pnpm run package:dir` creates an ad-hoc signed, non-notarized Mac app without the provisioned macOS extensions. `pnpm run package:mac:signed` requires Apple signing inputs and notarizes without publishing. The [release workflow](.github/workflows/release.yml) checks, builds, and publishes all desktop and browser packages with SHA-256 checksums. Push a matching `vX.Y.Z` tag or run it manually with the version; manual runs create the tag only after successful builds. The separate [signed macOS workflow](.github/workflows/release-macos-signed.yml) produces notarized artifacts for an existing tag without modifying published releases. Add `LATCH_SAFARI_PROFILE_BASE64` to include Safari.
 
 Release logic lives in `scripts/release.mjs`; `.github/release-notes.md` holds the preview notes. Artifact checks run locally without publishing:
 

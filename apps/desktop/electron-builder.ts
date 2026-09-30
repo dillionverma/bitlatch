@@ -15,8 +15,6 @@ function compressDmgs({ artifactPaths }: BuildResult) {
   return [];
 }
 
-// Signing stays outside this file: macOS AutoFill builds are signed by
-// build/package-autofill.mjs, and other packages are unsigned for now.
 export default {
   appId: 'app.latch.vault',
   productName: 'Latch',
@@ -39,13 +37,14 @@ export default {
     'dist/desktop/native-host.cjs',
     'node_modules/electron-liquid-glass/prebuilds/**/*',
   ],
-  // Embeds the macOS AutoFill and Safari extensions; a no-op elsewhere.
+  // Copies Mac icons and embeds extensions only for provisioned builds.
   afterPack: 'build/embed-autofill.cjs',
   mac: {
     target: ['dmg', 'zip'],
     icon: 'dist/native/LatchAutoFill.appex/Contents/Resources/Latch.icns',
     category: 'public.app-category.productivity',
-    identity: null,
+    identity: '-',
+    minimumSystemVersion: '14.0',
     hardenedRuntime: true,
     publish:
       process.env.LATCH_RELEASE === '1'

@@ -30,6 +30,13 @@ exports.default = async function ({ appOutDir, electronPlatformName, packager })
   info.CFBundleIconName = 'Latch';
   info.CFBundleIconFile = 'Latch.icns';
   await writeFile(infoPath, plist.build(info));
+  if (
+    packager.platformSpecificBuildOptions.identity !== null ||
+    !process.env.LATCH_SIGN_IDENTITY ||
+    !process.env.LATCH_APP_PROFILE ||
+    !process.env.LATCH_AUTOFILL_PROFILE
+  )
+    return;
   const plugins = path.join(appOutDir, 'Latch.app/Contents/PlugIns');
   await mkdir(plugins, { recursive: true });
   await cp(
