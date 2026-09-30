@@ -22,7 +22,7 @@ Latch is an alternative client for your existing Bitwarden vault, designed aroun
 
 ## Highlights
 
-- ✨ **A more considered interface.** Clear layouts, light and dark themes, and a glass finish on macOS.
+- ✨ **A more considered interface.** Clear layouts, a light theme, and a glass finish on macOS.
 - ⚡ **Keep your hands on the keyboard.** Jump to search with ⌘K / Ctrl+K, find a login, and copy what you need.
 - 🌐 **Fill where you browse.** Bring Latch to Chrome, Aside, and other browsers. [See browser availability](#browser-extensions).
 - 🚀 **Your vault in Raycast.** Search, unlock, and copy credentials straight from your launcher on Mac.
@@ -52,7 +52,11 @@ brew install --cask dillionverma/tap/latch
 - <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/firefox.svg" width="20" height="20" alt="" /> **Firefox preview:** [Download](https://github.com/dillionverma/latch/releases/download/v0.3.0/latch-0.3.0-firefox.zip) · [Setup](https://extensionworkshop.com/documentation/develop/temporary-installation-in-firefox/)
 
 <p align="center">
-  <img src="assets/readme/browser.png" alt="Latch browser popup and autofill suggestions on a demo sign-in page, with synthetic accounts against a soft blue and sand background." width="1080" />
+  <img src="assets/readme/popup.png" alt="Latch extension popup in light mode with demo vault items." width="720" />
+</p>
+
+<p align="center">
+  <img src="assets/readme/autofill.png" alt="Latch autofill suggestions in light mode on a demo sign-in page." width="720" />
 </p>
 
 ### <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/raycast.svg" width="20" height="20" alt="" /> Raycast
