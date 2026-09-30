@@ -34,6 +34,7 @@ const manifest = readJson(resolve(source, 'package.json'));
 delete manifest.dependencies['@latch/shared'];
 delete manifest.scripts.typecheck;
 manifest.access = 'public';
+manifest.scripts.build = 'ray build -e dist';
 manifest.scripts.publish = 'npx @raycast/api@latest publish';
 manifest.dependencies.zod = readJson(
   resolve(root, 'packages/shared/package.json'),
