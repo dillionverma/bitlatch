@@ -36,37 +36,22 @@ Latch is an alternative client for your existing Bitwarden vault, designed aroun
 _Coming soon. Planned command:_
 
 ```sh
-brew install --cask dillionverma/tap/latch
-```
-
-### Prerequisites
-
-A Bitwarden account and the [official Bitwarden CLI](https://bitwarden.com/help/cli/). On macOS:
-
-```sh
 brew install bitwarden-cli
+brew install --cask dillionverma/tap/latch
 ```
 
 ### Direct download
 
-- **macOS 14+ · Apple Silicon:** [DMG](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-mac-arm64.dmg)
-- **Windows · x64:** [Installer](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-win-x64.exe) · experimental
-- **Linux · x64 / ARM64:** [AppImage & deb](https://github.com/dillionverma/latch/releases/tag/v0.3.0) · experimental
-
-Install Latch, open it, and sign in. On Mac, move it to Applications first.
-
-Mac previews are not notarized ([first-launch help](https://support.apple.com/en-us/102445)); Windows builds are unsigned. [All downloads & checksums](https://github.com/dillionverma/latch/releases/tag/v0.3.0).
+- <picture><source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/apple_dark.svg" /><img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/apple.svg" width="20" height="20" alt="" /></picture> **macOS 14+ · Apple Silicon:** [DMG](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-mac-arm64.dmg)
+- <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/windows.svg" width="20" height="20" alt="" /> **Windows · x64:** [Installer](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-win-x64.exe) · experimental
+- <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/linux.svg" width="20" height="20" alt="" /> **Linux · x64 / ARM64:** [AppImage & deb](https://github.com/dillionverma/latch/releases/tag/v0.3.0) · experimental
 
 ### Browser extensions
 
-- **Chrome, Edge, Brave, Arc, Aside, Vivaldi & Chromium:** [Download](https://github.com/dillionverma/latch/releases/download/v0.3.0/latch-0.3.0-chrome.zip) · [Setup](https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked)
-- **Firefox preview:** [Download](https://github.com/dillionverma/latch/releases/download/v0.3.0/latch-0.3.0-firefox.zip) · [Setup](https://extensionworkshop.com/documentation/develop/temporary-installation-in-firefox/)
+- <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/chrome.svg" width="20" height="20" alt="" /> Chrome, <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/edge.svg" width="20" height="20" alt="" /> Edge, <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/brave.svg" width="20" height="20" alt="" /> Brave, <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/arc_browser.svg" width="20" height="20" alt="" /> Arc, Aside, <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/vivaldi.svg" width="20" height="20" alt="" /> Vivaldi & <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/chromium.svg" width="20" height="20" alt="" /> Chromium: [Download](https://github.com/dillionverma/latch/releases/download/v0.3.0/latch-0.3.0-chrome.zip) · [Setup](https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked)
+- <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/firefox.svg" width="20" height="20" alt="" /> **Firefox preview:** [Download](https://github.com/dillionverma/latch/releases/download/v0.3.0/latch-0.3.0-firefox.zip) · [Setup](https://extensionworkshop.com/documentation/develop/temporary-installation-in-firefox/)
 
-Extract the ZIP before setup. Keep Latch running and your vault unlocked. Safari is not available in this preview.
-
-### Raycast
-
-Search your vault, copy credentials, and lock Latch from Raycast on macOS.
+### <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/raycast.svg" width="20" height="20" alt="" /> Raycast
 
 [Download source ZIP](https://github.com/dillionverma/latch/releases/download/v0.3.0/latch-0.3.0-raycast.zip) · [Setup](apps/raycast/README.md#install-from-source). Store installation coming soon.
 
@@ -83,7 +68,7 @@ pnpm run dev
 
 Run `pnpm run check` and `pnpm run build` before submitting changes.
 
-[Contributing](CONTRIBUTING.md) · [Release workflow](.github/workflows/release.yml)
+[Release workflow](.github/workflows/release.yml)
 
 ## License
 
