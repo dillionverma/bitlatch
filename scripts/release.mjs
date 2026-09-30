@@ -35,7 +35,9 @@ function verifyAssets() {
     `Latch-${version}-linux-arm64.AppImage`,
     `Latch-${version}-linux-arm64.deb`,
     `Latch-${version}-win-x64.exe`,
-    ...['chrome', 'firefox', 'safari', 'sources'].map((target) => `latch-${version}-${target}.zip`),
+    ...['chrome', 'firefox', 'safari', 'sources', 'raycast'].map(
+      (target) => `latch-${version}-${target}.zip`,
+    ),
   ];
   const files = readdirSync(directory)
     .filter((name) => name !== 'SHA256SUMS')
