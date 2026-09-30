@@ -441,7 +441,7 @@ export function Settings({
                 ))}
               </div>
               <p className="settings-caption">
-                Approve the extension in your browser, then open it to connect. Keep Latch running
+                Install the extension in your browser, then open it to connect. Keep Latch running
                 for autofill. The connection above updates automatically.
               </p>
               <details className="settings-caption">
@@ -450,7 +450,8 @@ export function Settings({
                   <p>
                     For Chrome, Aside and other Chromium browsers: open the extension folder, enable
                     Developer mode on your browser’s extensions page, then choose Load unpacked and
-                    select that folder. Reload it after updating Latch.
+                    select that folder. After updating Latch, reload the extension and refresh open
+                    website tabs.
                   </p>
                   <Button
                     type="button"

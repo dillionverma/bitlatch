@@ -28,13 +28,13 @@ export async function browserSetup(macAutoFill: MacAutoFill): Promise<BrowserSet
       available: !!extensionUrls.chrome,
       reason: extensionUrls.chrome
         ? undefined
-        : 'The Chrome extension is not available to install yet.',
+        : 'No Chrome Web Store listing. Use Developer installation below.',
     },
     firefox: {
       available: !!extensionUrls.firefox,
       reason: extensionUrls.firefox
         ? undefined
-        : 'The Firefox extension is not available to install yet.',
+        : 'No signed Firefox download. Load the GitHub preview as a temporary add-on.',
     },
   };
 }
