@@ -54,7 +54,7 @@ Keep `bw` on your PATH, or point `LATCH_BW_PATH` to it. Mac previews are not not
 
 ### Browser extensions
 
-Use Latch to fill logins without leaving your browser. Keep the desktop app running. **Settings → Browser** has separate Safari, Chrome, and Firefox setup buttons. Safari opens its extension settings in supported signed builds. Chrome and Firefox installation buttons become available when their published install links are configured; the current preview still uses the developer setup below.
+Search your vault from the extension, filter by favorites, website, or item type, and copy login fields or secure notes. Use the Latch button in a login field to fill an account. Keep the desktop app running. **Settings → Browser** has separate Safari, Chrome, and Firefox setup buttons. Safari opens its extension settings in supported signed builds. Chrome and Firefox installation buttons become available when their published install links are configured; the current preview still uses the developer setup below.
 
 <details>
 <summary><img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/chrome.svg" width="20" height="20" alt="" /> <strong>Chrome & Chromium browsers</strong></summary>

@@ -163,6 +163,13 @@ export interface BrowserMatches {
   items: ItemSummary[];
 }
 
+export interface BrowserVaultPage {
+  state: VaultStatus;
+  revision: number;
+  items: ItemSummary[];
+  total: number;
+}
+
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
 export interface MacAutoFillState {

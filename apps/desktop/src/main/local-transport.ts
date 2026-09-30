@@ -15,6 +15,7 @@ export interface LocalTransportOptions<Request> {
   dataDir: string;
   requestTimeout?: (request: Request) => number;
   handle: (request: Request) => unknown;
+  responseGuard?: (request: Request) => () => void;
 }
 
 export class LocalTransport<Request> {
@@ -87,6 +88,7 @@ export class LocalTransport<Request> {
       }
       if (!buffer.includes('\n')) return;
       processed = true;
+      let guard: (() => void) | undefined;
       void safely(async () => {
         const message: unknown = JSON.parse(buffer.slice(0, buffer.indexOf('\n')));
         buffer = '';
@@ -106,8 +108,14 @@ export class LocalTransport<Request> {
         if (!parsed.success) throw new UserError('Unsupported browser request.');
         if (this.options.requestTimeout)
           socket.setTimeout(this.options.requestTimeout(parsed.data));
+        guard = this.options.responseGuard?.(parsed.data);
         return this.options.handle(parsed.data);
       }).then((response) => {
+        try {
+          guard?.();
+        } catch {
+          response = { ok: false, error: 'Vault locked. Try again after unlocking.' };
+        }
         if (!socket.destroyed) socket.end(`${JSON.stringify(response)}\n`);
       });
     });

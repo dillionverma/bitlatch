@@ -6,17 +6,73 @@
     <title>Latch</title>
   </head>
   <body>
-    <header>
-      <span class="mark">⌑</span><strong>Latch</strong><span class="badge">PREVIEW</span>
+    <header class="toolbar">
+      <span class="mark" aria-hidden="true"></span>
+      <strong>Latch</strong><span id="status" role="status">Connecting…</span>
+      <button
+        id="lock"
+        class="icon-button"
+        title="Lock vault"
+        aria-label="Lock vault"
+        hidden
+      ></button>
+      <button
+        id="open"
+        class="icon-button"
+        title="Open desktop app"
+        aria-label="Open desktop app"
+      ></button>
     </header>
-    <p id="status">Connecting…</p>
-    <button id="open">Open Latch <span>↗</span></button>
-    <div class="setting">
-      <label><input type="checkbox" id="autofill" disabled /> Fill automatically on this site</label
-      ><small id="domain">Open a website to enable</small>
-    </div>
-    <p id="message" class="hint">Inline suggestions appear when you focus a login field.</p>
-    <footer>Your vault, within reach.</footer>
+    <main>
+      <section id="browser" hidden aria-label="Vault items">
+        <div class="search-wrap">
+          <span id="search-icon" aria-hidden="true"></span
+          ><input
+            id="search"
+            type="search"
+            placeholder="Search vault"
+            aria-label="Search vault"
+            maxlength="500"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
+        <div class="filters">
+          <div id="scopes" role="group" aria-label="Filter items">
+            <button data-scope="all" aria-pressed="true">All items</button
+            ><button data-scope="favorites" aria-pressed="false">Favorites</button
+            ><button data-scope="site" aria-pressed="false">This site</button>
+          </div>
+          <select id="item-type" aria-label="Item type">
+            <option value="all">All types</option>
+            <option value="login">Logins</option>
+            <option value="note">Secure notes</option>
+          </select>
+        </div>
+        <div class="list-heading">
+          <span id="count" role="status"></span
+          ><button
+            id="refresh"
+            class="icon-button"
+            aria-label="Refresh items"
+            title="Refresh items"
+          ></button>
+        </div>
+        <div id="results" tabindex="-1" aria-label="Vault results"></div>
+      </section>
+      <section id="detail" hidden aria-label="Item details"></section>
+      <section id="empty" class="empty">
+        <span id="empty-icon" aria-hidden="true"></span>
+        <h1 id="empty-title">Connecting to Latch</h1>
+        <p id="empty-description">Your vault stays on your computer.</p>
+        <button id="connect" hidden>Open Latch</button>
+      </section>
+    </main>
+    <p id="message" role="status" aria-live="polite" hidden></p>
+    <footer>
+      <label><input type="checkbox" id="autofill" disabled /> Autofill on this site</label
+      ><span id="domain">Open a website</span>
+    </footer>
     <script type="module" src="../../popup.ts"></script>
   </body>
 </html>

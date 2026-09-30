@@ -1,7 +1,9 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import { browser, type Browser } from 'wxt/browser';
+import { browserRequestSchema, browserVaultQuerySchema } from '@latch/shared/protocol';
 import type {
   BrowserMatches,
+  BrowserVaultPage,
   CaptureOffer,
   FillCredential,
   Result,
@@ -156,7 +158,23 @@ export default defineBackground(() => {
     const type = message.type;
     void (async () => {
       const isPopup =
-        sender.id === browser.runtime.id && sender.url === browser.runtime.getURL('/popup.html');
+        sender.id === browser.runtime.id &&
+        !sender.tab &&
+        sender.url === browser.runtime.getURL('/popup.html');
+      if (isPopup && type === 'browse' && 'query' in message) {
+        const query = browserVaultQuerySchema.safeParse(message.query);
+        if (!query.success) return { ok: false, error: 'Invalid search.' };
+        const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+        const url = tab?.url && /^https?:\/\//.test(tab.url) ? tab.url : '';
+        return native<BrowserVaultPage>({ type, query: query.data, url });
+      }
+      if (isPopup && (type === 'copy' || type === 'lock')) {
+        const request = browserRequestSchema.safeParse(message);
+        if (!request.success) return { ok: false, error: 'Invalid vault request.' };
+        const result = await native<unknown>(request.data);
+        if (type === 'lock') void refreshBadge(true);
+        return result;
+      }
       if (type === 'open' && (isPopup || senderUrl(sender)))
         return native<VaultStatus>({ type: 'open' });
       // Status contains only the lock state. Content callers still require the

@@ -115,8 +115,33 @@ export const desktopRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('openExtensionFolder') }).strict(),
 ]);
 
+export const browserVaultQuerySchema = z
+  .object({
+    query: z.string().max(500),
+    scope: z.enum(['all', 'favorites', 'site']),
+    itemType: z.enum(['all', 'login', 'note']),
+    offset: z.number().int().min(0).max(1_000_000),
+  })
+  .strict();
+export type BrowserVaultQuery = z.infer<typeof browserVaultQuerySchema>;
+
 export const browserRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('status') }).strict(),
+  z
+    .object({
+      type: z.literal('browse'),
+      query: browserVaultQuerySchema,
+      url: z.string().max(4_096),
+    })
+    .strict(),
+  z.object({ type: z.literal('lock') }).strict(),
+  z
+    .object({
+      type: z.literal('copy'),
+      id,
+      field: z.enum(['username', 'password', 'notes', 'website']),
+    })
+    .strict(),
   z.object({ type: z.literal('open') }).strict(),
   z.object({ type: z.literal('matches'), url: z.string().max(4_096) }).strict(),
   z.object({ type: z.literal('fill'), url: z.string().max(4_096), id }).strict(),

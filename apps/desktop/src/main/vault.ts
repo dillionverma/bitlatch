@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { randomInt } from 'node:crypto';
 import { CodeRejectedError, type CliPort, type CliPrompt } from './cli';
 import { fillableUrl, matchesUri, normalizeServer, webUrl, type CipherUri } from './matching';
-import { UserError } from '@latch/shared/protocol';
+import { UserError, type BrowserVaultQuery } from '@latch/shared/protocol';
 import {
   ES256,
   attestationObject,
@@ -21,6 +21,7 @@ import type { SessionStore } from './biometrics';
 import type { AccountHint } from './account-hint';
 import type {
   BrowserMatches,
+  BrowserVaultPage,
   CaptureOffer,
   ChallengeAnswer,
   ItemDetail,
@@ -594,6 +595,60 @@ export class Vault extends EventEmitter {
     };
   }
 
+  browserItems(query: BrowserVaultQuery, url: string): BrowserVaultPage {
+    const page: BrowserVaultPage = {
+      state: this.state.status,
+      revision: this.itemsRevision,
+      items: [],
+      total: 0,
+    };
+    if (page.state !== 'unlocked') return page;
+    const terms = query.query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
+    const items = [...this.ciphers.values()]
+      .filter(
+        (cipher) =>
+          !cipher.deletedDate && !isRestricted(cipher) && (cipher.type === 1 || cipher.type === 2),
+      )
+      .filter((cipher) => query.scope !== 'site' || (fillableUrl(url) && canFill(cipher, url)))
+      .map(summarize)
+      .filter((item) => query.scope !== 'favorites' || item.favorite)
+      .filter(
+        (item) => query.itemType === 'all' || item.type === (query.itemType === 'login' ? 1 : 2),
+      )
+      .filter((item) =>
+        terms.every((term) =>
+          `${item.name} ${item.username} ${item.website}`.toLocaleLowerCase().includes(term),
+        ),
+      )
+      .sort(
+        (a, b) =>
+          Number(b.favorite) - Number(a.favorite) ||
+          a.name.localeCompare(b.name) ||
+          a.id.localeCompare(b.id),
+      );
+    page.total = items.length;
+    let bytes = 0;
+    for (const item of items.slice(query.offset, query.offset + 60)) {
+      const preview = {
+        ...item,
+        name: browserPreview(item.name, 200),
+        username: browserPreview(item.username, 200),
+        website: browserPreview(item.website, 300),
+      };
+      const size = Buffer.byteLength(JSON.stringify(preview));
+      if (bytes + size > 48_000) break;
+      bytes += size;
+      page.items.push(preview);
+    }
+    return page;
+  }
+
+  requireBrowserItem(id: string) {
+    const cipher = this.item(id);
+    if (cipher.deletedDate || isRestricted(cipher) || (cipher.type !== 1 && cipher.type !== 2))
+      throw new UserError('Open this item in the desktop app.');
+  }
+
   /** Only non-secret, fillable identities go to Apple's suggestion index. */
   autoFillIdentities(): (PasswordIdentity | PasskeyIdentity)[] {
     if (this.state.status !== 'unlocked') return [];
@@ -1093,6 +1148,9 @@ function canFill(cipher: Cipher, url: string) {
     Boolean(cipher.login?.password) &&
     (cipher.login?.uris ?? []).some((uri) => matchesUri(uri, url))
   );
+}
+function browserPreview(value: string, limit: number) {
+  return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
 }
 function summarize(cipher: Cipher): ItemSummary {
   return {

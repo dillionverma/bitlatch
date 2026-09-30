@@ -59,6 +59,16 @@ export async function startBridges({
         return vault.snapshot().status;
       }
       if (request.type === 'status') return vault.snapshot().status;
+      if (request.type === 'browse') return vault.browserItems(request.query, request.url);
+      if (request.type === 'lock') {
+        await handleRequest(request);
+        return vault.snapshot().status;
+      }
+      if (request.type === 'copy') {
+        vault.requireBrowserItem(request.id);
+        await handleRequest(request);
+        return null;
+      }
       if (request.type === 'matches') return vault.matches(request.url);
       if (request.type === 'capture')
         return vault.capture(request.url, request.username, request.password);
@@ -76,10 +86,18 @@ export async function startBridges({
       }
       return vault.fill(request.id, request.url);
     };
+    const responseGuard = (request: BrowserRequest) => {
+      const startedAt = epoch();
+      return () => {
+        if (!['open', 'status', 'lock'].includes(request.type) && startedAt !== epoch())
+          throw new UserError('Vault locked. Try again after unlocking.');
+      };
+    };
     const bridge = new LocalTransport({
       schema: browserRequestSchema,
       dataDir,
       handle: handleBrowserRequest,
+      responseGuard,
     });
     transports.push(bridge);
     await bridge.start();
@@ -149,6 +167,7 @@ export async function startBridges({
           dataDir: container,
           socketDirectory: container,
           handle: handleBrowserRequest,
+          responseGuard,
         });
         transports.push(safariBridge);
         await safariBridge.start();

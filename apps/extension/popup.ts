@@ -1,84 +1,406 @@
 import { browser } from 'wxt/browser';
 import '@latch/shared/theme.css';
 import './popup.css';
-import { claspPaths } from '@latch/shared/brand';
-import type { Result, VaultStatus } from '@latch/shared/types';
+import { element, mark } from './content/render';
+import type { BrowserVaultQuery } from '@latch/shared/protocol';
+import type { BrowserVaultPage, ItemSummary, Result, VaultStatus } from '@latch/shared/types';
 
 const status = document.querySelector<HTMLElement>('#status')!;
+const vaultBrowser = document.querySelector<HTMLElement>('#browser')!;
+const detail = document.querySelector<HTMLElement>('#detail')!;
+const empty = document.querySelector<HTMLElement>('#empty')!;
+const results = document.querySelector<HTMLElement>('#results')!;
+const count = document.querySelector<HTMLElement>('#count')!;
+const search = document.querySelector<HTMLInputElement>('#search')!;
+const itemType = document.querySelector<HTMLSelectElement>('#item-type')!;
+const scopes = document.querySelector<HTMLElement>('#scopes')!;
+const lock = document.querySelector<HTMLButtonElement>('#lock')!;
+const open = document.querySelector<HTMLButtonElement>('#open')!;
+const connect = document.querySelector<HTMLButtonElement>('#connect')!;
+const refresh = document.querySelector<HTMLButtonElement>('#refresh')!;
 const checkbox = document.querySelector<HTMLInputElement>('#autofill')!;
 const domain = document.querySelector<HTMLElement>('#domain')!;
 const message = document.querySelector<HTMLElement>('#message')!;
-const open = document.querySelector<HTMLButtonElement>('#open')!;
-const connectionError = document.createElement('p');
-connectionError.className = 'connection-error';
-connectionError.setAttribute('role', 'alert');
-connectionError.hidden = true;
-status.after(connectionError);
-status.setAttribute('role', 'status');
-message.setAttribute('role', 'status');
-message.setAttribute('aria-live', 'polite');
-checkbox.setAttribute('aria-describedby', 'domain message');
-document.querySelector('.badge')!.textContent = 'Preview';
 
-// Same local mark as the desktop app. No remote asset or HTML interpolation.
-const mark = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-mark.setAttribute('viewBox', '200 200 624 624');
-mark.setAttribute('fill', 'currentColor');
-mark.setAttribute('aria-hidden', 'true');
-for (const d of claspPaths) {
-  const path = document.createElementNS(mark.namespaceURI, 'path');
-  path.setAttribute('d', d);
-  mark.append(path);
+const paths = {
+  open: 'M9 3H3v12h12V9 M9 1h8v8 M17 1 7 11',
+  lock: 'M5 8V5a4 4 0 0 1 8 0v3 M3 8h12v9H3z M9 11v3',
+  search: 'M12 12 17 17 M14 8a6 6 0 1 1-12 0 6 6 0 0 1 12 0',
+  refresh: 'M15 7a6 6 0 1 0 0 5 M15 2v5h-5',
+  back: 'M11 3 5 9l6 6 M5 9h11',
+  note: 'M4 2h8l3 3v11H4z M7 7h5 M7 10h5 M7 13h3',
+  copy: 'M6 6h10v11H6z M12 6V2H2v11h4',
+} satisfies Record<string, string>;
+function icon(name: keyof typeof paths) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 18 18');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '1.4');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(svg.namespaceURI, 'path');
+  path.setAttribute('d', paths[name]);
+  svg.append(path);
+  return svg;
 }
-document.querySelector('.mark')!.replaceChildren(mark);
+document.querySelector('.mark')!.append(mark());
+open.append(icon('open'));
+lock.append(icon('lock'));
+refresh.append(icon('refresh'));
+document.querySelector('#search-icon')!.append(icon('search'));
+document.querySelector('#empty-icon')!.append(icon('lock'));
 
-function feedback(text: string, error = false) {
-  message.classList.toggle('error', error);
-  message.setAttribute('role', error ? 'alert' : 'status');
-  message.textContent = text;
-}
+let state: VaultStatus | 'disconnected' | 'connecting' = 'connecting';
+let selected: ItemSummary | undefined;
+let items: ItemSummary[] = [];
+let total = 0;
+let revision = -1;
+let generation = 0;
+let requestVersion = 0;
+let disposed = false;
+let query: BrowserVaultQuery = { query: '', scope: 'all', itemType: 'all', offset: 0 };
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+let statusTimer: ReturnType<typeof setTimeout> | undefined;
+let feedbackTimer: ReturnType<typeof setTimeout> | undefined;
 
-async function send<T>(type: 'status' | 'open'): Promise<Result<T>> {
+async function send<T>(request: object): Promise<Result<T>> {
   try {
-    return (await browser.runtime.sendMessage({ type })) as Result<T>;
+    return (await browser.runtime.sendMessage(request)) as Result<T>;
   } catch {
-    return { ok: false, error: 'Open Latch on your computer to connect your vault.' };
+    return { ok: false, error: 'Open Latch on your computer to reconnect.' };
   }
 }
-
-open.addEventListener('click', async () => {
-  open.disabled = true;
-  open.setAttribute('aria-busy', 'true');
-  const response = await send<unknown>('open');
-  if (!response.ok) {
-    feedback(response.error, true);
-    open.disabled = false;
-    open.removeAttribute('aria-busy');
-    open.focus();
-  } else window.close();
+function feedback(text: string, error = false) {
+  clearTimeout(feedbackTimer);
+  message.textContent = text;
+  message.hidden = !text;
+  message.classList.toggle('error', error);
+  message.setAttribute('role', error ? 'alert' : 'status');
+  if (text && !error) feedbackTimer = setTimeout(() => feedback(''), 3000);
+}
+function setState(next: typeof state, error = '') {
+  const changed = state !== next;
+  state = next;
+  status.textContent = {
+    unlocked: 'Unlocked',
+    locked: 'Locked',
+    'signed-out': 'Signed out',
+    disconnected: 'Disconnected',
+    connecting: 'Connecting…',
+  }[state];
+  lock.hidden = state !== 'unlocked';
+  empty.hidden = state === 'unlocked';
+  vaultBrowser.hidden = state !== 'unlocked' || Boolean(selected);
+  detail.hidden = state !== 'unlocked' || !selected;
+  if (state === 'unlocked') return changed;
+  generation++;
+  requestVersion++;
+  clearTimeout(searchTimer);
+  results.removeAttribute('aria-busy');
+  selected = undefined;
+  items = [];
+  total = 0;
+  revision = -1;
+  results.replaceChildren();
+  detail.replaceChildren();
+  search.value = '';
+  query.query = '';
+  count.textContent = '';
+  feedback('');
+  document.querySelector('#empty-title')!.textContent =
+    state === 'locked'
+      ? 'Your vault is locked'
+      : state === 'signed-out'
+        ? 'Sign in to Latch'
+        : state === 'disconnected'
+          ? 'Connect to Latch'
+          : 'Connecting to Latch';
+  document.querySelector('#empty-description')!.textContent =
+    error ||
+    (state === 'locked'
+      ? 'Unlock in the desktop app to browse your vault.'
+      : state === 'signed-out'
+        ? 'Sign in on your computer to access your vault.'
+        : 'Your vault stays on your computer.');
+  connect.hidden = state === 'connecting';
+  connect.textContent = state === 'locked' ? 'Unlock in Latch' : 'Open Latch';
+  return changed;
+}
+async function openDesktop() {
+  const response = await send<unknown>({ type: 'open' });
+  if (disposed) return;
+  if (response.ok) window.close();
+  else feedback(response.error, true);
+}
+open.addEventListener('click', () => void openDesktop());
+connect.addEventListener('click', () => void openDesktop());
+lock.addEventListener('click', async () => {
+  setState('locked');
+  const lifetime = generation;
+  const response = await send<VaultStatus>({ type: 'lock' });
+  if (disposed || lifetime !== generation) return;
+  if (!response.ok) setState('disconnected', response.error);
 });
 
-let statusTimer: ReturnType<typeof setTimeout> | undefined;
-let disposed = false;
+function tile(item: ItemSummary) {
+  const node = element('span', 'tile');
+  node.setAttribute('aria-hidden', 'true');
+  if (item.type === 2) node.append(icon('note'));
+  else node.textContent = item.name.slice(0, 1).toUpperCase();
+  return node;
+}
+function showList(focusId?: string) {
+  selected = undefined;
+  detail.hidden = true;
+  detail.replaceChildren();
+  vaultBrowser.hidden = false;
+  renderItems();
+  const row = [...results.querySelectorAll<HTMLButtonElement>('.item')].find(
+    (entry) => entry.dataset.id === focusId,
+  );
+  (row ?? search).focus();
+}
+function showDetail(item: ItemSummary) {
+  selected = item;
+  vaultBrowser.hidden = true;
+  detail.hidden = false;
+  detail.replaceChildren();
+  feedback('');
+  const back = element('button', 'back', 'All results');
+  back.prepend(icon('back'));
+  back.addEventListener('click', () => showList(item.id));
+  const heading = element('div', 'detail-heading');
+  const title = element('div', '');
+  title.append(
+    element('h1', '', item.name),
+    element(
+      'p',
+      '',
+      item.type === 2 ? 'Secure note' : item.hasPasskey ? 'Login · Passkey' : 'Login',
+    ),
+  );
+  heading.append(tile(item), title);
+  detail.append(back, heading);
+  if (item.type === 1) {
+    addField(item, 'Username', item.username || 'No username', 'username');
+    addField(item, 'Password', '••••••••••••', 'password');
+    addField(item, 'Website', item.website || 'No website', 'website');
+  }
+  addField(item, 'Notes', item.type === 2 ? 'Secure note' : 'Saved with this login', 'notes');
+  detail.append(
+    element(
+      'p',
+      'detail-hint',
+      item.type === 1
+        ? 'Fill from the Latch button in a login field. Copied values clear after 30 seconds.'
+        : 'Copy the note to read it, or open it in Latch. Copied values clear after 30 seconds.',
+    ),
+  );
+  back.focus();
+}
+function addField(
+  item: ItemSummary,
+  label: string,
+  value: string,
+  field: 'username' | 'password' | 'website' | 'notes',
+) {
+  const row = element('div', 'field');
+  const text = element('div', 'field-text');
+  text.append(element('span', 'field-label', label), element('span', 'field-value', value));
+  const copy = element('button', '', 'Copy');
+  copy.prepend(icon('copy'));
+  copy.setAttribute('aria-label', `Copy ${label.toLowerCase()}`);
+  copy.addEventListener('click', async () => {
+    const lifetime = generation;
+    copy.disabled = true;
+    const response = await send<null>({ type: 'copy', id: item.id, field });
+    if (disposed || lifetime !== generation || selected?.id !== item.id) return;
+    copy.disabled = false;
+    if (response.ok) feedback(`${label} copied`);
+    else {
+      feedback(response.error, true);
+      void refreshStatus();
+    }
+  });
+  row.append(text, copy);
+  detail.append(row);
+}
+function renderItems() {
+  count.textContent = `${total} ${total === 1 ? 'item' : 'items'}`;
+  results.replaceChildren();
+  for (const item of items) {
+    const row = element('button', 'item');
+    row.dataset.id = item.id;
+    const text = element('span', 'item-text');
+    text.append(
+      element('span', 'item-name', item.name),
+      element(
+        'span',
+        'item-sub',
+        item.type === 2 ? 'Secure note' : item.username || item.website || 'Login',
+      ),
+    );
+    row.append(tile(item), text);
+    if (item.favorite) {
+      const star = element('span', 'favorite', '☆');
+      star.setAttribute('aria-label', 'Favorite');
+      row.append(star);
+    }
+    row.addEventListener('click', () => showDetail(item));
+    results.append(row);
+  }
+  if (!items.length)
+    results.append(
+      element(
+        'p',
+        'no-results',
+        query.query
+          ? 'No items match your search.'
+          : query.scope === 'site'
+            ? 'No matching logins for this website.'
+            : query.scope === 'favorites'
+              ? 'No favorite items yet.'
+              : 'No items to show.',
+      ),
+    );
+  if (items.length < total) {
+    const more = element('button', 'more', 'Load more');
+    more.addEventListener('click', () => {
+      more.disabled = true;
+      void loadItems(true);
+    });
+    results.append(more);
+  }
+}
+async function loadItems(append = false) {
+  const version = ++requestVersion;
+  const lifetime = generation;
+  results.setAttribute('aria-busy', 'true');
+  const response = await send<BrowserVaultPage>({
+    type: 'browse',
+    query: { ...query, offset: append ? items.length : 0 },
+  });
+  if (disposed || lifetime !== generation || version !== requestVersion) return;
+  results.removeAttribute('aria-busy');
+  if (!response.ok) {
+    setState('disconnected', response.error);
+    return;
+  }
+  if (response.value.state !== 'unlocked') {
+    setState(response.value.state);
+    return;
+  }
+  if (append && response.value.revision !== revision) {
+    await loadItems();
+    return;
+  }
+  setState('unlocked');
+  revision = response.value.revision;
+  total = response.value.total;
+  const previousCount = items.length;
+  items = append ? [...items, ...response.value.items] : response.value.items;
+  renderItems();
+  if (append) results.querySelectorAll<HTMLButtonElement>('.item')[previousCount]?.focus();
+}
+function changeQuery() {
+  clearTimeout(searchTimer);
+  requestVersion++;
+  selected = undefined;
+  detail.replaceChildren();
+  detail.hidden = true;
+  vaultBrowser.hidden = false;
+  items = [];
+  results.replaceChildren();
+  count.textContent = 'Searching…';
+  feedback('');
+  searchTimer = setTimeout(() => void loadItems(), 120);
+}
+search.addEventListener('input', () => {
+  query.query = search.value;
+  changeQuery();
+});
+scopes.addEventListener('click', (event) => {
+  if (!(event.target instanceof HTMLButtonElement)) return;
+  const scope = event.target.dataset.scope;
+  if (scope !== 'all' && scope !== 'favorites' && scope !== 'site') return;
+  query.scope = scope;
+  scopes
+    .querySelectorAll('button')
+    .forEach((button) => button.setAttribute('aria-pressed', String(button === event.target)));
+  changeQuery();
+});
+itemType.addEventListener('change', () => {
+  const type = itemType.value;
+  if (type !== 'all' && type !== 'login' && type !== 'note') return;
+  query.itemType = type;
+  changeQuery();
+});
+refresh.addEventListener('click', () => {
+  feedback('');
+  void loadItems();
+});
+results.addEventListener('keydown', (event) => {
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+  const rows = [...results.querySelectorAll<HTMLButtonElement>('.item')];
+  if (!rows.length) return;
+  event.preventDefault();
+  const index = rows.findIndex((row) => row === document.activeElement);
+  const next =
+    event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? rows.length - 1
+        : Math.max(0, Math.min(rows.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
+  rows[next]?.focus();
+});
+search.addEventListener('keydown', (event) => {
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    results.querySelector<HTMLButtonElement>('.item')?.focus();
+  }
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && selected) {
+    event.preventDefault();
+    showList(selected.id);
+  }
+  if ((event.metaKey || event.ctrlKey) && event.key === 'f' && state === 'unlocked') {
+    event.preventDefault();
+    showList();
+    search.select();
+  }
+});
 async function refreshStatus() {
-  const state = await send<VaultStatus>('status');
+  clearTimeout(statusTimer);
+  const lifetime = generation;
+  const response = await send<VaultStatus>({ type: 'status' });
   if (disposed) return;
-  const label = state.ok
-    ? {
-        unlocked: 'Vault unlocked',
-        locked: 'Vault locked',
-        'signed-out': 'Sign in on your computer',
-      }[state.value]
-    : 'desktop app disconnected';
-  if (status.textContent !== label) status.textContent = label;
-  const error = state.ok ? '' : state.error;
-  if (connectionError.textContent !== error) connectionError.textContent = error;
-  connectionError.hidden = state.ok;
+  if (lifetime === generation) {
+    const changed = setState(
+      response.ok ? response.value : 'disconnected',
+      response.ok ? '' : response.error,
+    );
+    if (changed && state === 'unlocked') {
+      void loadItems();
+      search.focus();
+    }
+  }
   statusTimer = setTimeout(() => void refreshStatus(), 1000);
 }
 window.addEventListener('pagehide', () => {
   disposed = true;
+  generation++;
+  search.value = '';
+  query.query = '';
   clearTimeout(statusTimer);
+  clearTimeout(searchTimer);
+  clearTimeout(feedbackTimer);
+  items = [];
+  selected = undefined;
+  results.replaceChildren();
+  detail.replaceChildren();
 });
 void refreshStatus();
 
@@ -89,21 +411,17 @@ void (async () => {
   if (!['https:', 'http:'].includes(url.protocol)) return;
   domain.textContent = url.host;
   domain.title = url.origin;
+  checkbox.setAttribute('aria-describedby', 'domain');
   const settings = await browser.storage.local.get('autoFillOrigins');
-  let origins: string[] = Array.isArray(settings.autoFillOrigins)
-    ? settings.autoFillOrigins.filter(
-        (value: unknown): value is string => typeof value === 'string',
-      )
-    : [];
-  checkbox.checked = origins.includes(url.origin);
+  checkbox.checked =
+    Array.isArray(settings.autoFillOrigins) && settings.autoFillOrigins.includes(url.origin);
   checkbox.disabled = false;
   checkbox.addEventListener('change', async () => {
     const enabled = checkbox.checked;
     checkbox.disabled = true;
     try {
-      // Read again so another popup's site setting is not overwritten.
       const current = await browser.storage.local.get('autoFillOrigins');
-      origins = Array.isArray(current.autoFillOrigins)
+      const origins: string[] = Array.isArray(current.autoFillOrigins)
         ? current.autoFillOrigins.filter(
             (value: unknown): value is string => typeof value === 'string',
           )
@@ -112,20 +430,16 @@ void (async () => {
         ? [...new Set([...origins, url.origin])]
         : origins.filter((origin) => origin !== url.origin);
       await browser.storage.local.set({ autoFillOrigins: next });
-      origins = next;
       feedback(
         enabled
-          ? 'Enabled. One matching login will fill on the next page load. The page can read filled passwords.'
-          : 'Use the inline picker to fill on this site.',
+          ? 'One matching login will fill on the next page load. The page can read filled passwords.'
+          : 'Automatic fill disabled for this site.',
       );
     } catch {
       checkbox.checked = !enabled;
       feedback('Could not save this site setting. Try again.', true);
     } finally {
       checkbox.disabled = false;
-      checkbox.focus();
     }
   });
-})().catch(() => {
-  feedback('Could not read this site setting. Reopen the popup to try again.', true);
-});
+})().catch(() => feedback('Could not read this site setting.', true));
