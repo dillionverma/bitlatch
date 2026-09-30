@@ -31,80 +31,106 @@ Latch is an alternative client for your existing Bitwarden vault, designed aroun
 
 ## Installation
 
+Install the desktop app first, then add the browser extension if you want autofill.
+
 ### Desktop
 
-| Platform                                                                                                                                                                                                                                                                                                                                                                        | Availability                 | Get Latch                                                                                                                                                                                                                                                                             |
-| :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :--------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/apple_dark.svg" /><img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/apple.svg" width="20" height="20" alt="" /></picture> **macOS 14+** · Apple Silicon | Preview                      | [DMG](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-mac-arm64.dmg) · [ZIP](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-mac-arm64.zip)                                                                                     |
-| <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/linux.svg" width="20" height="20" alt="" /> **Linux**                                                                                                                                                                                                                | Experimental · AppImage, deb | [x64](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-linux-x86_64.AppImage) · [arm64](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-linux-arm64.AppImage) · [deb](https://github.com/dillionverma/latch/releases/tag/v0.3.0) |
-| <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/windows.svg" width="20" height="20" alt="" /> **Windows**                                                                                                                                                                                                            | Experimental · x64           | [Installer](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-win-x64.exe)                                                                                                                                                                                   |
+| Platform                                                                                                                                                                                                                                                                                                                                                                        | Download                                                                                                                                                                                                         |
+| :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/apple_dark.svg" /><img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/apple.svg" width="20" height="20" alt="" /></picture> **macOS 14+** · Apple Silicon | [DMG](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-mac-arm64.dmg) · [ZIP](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-mac-arm64.zip)                |
+| <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/windows.svg" width="20" height="20" alt="" /> **Windows** · x64                                                                                                                                                                                                      | [Installer (.exe)](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-win-x64.exe)                                                                                                       |
+| <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/linux.svg" width="20" height="20" alt="" /> **Linux** · x64                                                                                                                                                                                                          | [AppImage](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-linux-x86_64.AppImage) · [deb](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-linux-amd64.deb) |
+| <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/linux.svg" width="20" height="20" alt="" /> **Linux** · arm64                                                                                                                                                                                                        | [AppImage](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-linux-arm64.AppImage) · [deb](https://github.com/dillionverma/latch/releases/download/v0.3.0/Latch-0.3.0-linux-arm64.deb)  |
 
-Preview builds. Mac packages are ad-hoc signed and not notarized. Windows packages are unsigned. Linux and Windows are experimental. [All downloads and checksums →](https://github.com/dillionverma/latch/releases/tag/v0.3.0)
+[All downloads and checksums](https://github.com/dillionverma/latch/releases/tag/v0.3.0). Windows and Linux are experimental. Downloads require repository access while Latch is private.
 
-While this repository is private, sign in to a GitHub account with repository access to download releases.
+#### Set up your vault
+
+1. Install the [official Bitwarden CLI](https://bitwarden.com/help/cli/) using the command for your computer:
+
+   | Platform        | Command                                                    |
+   | :-------------- | :--------------------------------------------------------- |
+   | macOS           | `brew install bitwarden-cli`                               |
+   | Windows / Linux | `npm install -g @bitwarden/cli` · requires Node.js and npm |
+
+2. Install Latch. On Mac, drag it to **Applications**. On Windows, run the installer. On Linux, install the deb or mark the AppImage executable.
+3. Open Latch and sign in to your Bitwarden account. If Latch was already open when you installed the CLI, quit and reopen it.
+
+**Mac won't open Latch?** This preview is not notarized. Try opening it once, then choose **System Settings → Privacy & Security → Open Anyway**. [Apple's instructions](https://support.apple.com/en-us/102445).
 
 <details>
-<summary><strong>Set up Latch</strong></summary>
+<summary>Windows / Linux setup and CLI troubleshooting</summary>
 
-1. Install the [official Bitwarden CLI](https://bitwarden.com/help/cli/) separately. On Mac, run `brew install bitwarden-cli`. On Windows or Linux with Node.js and npm installed, run `npm install -g @bitwarden/cli`.
-2. Install Latch for your platform:
-   - **Mac:** open the DMG and drag Latch to **Applications**, or extract the ZIP and move `Latch.app` there. Open Latch once. If macOS blocks the non-notarized app, open **System Settings → Privacy & Security → Open Anyway**, then confirm **Open**. See [Apple's instructions](https://support.apple.com/en-us/102445).
-   - **Windows:** run the x64 installer. This preview is not code-signed, so Windows may show an unrecognized-app warning.
-   - **Linux:** install the deb for your architecture with your package manager. For an AppImage, run `chmod +x Latch-0.3.0-linux-*.AppImage`, then open the downloaded file.
-3. Start Latch and sign in to your Bitwarden account. If Latch was already open when you installed the CLI, quit and reopen it first.
-
-Keep `bw` on your PATH, or set `LATCH_BW_PATH` to its full path in the environment used to launch Latch. Mac previews are not notarized. Windows and Linux packages still need end-to-end verification.
-
-**Upgrading a preview.** Preview releases do not update automatically. Quit Latch, replace the Mac app or Linux AppImage, or run the newer Windows installer or Linux package update. Start Latch again. Update and reload the browser extension as described below, then refresh open website tabs.
+- Windows previews are unsigned, so Windows may show an unrecognized-app warning.
+- For a Linux AppImage, run `chmod +x Latch-0.3.0-linux-*.AppImage`, then open the file. Choose the download matching your computer's architecture.
+- If Latch cannot find the CLI, keep `bw` on your PATH or set `LATCH_BW_PATH` to its full path in the environment used to launch Latch. Restart Latch afterward.
+- Windows and Linux packages still need end-to-end verification.
 
 </details>
+
+#### Homebrew tap · coming soon
+
+The tap is not published yet. Use the GitHub downloads above for now.
+
+Planned command:
+
+```sh
+brew install --cask dillionverma/tap/latch
+```
 
 ### Browser extensions
 
-Search your vault from the extension, filter by favorites, website, or item type, and copy login fields or secure notes. Use the Latch button in a login field to fill an account. Keep the desktop app running and unlock your vault in Latch. This preview uses the manual installation steps below; there are no public browser-store listings. **Settings → Browser → Developer installation** opens the bundled Chrome extension folder. The separate store-install buttons are unavailable in this preview.
+Keep Latch running and your vault unlocked. Browser installation is manual for this preview.
+
+#### <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/chrome.svg" width="20" height="20" alt="" /> Chrome & Aside
+
+1. In Latch, choose **Settings → Browser → Developer installation → Open extension folder**.
+2. Open your browser's extensions page, such as `chrome://extensions`, and enable **Developer mode**.
+3. Choose **Load unpacked** and select the folder Latch opened.
+4. Pin Latch to the toolbar and open it. **Settings → Browser** in the desktop app shows **Connected** when setup succeeds.
+
+You can now search and copy from the popup, or fill a login using the Latch button inside a website's login field.
+
+Prefer a separate download? Extract the [Chrome ZIP](https://github.com/dillionverma/latch/releases/download/v0.3.0/latch-0.3.0-chrome.zip) to a permanent folder and load that folder instead. Keep it at the same path.
 
 <details>
-<summary><img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/chrome.svg" width="20" height="20" alt="" /> <strong>Chrome & Chromium browsers</strong></summary>
+<summary>Firefox, other Chromium browsers, Safari & Raycast</summary>
 
-<img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/chrome.svg" width="20" height="20" alt="" /> Chrome · <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/brave.svg" width="20" height="20" alt="" /> Brave · <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/edge.svg" width="20" height="20" alt="" /> Edge · <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/arc_browser.svg" width="20" height="20" alt="" /> Arc · <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/vivaldi.svg" width="20" height="20" alt="" /> Vivaldi · <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/chromium.svg" width="20" height="20" alt="" /> Chromium · Aside
-
-1. Install Latch in its permanent location first. In Latch, open **Settings → Browser → Developer installation → Open extension folder**. This bundled folder is the recommended source. Alternatively, extract the [Chrome ZIP](https://github.com/dillionverma/latch/releases/download/v0.3.0/latch-0.3.0-chrome.zip) into a permanent folder that you will keep.
-2. Open your browser's extensions page, such as `chrome://extensions`, and enable **Developer mode**. It is required for this installation method.
-3. Choose **Load unpacked** and select the folder containing `manifest.json`, either the folder Latch opened or your extracted ZIP folder.
-4. Pin Latch to the browser toolbar and open the extension. Latch handles desktop setup automatically and shows **Connected** in Settings.
-
-After updating the desktop app, reload Latch on the browser's extensions page, then refresh open website tabs. If you loaded a separate ZIP folder, replace its contents with the new Chrome ZIP before reloading. Keep the folder at the same path.
-
-Chrome and Aside have been verified; the other Chromium browsers still need end-to-end verification.
-
-</details>
-
-<details>
-<summary><img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/firefox.svg" width="20" height="20" alt="" /> <strong>Firefox</strong> · developer preview</summary>
-
-Requires Firefox 140+.
+**<img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/firefox.svg" width="20" height="20" alt="" /> Firefox 140+ · temporary install**
 
 1. Extract the [Firefox ZIP](https://github.com/dillionverma/latch/releases/download/v0.3.0/latch-0.3.0-firefox.zip) and start Latch.
 2. Open `about:debugging` → **This Firefox** → **Load Temporary Add-on**.
 3. Select `manifest.json` from the extracted folder.
 
-Temporary installation lasts until Firefox restarts. Repeat these steps after each restart. To upgrade, extract the newer Firefox ZIP and load its `manifest.json` again, then refresh open website tabs. No signed download is available; end-to-end verification is pending.
+Repeat after each Firefox restart. No signed download is available; end-to-end verification is pending.
+
+**Other Chromium browsers**
+
+Brave, Edge, Arc, Vivaldi, and Chromium use the Chrome instructions above. Chrome and Aside have been verified; the others still need end-to-end verification.
+
+**<img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/safari.svg" width="20" height="20" alt="" /> Safari & macOS AutoFill · not included in the preview**
+
+These require a signed app with matching Apple provisioning profiles. Follow the [signing and setup guide](apps/desktop/native/autofill/README.md). To include Safari, provide `LATCH_SAFARI_PROFILE` alongside the app and AutoFill profiles when running `pnpm run package:autofill`. Its app group must match Latch's. Safari end-to-end verification is pending.
+
+The [Safari ZIP](https://github.com/dillionverma/latch/releases/download/v0.3.0/latch-0.3.0-safari.zip) contains developer web assets, not an installable app.
+
+**<img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/raycast.svg" width="20" height="20" alt="" /> Raycast · development install**
+
+Requires a source checkout and development import. [Set up Latch for Raycast](apps/raycast/README.md). No packaged download or public store listing is available.
 
 </details>
 
 <details>
-<summary><img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/safari.svg" width="20" height="20" alt="" /> <strong>Safari</strong> · signed builds</summary>
+<summary>Update Latch and its extensions</summary>
 
-The non-notarized preview does not include a working Safari integration. Safari and native macOS AutoFill require a signed app with matching Apple provisioning profiles. The [Safari ZIP](https://github.com/dillionverma/latch/releases/download/v0.3.0/latch-0.3.0-safari.zip) contains web assets for developers, not an installable app.
+Preview releases do not update automatically.
 
-- **Safari extension:** build with `pnpm run package:autofill` and provide `LATCH_SAFARI_PROFILE` alongside the app and AutoFill profiles. Its app group must match Latch's. End-to-end verification is pending.
-- **macOS AutoFill:** follow the [signing and setup guide](apps/desktop/native/autofill/README.md).
+1. Quit Latch and replace the Mac app or Linux AppImage, or run the newer Windows installer or Linux package update.
+2. Reopen Latch. Reload the extension on your browser's extensions page, then refresh open website tabs.
+
+If you loaded a separate Chrome ZIP folder, replace its contents before reloading. For Firefox, extract the newer ZIP and load its `manifest.json` again.
 
 </details>
-
-### Raycast
-
-<img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/raycast.svg" width="20" height="20" alt="" /> **Latch for Raycast** brings vault search, unlocking, and copying to your launcher on Mac. It currently requires a source checkout and development import; no packaged download or Raycast Store listing is available. [Set up the development extension →](apps/raycast/README.md)
 
 ## Development
 
