@@ -2,6 +2,7 @@ import { browser } from 'wxt/browser';
 import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { isLocalHost } from '@latch/shared/urls';
 import sharedTheme from '@latch/shared/theme.css?inline';
+import appearance from './content/appearance.css?inline';
 import contentStyles from './content/styles.css?inline';
 import { brand, element, mark } from './content/render';
 import {
@@ -42,7 +43,7 @@ export function startContent(ctx: ContentScriptContext) {
     'all:initial!important;position:fixed!important;top:0!important;left:0!important;z-index:2147483647!important;width:0!important;height:0!important;pointer-events:none!important;color-scheme:light dark!important;';
   const shadow = host.attachShadow({ mode: 'closed' });
   const style = document.createElement('style');
-  style.textContent = sharedTheme + contentStyles;
+  style.textContent = sharedTheme + appearance + contentStyles;
   const trigger = document.createElement('button');
   trigger.className = 'trigger';
   trigger.type = 'button';

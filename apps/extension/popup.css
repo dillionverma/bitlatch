@@ -65,14 +65,12 @@ svg {
   flex: none;
   padding: 0 12px;
   background: var(--window);
-  border-bottom: 1px solid var(--border);
 }
 .toolbar strong {
   font-weight: 600;
 }
 .mark {
   display: flex;
-  color: var(--primary);
 }
 .mark svg {
   width: 20px;
@@ -114,7 +112,7 @@ main {
   height: 32px;
   border: 1px solid var(--input);
   border-radius: 6px;
-  background: var(--card);
+  background: var(--search-background);
   flex: none;
 }
 #search-icon {
@@ -142,7 +140,6 @@ main {
   justify-content: space-between;
   gap: 8px;
   padding: 0 12px 8px;
-  border-bottom: 1px solid var(--border);
   flex: none;
 }
 #scopes {
@@ -196,7 +193,10 @@ main {
   gap: 10px;
   min-height: 48px;
 }
-.item:hover,
+.item:hover {
+  background: var(--accent);
+}
+.item:active,
 .item:focus-visible {
   background: var(--selection);
 }
@@ -206,7 +206,7 @@ main {
   width: 32px;
   height: 32px;
   flex: none;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: 7px;
   background: var(--card);
   font-size: 14px;

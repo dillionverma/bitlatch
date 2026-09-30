@@ -1,5 +1,6 @@
 import { browser } from 'wxt/browser';
 import '@latch/shared/theme.css';
+import './content/appearance.css';
 import './popup.css';
 import { element, mark } from './content/render';
 import type { BrowserVaultQuery } from '@latch/shared/protocol';
