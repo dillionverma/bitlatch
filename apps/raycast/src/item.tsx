@@ -81,7 +81,10 @@ export function ItemActions({
             title={action.title}
             icon={action.icon}
             shortcut={{
-              modifiers: action.field === 'website' ? ['cmd', 'shift'] : ['cmd'],
+              modifiers:
+                action.field === 'website' || action.field === 'password'
+                  ? ['cmd', 'shift']
+                  : ['cmd'],
               key: action.key,
             }}
             onAction={() => copy(action.field)}
