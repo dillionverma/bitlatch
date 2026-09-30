@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/readme/vault.png" alt="Latch with a glass window over a macOS wallpaper: a clean sidebar, vault items, and a selected login with its password hidden. All accounts shown are demo data." width="1080" />
+  <img src="assets/readme/vault.webp" alt="Latch with a glass window over a macOS wallpaper: a clean sidebar, vault items, and a selected login with its password hidden. All accounts shown are demo data." width="1080" />
 </p>
 
 Latch is an alternative client for your existing Bitwarden vault, designed around a cleaner interface and quicker workflows. Search from the keyboard, fill logins in your browser, and access credentials from Raycast. Keep your account and vault; there's nothing to migrate.
@@ -52,11 +52,8 @@ brew install --cask dillionverma/tap/latch
 - <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/firefox.svg" width="20" height="20" alt="" /> **Firefox preview:** [Download](https://github.com/dillionverma/latch/releases/download/v0.3.0/latch-0.3.0-firefox.zip) · [Setup](https://extensionworkshop.com/documentation/develop/temporary-installation-in-firefox/)
 
 <p align="center">
-  <img src="assets/readme/popup.png" alt="Latch extension popup in light mode with demo vault items." width="720" />
-</p>
-
-<p align="center">
-  <img src="assets/readme/autofill.png" alt="Latch autofill suggestions in light mode on a demo sign-in page." width="720" />
+  <img src="assets/readme/popup.webp" alt="Latch extension popup in light mode with demo vault items." width="49%" />
+  <img src="assets/readme/autofill.webp" alt="Latch autofill suggestions in light mode on a demo sign-in page." width="49%" />
 </p>
 
 ### <img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/raycast.svg" width="20" height="20" alt="" /> Raycast
@@ -64,7 +61,7 @@ brew install --cask dillionverma/tap/latch
 [Download source ZIP](https://github.com/dillionverma/latch/releases/download/v0.3.0/latch-0.3.0-raycast.zip) · [Setup](apps/raycast/README.md#install-from-source). Store installation coming soon.
 
 <p align="center">
-  <img src="assets/readme/raycast.png" alt="Latch vault search in Raycast with synthetic demo accounts on the macOS Golden Gate wallpaper." width="720" />
+  <img src="assets/readme/raycast.webp" alt="Latch vault search in Raycast with synthetic demo accounts on the macOS Golden Gate wallpaper." width="720" />
 </p>
 
 ## Development
