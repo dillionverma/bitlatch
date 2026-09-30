@@ -1,11 +1,10 @@
 /* Canonical static tokens: desktop, extension popup and closed shadow root.
    No reset, Tailwind directives, remote assets or page-dependent variables.
-   Every pair is light-dark(): the desktop and popup follow the system through
-   `color-scheme: light dark`; the content script pins the host's color-scheme
-   to whatever the page paints behind the field. */
+   The desktop and popup default to light. The content script pins the host's
+   color-scheme to whatever the page paints behind the field. */
 :root,
 :host {
-  color-scheme: light dark;
+  color-scheme: light;
   --font-ui: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
   --font-code: ui-monospace, SFMono-Regular, Menlo, monospace;
   --control-height: 32px;

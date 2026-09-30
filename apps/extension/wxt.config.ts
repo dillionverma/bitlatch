@@ -8,6 +8,10 @@ const identity = JSON.parse(
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 export default defineConfig({
   imports: false,
+  vite: () => ({
+    // Keep native light-dark() so the inline picker can follow the page's color scheme.
+    build: { cssTarget: ['chrome123', 'firefox120', 'safari17.5'] },
+  }),
   hooks: {
     'build:publicAssets': (_wxt, files) => {
       files.push({

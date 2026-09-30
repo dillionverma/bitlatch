@@ -136,7 +136,7 @@ lifecycle.startup = app
     );
     session.defaultSession.setPermissionCheckHandler(() => false);
     const requestedMaterial = process.env.LATCH_MATERIAL;
-    nativeTheme.themeSource = 'system';
+    nativeTheme.themeSource = 'light';
     appearance = prepareWindowAppearance({
       // Built-in vibrancy needs no addon; retain the existing explicit glass opt-in.
       allowGlass: requestedMaterial === 'glass',
