@@ -104,7 +104,7 @@ The non-notarized preview does not include a working Safari integration. Safari 
 
 ### Raycast
 
-<img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/raycast.svg" width="20" height="20" alt="" /> **Latch for Raycast** brings vault search, unlocking, and copying to your launcher on Mac. It currently requires a source checkout and development import; no packaged download or Raycast Store listing is available. [Set up the development extension →](apps/raycast/README.md)
+<img src="https://cdn.jsdelivr.net/gh/pheralb/svgl@ed75393dbe6eba6e446e208abb6826ecd1abd36d/static/library/raycast.svg" width="20" height="20" alt="" /> **Latch for Raycast** brings vault search, unlocking, and copying to your launcher on Mac. [Download the source ZIP](https://github.com/dillionverma/latch/releases/download/v0.3.0/latch-0.3.0-raycast.zip) · [Setup instructions](apps/raycast/README.md#install-from-source). Raycast Store installation is coming soon.
 
 ## Development
 
@@ -140,7 +140,7 @@ The [desktop workflow](.github/workflows/desktop.yml) builds macOS arm64, Window
 
 Desktop builds depend only on Chrome assets. The root build adds Firefox, Safari, the native Safari wrapper on macOS, and Raycast. WXT targets run sequentially because they share generated types. Signed packaging builds Safari only when its profile is supplied. Build caching remains disabled for host- and signing-dependent tasks.
 
-**Releases.** `pnpm run package:dir` creates an ad-hoc signed, non-notarized Mac app without the provisioned macOS extensions. `pnpm run package:mac:signed` requires Apple signing inputs and notarizes without publishing. The [release workflow](.github/workflows/release.yml) checks, builds, and publishes all desktop and browser packages with SHA-256 checksums. Push a matching `vX.Y.Z` tag or run it manually with the version; manual runs create the tag only after successful builds. The separate [signed macOS workflow](.github/workflows/release-macos-signed.yml) produces notarized artifacts for an existing tag without modifying published releases. Add `LATCH_SAFARI_PROFILE_BASE64` to include Safari.
+**Releases.** `pnpm run package:dir` creates an ad-hoc signed, non-notarized Mac app without the provisioned macOS extensions. `pnpm run package:mac:signed` requires Apple signing inputs and notarizes without publishing. The [release workflow](.github/workflows/release.yml) checks, builds, and publishes all desktop, browser, and Raycast packages with SHA-256 checksums. Push a matching `vX.Y.Z` tag or run it manually with the version; manual runs create the tag only after successful builds. The separate [signed macOS workflow](.github/workflows/release-macos-signed.yml) produces notarized artifacts for an existing tag without modifying published releases. Add `LATCH_SAFARI_PROFILE_BASE64` to include Safari.
 
 Release logic lives in `scripts/release.mjs`; `.github/release-notes.md` holds the preview notes. Artifact checks run locally without publishing:
 
@@ -149,7 +149,7 @@ node scripts/release.mjs validate v0.3.0
 node scripts/release.mjs verify v0.3.0 /path/to/collected-artifacts
 ```
 
-Validation requires matching desktop/extension versions and rejects a local tag pointing at another commit. Artifact verification requires all eleven expected payloads, rejects empty or unexpected files, and writes `SHA256SUMS`. Publication is a separate workflow step that preserves draft and tag checks. The internal shared package is not release-versioned with the apps.
+Validation requires matching desktop/extension versions and rejects a local tag pointing at another commit. Artifact verification requires all twelve expected payloads, rejects empty or unexpected files, and writes `SHA256SUMS`. Publication is a separate workflow step that preserves draft and tag checks. The internal shared package is not release-versioned with the apps.
 
 **Browser install buttons.** Set `extensionUrls` in `apps/desktop/src/main/browser-setup.ts` to the published Chrome Web Store listing and Firefox listing or Mozilla-signed HTTPS XPI download. Keep the Chrome store ID aligned with `packages/shared/extension.json` and Firefox's ID with `packages/shared/src/browser-targets.ts` so native messaging remains authorized. URLs stay in the main process; buttons open the selected browser, not the default browser. Safari uses Apple's extension-settings API and is available only when Safari recognizes the bundled extension. Connection status remains shared across browsers.
 
