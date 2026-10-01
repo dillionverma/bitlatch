@@ -15,6 +15,10 @@
   <a href="#development">Development</a>
 </p>
 
+<p align="center">
+  <img src="assets/readme/vault.webp" alt="Latch with a glass window over a macOS wallpaper: a clean sidebar, vault items, and a selected login with its password hidden. All accounts shown are demo data." width="1080" />
+</p>
+
 Latch is an alternative client for your existing Bitwarden vault, designed around a cleaner interface and quicker workflows. Search from the keyboard, fill logins in your browser, and access credentials from Raycast. Keep your account and vault; there's nothing to migrate.
 
 ## Highlights
@@ -27,10 +31,6 @@ Latch is an alternative client for your existing Bitwarden vault, designed aroun
 - 🔑 **Keep Bitwarden underneath.** Your existing account and vault, with authentication and cryptography handled by the official Bitwarden CLI.
 
 ## Screenshots
-
-<p align="center">
-  <img src="assets/readme/vault.webp" alt="Latch with a glass window over a macOS wallpaper: a clean sidebar, vault items, and a selected login with its password hidden. All accounts shown are demo data." width="1080" />
-</p>
 
 <p align="center">
   <img src="assets/readme/popup.webp" alt="Latch extension popup in light mode with demo vault items." width="49%" />
