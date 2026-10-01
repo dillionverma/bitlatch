@@ -4,7 +4,7 @@ Search your Bitlatch vault, copy credentials and secure notes, and lock your vau
 
 ## Setup
 
-1. [Download Bitlatch](https://github.com/dillionverma/latch/releases) for macOS 14 or later on Apple Silicon.
+1. [Download Bitlatch](https://github.com/dillionverma/bitlatch/releases) for macOS 14 or later on Apple Silicon.
 2. Install Bitlatch in `/Applications`, open it, and complete sign-in.
 3. Keep Bitlatch running, then open **Search Vault** in Raycast.
 

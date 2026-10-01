@@ -46,7 +46,7 @@ export default defineConfig({
   },
   manifestVersion: 3,
   manifest: ({ browser }) => ({
-    name: 'Bitlatch — your vault, within reach',
+    name: 'Bitlatch — a modern, unofficial Bitwarden client',
     version: pkg.version,
     description:
       'Search, filter, and copy from your Bitwarden vault, and fill logins with the Bitlatch desktop app.',
