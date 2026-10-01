@@ -140,16 +140,14 @@ lifecycle.startup = app
     const requestedMaterial = process.env.LATCH_MATERIAL;
     nativeTheme.themeSource = 'light';
     appearance = prepareWindowAppearance({
-      // Built-in vibrancy needs no addon; retain the existing explicit glass opt-in.
-      allowGlass: requestedMaterial === 'glass',
+      // Use native glass on verified macOS builds, with built-in vibrancy as fallback.
+      allowGlass: true,
       override:
         requestedMaterial === 'vibrancy' ||
         requestedMaterial === 'unavailable' ||
         requestedMaterial === 'solid'
           ? requestedMaterial
-          : requestedMaterial === 'glass'
-            ? 'glass'
-            : 'vibrancy',
+          : undefined,
     });
     window = new BrowserWindow({
       ...appearance.windowOptions,
