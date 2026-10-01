@@ -1,7 +1,8 @@
 ## What's new
 
 - Latch is now **Bitlatch**, across desktop, browser extensions, and Raycast.
-- Existing vault settings and browser connections are preserved.
+- Restored the original system colors and macOS vibrancy.
+- Install with Homebrew: `brew install --cask dillionverma/tap/bitlatch`.
 
 ## Downloads
 
