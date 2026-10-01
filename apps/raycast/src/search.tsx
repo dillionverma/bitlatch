@@ -23,7 +23,7 @@ export default function SearchVault() {
       } catch (e) {
         if (controller.signal.aborted) return;
         setResult({ status: 'unavailable', items: [] });
-        setError(e instanceof Error ? e.message : 'Latch is unavailable.');
+        setError(e instanceof Error ? e.message : 'Bitlatch is unavailable.');
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false);
@@ -45,7 +45,7 @@ export default function SearchVault() {
       filtering={false}
       searchText={query}
       onSearchTextChange={setQuery}
-      searchBarPlaceholder="Search Latch…"
+      searchBarPlaceholder="Search Bitlatch…"
     >
       <List.EmptyView
         icon="icon.png"
@@ -54,12 +54,12 @@ export default function SearchVault() {
           (result.status === 'unlocked'
             ? 'No matching items'
             : result.status === 'loading'
-              ? 'Connecting to Latch…'
-              : 'Open Latch to connect')
+              ? 'Connecting to Bitlatch…'
+              : 'Open Bitlatch to connect')
         }
         description={
           result.status === 'signed-out'
-            ? 'Sign in to your Bitwarden account in Latch first.'
+            ? 'Sign in to your Bitwarden account in Bitlatch first.'
             : undefined
         }
         actions={

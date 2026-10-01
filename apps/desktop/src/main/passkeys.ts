@@ -10,7 +10,7 @@ import { UserError } from '@latch/shared/protocol';
 
 /**
  * A passkey as Bitwarden stores it on a login item. Field names, string
- * encodings and the counter rule match the official clients so an item Latch
+ * encodings and the counter rule match the official clients so an item Bitlatch
  * writes is usable everywhere else, and vice versa.
  */
 export interface Fido2Credential {
@@ -33,7 +33,7 @@ export interface Fido2Credential {
 /** COSE algorithm identifier for ECDSA with P-256 and SHA-256. */
 export const ES256 = -7;
 
-/** Latch's authenticator identifier. Relying parties may show it in their key list. */
+/** Bitlatch's authenticator identifier. Relying parties may show it in their key list. */
 const AAGUID = Buffer.from('7c4b2f7ad3a546c2b8e1a2a6f0c1e3d9', 'hex');
 
 const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;

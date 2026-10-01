@@ -47,7 +47,7 @@ export function startContent(ctx: ContentScriptContext) {
   const trigger = document.createElement('button');
   trigger.className = 'trigger';
   trigger.type = 'button';
-  trigger.setAttribute('aria-label', 'Fill with Latch');
+  trigger.setAttribute('aria-label', 'Fill with Bitlatch');
   trigger.setAttribute('aria-expanded', 'false');
   trigger.setAttribute('aria-haspopup', 'dialog');
   trigger.setAttribute('aria-controls', 'latch-logins');
@@ -56,12 +56,12 @@ export function startContent(ctx: ContentScriptContext) {
   panel.className = 'panel';
   panel.id = 'latch-logins';
   panel.setAttribute('role', 'dialog');
-  panel.setAttribute('aria-label', 'Latch logins');
+  panel.setAttribute('aria-label', 'Bitlatch logins');
   const savePanel = document.createElement('div');
   savePanel.className = 'save';
   savePanel.tabIndex = -1;
   savePanel.setAttribute('role', 'dialog');
-  savePanel.setAttribute('aria-label', 'Save this login to Latch');
+  savePanel.setAttribute('aria-label', 'Save this login to Bitlatch');
   shadow.append(style, trigger, panel, savePanel);
   document.documentElement.append(host);
 
@@ -292,10 +292,10 @@ export function startContent(ctx: ContentScriptContext) {
   async function send<T>(message: unknown): Promise<Result<T>> {
     try {
       const result = (await browser.runtime.sendMessage(message)) as Result<T>;
-      if (ctx.isInvalid) return { ok: false, error: 'Reload this page to reconnect Latch.' };
+      if (ctx.isInvalid) return { ok: false, error: 'Reload this page to reconnect Bitlatch.' };
       return result;
     } catch {
-      return { ok: false, error: 'Reload this page to reconnect Latch.' };
+      return { ok: false, error: 'Reload this page to reconnect Bitlatch.' };
     }
   }
 
@@ -305,7 +305,7 @@ export function startContent(ctx: ContentScriptContext) {
     const version = ++requestVersion;
     open = true;
     trigger.setAttribute('aria-expanded', 'true');
-    panel.replaceChildren(element('div', 'hint', 'Connecting to Latch…'));
+    panel.replaceChildren(element('div', 'hint', 'Connecting to Bitlatch…'));
     applyScheme();
     panel.style.display = 'flex';
     watchStatus();
@@ -336,10 +336,10 @@ export function startContent(ctx: ContentScriptContext) {
           'span',
           'text',
           !response.ok
-            ? 'Open Latch on your computer'
+            ? 'Open Bitlatch on your computer'
             : response.value.state === 'signed-out'
-              ? 'Sign in to Latch to fill'
-              : 'Unlock Latch to fill',
+              ? 'Sign in to Bitlatch to fill'
+              : 'Unlock Bitlatch to fill',
         ),
       );
       row.addEventListener('click', (event) => {
@@ -444,7 +444,9 @@ export function startContent(ctx: ContentScriptContext) {
     const targets = fillTargets(field);
     if (!targets) {
       response.value.password = '';
-      showFillError('This looks like a signup or password-change form. Copy from Latch instead.');
+      showFillError(
+        'This looks like a signup or password-change form. Copy from Bitlatch instead.',
+      );
       return;
     }
     const { username, password } = targets;
@@ -516,12 +518,12 @@ export function startContent(ctx: ContentScriptContext) {
     const update = offer.action === 'update';
     savePanel.setAttribute(
       'aria-label',
-      update ? 'Update this password in Latch' : 'Save this login to Latch',
+      update ? 'Update this password in Bitlatch' : 'Save this login to Bitlatch',
     );
     const title = element(
       'div',
       'save-title',
-      update ? 'Update this password in Latch?' : 'Save this login to Latch?',
+      update ? 'Update this password in Bitlatch?' : 'Save this login to Bitlatch?',
     );
     const sub = element(
       'div',
@@ -577,7 +579,7 @@ export function startContent(ctx: ContentScriptContext) {
           if (restoreFocus) no.focus({ preventScroll: true });
           return;
         }
-        title.textContent = update ? 'Password updated.' : 'Saved to Latch.';
+        title.textContent = update ? 'Password updated.' : 'Saved to Bitlatch.';
         savePanel.dataset.offer = 'success';
         sub.remove();
         feedback.textContent = 'Done.';

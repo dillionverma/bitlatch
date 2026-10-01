@@ -45,14 +45,14 @@ export function createUpdates() {
       if (manual && !stopping)
         await dialog.showMessageBox({
           type: 'info',
-          message: downloaded ? 'An update is ready.' : 'Latch is up to date.',
-          detail: downloaded ? 'It will be installed when you quit Latch.' : undefined,
+          message: downloaded ? 'An update is ready.' : 'Bitlatch is up to date.',
+          detail: downloaded ? 'It will be installed when you quit Bitlatch.' : undefined,
         });
     } catch {
       if (manual && !stopping)
         await dialog.showMessageBox({
           type: 'info',
-          message: 'Could not update Latch.',
+          message: 'Could not update Bitlatch.',
           detail: 'Please try again later.',
         });
     } finally {

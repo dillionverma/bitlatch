@@ -21,7 +21,7 @@ export default defineConfig({
     },
   },
   zip: {
-    name: 'latch',
+    name: 'bitlatch',
     sourcesRoot: fileURLToPath(new URL('../..', import.meta.url)),
     includeSources: [
       'apps/extension/{content,popup}.ts',
@@ -46,15 +46,15 @@ export default defineConfig({
   },
   manifestVersion: 3,
   manifest: ({ browser }) => ({
-    name: 'Latch — your vault, within reach',
+    name: 'Bitlatch — your vault, within reach',
     version: pkg.version,
     description:
-      'Search, filter, and copy from your Bitwarden vault, and fill logins with the Latch desktop app.',
+      'Search, filter, and copy from your Bitwarden vault, and fill logins with the Bitlatch desktop app.',
     ...(browser === 'chrome' || browser === 'edge' ? { key: identity.key } : {}),
     permissions: ['nativeMessaging', 'activeTab', 'storage'],
     host_permissions: EXTENSION_MATCHES,
     action: {
-      default_title: 'Latch',
+      default_title: 'Bitlatch',
       default_icon: {
         16: 'icon-16.png',
         32: 'icon-32.png',

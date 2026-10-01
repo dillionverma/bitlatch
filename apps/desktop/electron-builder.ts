@@ -17,8 +17,8 @@ function compressDmgs({ artifactPaths }: BuildResult) {
 
 export default {
   appId: 'app.latch.vault',
-  productName: 'Latch',
-  artifactName: 'Latch-${version}-${os}-${arch}.${ext}',
+  productName: 'Bitlatch',
+  artifactName: 'Bitlatch-${version}-${os}-${arch}.${ext}',
   publish: null,
   directories: { output: 'release' },
   files: [
@@ -28,7 +28,7 @@ export default {
     '!dist/native/icon-info.plist',
     'package.json',
   ],
-  // Latch is English-only; other Chromium locales are about 45 MB per app.
+  // Bitlatch is English-only; other Chromium locales are about 45 MB per app.
   electronLanguages: ['en', 'en-US'],
   asar: true,
   asarUnpack: [
@@ -58,7 +58,7 @@ export default {
     target: ['AppImage', 'deb'],
     icon: '../../assets/brand/macos/icon-1024.png',
     category: 'Utility',
-    executableName: 'latch',
+    executableName: 'bitlatch',
     maintainer: 'Dillion Verma <hello@dillion.io>',
     // Matches the .desktop file to Electron's app ID, which Wayland shortcuts need.
     syncDesktopName: true,

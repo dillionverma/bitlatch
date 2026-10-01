@@ -4,7 +4,7 @@ const path = require('node:path');
 exports.default = async function ({ appOutDir, electronPlatformName, packager }) {
   if (electronPlatformName !== 'darwin') return;
   const plist = await import('plist');
-  const contents = path.join(appOutDir, 'Latch.app/Contents');
+  const contents = path.join(appOutDir, 'Bitlatch.app/Contents');
   // The signed release is built as a directory first; electron-builder only
   // writes this itself when building archive targets. Include it before signing.
   const publish = packager.platformSpecificBuildOptions.publish;
@@ -37,7 +37,7 @@ exports.default = async function ({ appOutDir, electronPlatformName, packager })
     !process.env.LATCH_AUTOFILL_PROFILE
   )
     return;
-  const plugins = path.join(appOutDir, 'Latch.app/Contents/PlugIns');
+  const plugins = path.join(appOutDir, 'Bitlatch.app/Contents/PlugIns');
   await mkdir(plugins, { recursive: true });
   await cp(
     path.join(packager.projectDir, 'dist/native/LatchAutoFill.appex'),

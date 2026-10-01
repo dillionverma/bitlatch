@@ -1,4 +1,4 @@
-# Latch artwork
+# Bitlatch artwork
 
 Source color: #145CFF. Created with Icon Composer MCP 1.1.0 and Apple ictool 27.0.
 

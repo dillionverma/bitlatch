@@ -1,8 +1,8 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
-  "name": "latch",
-  "title": "Latch",
-  "description": "Unlock and search your Latch logins and secure notes.",
+  "name": "bitlatch",
+  "title": "Bitlatch",
+  "description": "Unlock and search your Bitlatch logins and secure notes.",
   "icon": "icon.png",
   "author": "dillionverma",
   "license": "MIT",
@@ -18,15 +18,15 @@
     {
       "name": "search",
       "title": "Search Vault",
-      "subtitle": "Latch",
-      "description": "Unlock Latch, browse item details, and copy login fields or secure notes.",
+      "subtitle": "Bitlatch",
+      "description": "Unlock Bitlatch, browse item details, and copy login fields or secure notes.",
       "mode": "view"
     },
     {
       "name": "lock",
       "title": "Lock Vault",
-      "subtitle": "Latch",
-      "description": "Lock Latch immediately.",
+      "subtitle": "Bitlatch",
+      "description": "Lock Bitlatch immediately.",
       "mode": "no-view"
     }
   ],

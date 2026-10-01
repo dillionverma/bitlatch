@@ -32,7 +32,7 @@ process.stdin.on('data', (chunk: Buffer) => {
       try {
         response = await forward(JSON.parse(payload));
       } catch {
-        response = { ok: false, error: 'Open Latch on your computer to connect your vault.' };
+        response = { ok: false, error: 'Open Bitlatch on your computer to connect your vault.' };
       }
       const body = Buffer.from(JSON.stringify(response));
       const header = Buffer.alloc(4);

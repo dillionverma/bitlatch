@@ -30,8 +30,9 @@ import { desktopRequestSchema, safely, UserError } from '@latch/shared/protocol'
 import type { DesktopRequest } from '@latch/shared/protocol';
 
 process.umask(0o077);
+// Keep the existing data directory and OS encryption identity across the rename.
 app.setName('Latch');
-if (process.env.LATCH_DATA_DIR) app.setPath('userData', process.env.LATCH_DATA_DIR);
+app.setPath('userData', process.env.LATCH_DATA_DIR ?? join(app.getPath('appData'), 'Latch'));
 if (!app.requestSingleInstanceLock()) app.quit();
 
 let window: BrowserWindow;
@@ -76,6 +77,7 @@ if (!app.isPackaged) {
 lifecycle.startup = app
   .whenReady()
   .then(async () => {
+    app.setName('Bitlatch');
     // Refresh the running Dock tile when macOS retains artwork from an older build.
     if (process.platform === 'darwin' && app.isPackaged) {
       app.dock?.setIcon(join(process.resourcesPath, 'latch-dock.png'));
@@ -113,7 +115,7 @@ lifecycle.startup = app
     examined = setupError
       ? Promise.resolve()
       : vault.initialize().catch(() => {
-          setupError = 'Could not check your vault. Restart Latch to try again.';
+          setupError = 'Could not check your vault. Restart Bitlatch to try again.';
           if (window && !window.isDestroyed())
             window.webContents.send('latch:state', { ...vault.snapshot(), setupError });
         });
@@ -155,7 +157,7 @@ lifecycle.startup = app
       height: 720,
       minWidth: 820,
       minHeight: 550,
-      title: 'Latch',
+      title: 'Bitlatch',
       titleBarStyle: 'hiddenInset',
       trafficLightPosition: { x: 18, y: 19 },
       // An inactive-window click must only activate, never reveal or copy a secret.
@@ -229,7 +231,7 @@ lifecycle.startup = app
   })
   .catch(() => {
     // Deliberately omit raw engine errors: they can contain vault data.
-    console.error('Latch could not initialize. Check the installation and restart.');
+    console.error('Bitlatch could not initialize. Check the installation and restart.');
     app.quit();
   });
 
@@ -366,7 +368,7 @@ function sendCommand(command: WindowCommand) {
 function installMenu() {
   const menu = Menu.buildFromTemplate([
     {
-      label: 'Latch',
+      label: 'Bitlatch',
       submenu: [
         { role: 'about' },
         { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => sendCommand('settings') },

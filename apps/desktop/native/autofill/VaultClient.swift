@@ -20,7 +20,7 @@ final class VaultClient {
 
   struct Failure: LocalizedError {
     let errorDescription: String?
-    init(_ message: String = "Open and unlock Latch, then try again.") {
+    init(_ message: String = "Open and unlock Bitlatch, then try again.") {
       errorDescription = message
     }
   }
@@ -51,7 +51,7 @@ final class VaultClient {
         self.continuation = continuation
         timeout = Task { [weak self] in
           do { try await Task.sleep(for: .seconds(20)) } catch { return }
-          self?.finish(.failure(Failure("Latch took too long to respond. Try again.")))
+          self?.finish(.failure(Failure("Bitlatch took too long to respond. Try again.")))
         }
         connection.stateUpdateHandler = { [weak self] state in
           // All Network callbacks are delivered on the main queue.
@@ -79,7 +79,7 @@ final class VaultClient {
     let reply = try JSONDecoder().decode(Reply<Value>.self, from: data)
     guard reply.ok, let value = reply.value else {
       throw Failure(
-        reply.error.flatMap { $0.isEmpty ? nil : $0 } ?? "Open and unlock Latch, then try again.")
+        reply.error.flatMap { $0.isEmpty ? nil : $0 } ?? "Open and unlock Bitlatch, then try again.")
     }
     return value
   }

@@ -40,8 +40,8 @@ export async function buildSafari(
     resolve(contents, 'Info.plist'),
     plist.build({
       CFBundleIdentifier: 'app.latch.vault.safari',
-      CFBundleName: 'Latch',
-      CFBundleDisplayName: 'Latch',
+      CFBundleName: 'Bitlatch',
+      CFBundleDisplayName: 'Bitlatch',
       CFBundleInfoDictionaryVersion: '6.0',
       CFBundleSupportedPlatforms: ['MacOSX'],
       CFBundleExecutable: 'LatchSafari',

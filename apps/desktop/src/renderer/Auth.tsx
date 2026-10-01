@@ -90,7 +90,7 @@ export function Auth({
   }
   useEffect(() => {
     if (!touchId) return;
-    // Ask for Touch ID whenever Latch comes to the front while locked. A lock
+    // Ask for Touch ID whenever Bitlatch comes to the front while locked. A lock
     // that happens in the background, such as at the screen lock, must not
     // spend the prompt before anyone is looking.
     const ask = () => {
@@ -98,7 +98,7 @@ export function Auth({
       asked.current = true;
       void run(() => window.latch.unlockWithBiometrics(), true);
     };
-    // Leaving Latch re-arms the prompt. The Touch ID sheet itself can take
+    // Leaving Bitlatch re-arms the prompt. The Touch ID sheet itself can take
     // focus, so a blur while it is open does not, and cancelling cannot loop.
     const leave = () => {
       if (!working.current) asked.current = false;

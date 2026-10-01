@@ -1,4 +1,4 @@
-# Working on Latch
+# Working on Bitlatch
 
 - Keep the MVP small. `pnpm run check` runs static checks; `pnpm run build` builds all targets. Run both before shipping changes.
 - Do not add automated tests. Verify with type checking, builds, and manual checks using synthetic data.

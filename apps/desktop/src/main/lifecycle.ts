@@ -75,7 +75,7 @@ export class DesktopLifecycle {
   }
 
   assertRunning() {
-    if (this.quitting) throw new UserError('Latch is shutting down.');
+    if (this.quitting) throw new UserError('Bitlatch is shutting down.');
   }
 
   track<T extends { stop(): Promise<void> }>(resource: T): T {

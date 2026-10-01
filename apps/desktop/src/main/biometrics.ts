@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
  *
  * Two things worth being plain about. The key is kept because `bw lock`
  * destroys a session key outright, so a locked CLI can only be reopened with
- * the master password; Latch therefore leaves the CLI unlocked while this is
+ * the master password; Bitlatch therefore leaves the CLI unlocked while this is
  * on and relies on the stored key being unreachable instead. And the Touch ID
  * prompt is a gate this app chooses to honour, not one macOS enforces on the
  * stored bytes: Electron cannot ask the Keychain for a biometry-guarded entry,
@@ -85,7 +85,7 @@ export function touchIdSessionStore(dataDir: string): SessionStore {
     async recall() {
       const encrypted = await read();
       if (!encrypted) throw new Error('No session key is being kept.');
-      await systemPreferences.promptTouchID('unlock your Latch vault');
+      await systemPreferences.promptTouchID('unlock your Bitlatch vault');
       return safeStorage.decryptString(encrypted);
     },
     async forget(decline = false) {

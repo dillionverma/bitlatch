@@ -54,7 +54,7 @@ const sections = [
     id: 'browser',
     label: 'Browser',
     icon: Globe,
-    description: 'Connect Latch to your browser for quick, secure autofill.',
+    description: 'Connect Bitlatch to your browser for quick, secure autofill.',
   },
   {
     id: 'security',
@@ -64,19 +64,23 @@ const sections = [
   },
   {
     id: 'about',
-    label: 'About Latch',
+    label: 'About Bitlatch',
     icon: Info,
     description: 'A quiet companion for your Bitwarden vault.',
   },
 ] as const;
 const browsers = [
-  { id: 'safari', name: 'Safari', description: 'Enable Latch in Safari settings.' },
+  { id: 'safari', name: 'Safari', description: 'Enable Bitlatch in Safari settings.' },
   {
     id: 'chrome',
     name: 'Chrome',
     description: 'Also works with Aside, Brave, Edge and other Chromium browsers.',
   },
-  { id: 'firefox', name: 'Firefox', description: 'Install the signed Latch extension in Firefox.' },
+  {
+    id: 'firefox',
+    name: 'Firefox',
+    description: 'Install the signed Bitlatch extension in Firefox.',
+  },
 ] as const;
 
 type Section = (typeof sections)[number]['id'];
@@ -266,7 +270,7 @@ export function Settings({
           </span>
           <div>
             <strong>Settings</strong>
-            <small>Latch</small>
+            <small>Bitlatch</small>
           </div>
         </div>
         <nav aria-label="Settings categories">
@@ -319,10 +323,10 @@ export function Settings({
               <div className="settings-group">
                 <div className="settings-row">
                   <div>
-                    <strong>Use Latch for AutoFill</strong>
+                    <strong>Use Bitlatch for AutoFill</strong>
                     <p>
                       {autoFill?.enabled
-                        ? 'Latch is enabled in macOS.'
+                        ? 'Bitlatch is enabled in macOS.'
                         : 'Let macOS suggest logins from your vault.'}
                     </p>
                   </div>
@@ -349,7 +353,7 @@ export function Settings({
               <p className="settings-caption">
                 {autoFill && !autoFill.available
                   ? autoFill.reason
-                  : 'macOS will ask you to confirm. Keep Latch running and unlocked to fill a login.'}
+                  : 'macOS will ask you to confirm. Keep Bitlatch running and unlocked to fill a login.'}
               </p>
               <p className="settings-caption">
                 Login websites and usernames are shared with macOS for suggestions. Passwords are
@@ -394,10 +398,10 @@ export function Settings({
                     <strong>Connection</strong>
                     <p>
                       {connection === 'connected'
-                        ? 'Your browser extension is communicating with Latch.'
+                        ? 'Your browser extension is communicating with Bitlatch.'
                         : connection === 'setup-error'
-                          ? 'Browser setup could not finish. Restart Latch to try again.'
-                          : 'Open the Latch extension in your browser to connect.'}
+                          ? 'Browser setup could not finish. Restart Bitlatch to try again.'
+                          : 'Open the Bitlatch extension in your browser to connect.'}
                     </p>
                   </div>
                   <Badge
@@ -441,8 +445,8 @@ export function Settings({
                 ))}
               </div>
               <p className="settings-caption">
-                Install the extension in your browser, then open it to connect. Keep Latch running
-                for autofill. The connection above updates automatically.
+                Install the extension in your browser, then open it to connect. Keep Bitlatch
+                running for autofill. The connection above updates automatically.
               </p>
               <details className="settings-caption">
                 <summary>Developer installation</summary>
@@ -450,8 +454,8 @@ export function Settings({
                   <p>
                     For Chrome, Aside and other Chromium browsers: open the extension folder, enable
                     Developer mode on your browser’s extensions page, then choose Load unpacked and
-                    select that folder. After updating Latch, reload the extension and refresh open
-                    website tabs.
+                    select that folder. After updating Bitlatch, reload the extension and refresh
+                    open website tabs.
                   </p>
                   <Button
                     type="button"
@@ -474,7 +478,7 @@ export function Settings({
                   <FieldContent>
                     <FieldLabel htmlFor="settings-lock-timeout">Lock when idle</FieldLabel>
                     <FieldDescription id="lock-timeout-description">
-                      How long your Mac can be inactive before Latch locks.
+                      How long your Mac can be inactive before Bitlatch locks.
                     </FieldDescription>
                   </FieldContent>
                   <NativeSelect
@@ -498,7 +502,7 @@ export function Settings({
               </FieldGroup>
               <p id="lock-timeout-limits" className="settings-caption">
                 Timed locking also locks on sleep or screen lock. Never keeps the vault unlocked
-                until you lock it or quit Latch. Lock anytime with ⌘L.
+                until you lock it or quit Bitlatch. Lock anytime with ⌘L.
               </p>
               <h3>Unlock</h3>
               <FieldGroup className="settings-group">
@@ -538,7 +542,7 @@ export function Settings({
               )}
               <p id="touch-id-limits" className="settings-caption">
                 Keeps the session key in your login Keychain while locked. Touch ID is checked by
-                Latch. Turn this off to remove the stored key.
+                Bitlatch. Turn this off to remove the stored key.
               </p>
             </section>
           )}
@@ -549,7 +553,7 @@ export function Settings({
                 <div className="settings-row">
                   <div>
                     <strong>Bitwarden account</strong>
-                    <p>Latch connects to your existing Bitwarden vault.</p>
+                    <p>Bitlatch connects to your existing Bitwarden vault.</p>
                   </div>
                 </div>
                 <div className="settings-row">

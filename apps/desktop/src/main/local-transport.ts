@@ -103,7 +103,7 @@ export class LocalTransport<Request> {
           typeof message.token === 'string' ? Buffer.from(message.token) : Buffer.alloc(0);
         const expected = Buffer.from(this.token);
         if (token.length !== expected.length || !timingSafeEqual(token, expected))
-          throw new UserError('Browser pairing failed. Restart Latch and reload the extension.');
+          throw new UserError('Browser pairing failed. Restart Bitlatch and reload the extension.');
         const parsed = this.options.schema.safeParse(message.request);
         if (!parsed.success) throw new UserError('Unsupported browser request.');
         if (this.options.requestTimeout)

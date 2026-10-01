@@ -5,9 +5,9 @@ import { CopyField, ItemDetail, request, VaultItem } from './bridge';
 export function OpenLatch() {
   return (
     <Action
-      title="Open Latch"
+      title="Open Bitlatch"
       icon={Icon.AppWindow}
-      onAction={() => open('/Applications/Latch.app')}
+      onAction={() => open('/Applications/Bitlatch.app')}
     />
   );
 }
@@ -27,7 +27,7 @@ export function ItemActions({
       await showToast({
         style: Toast.Style.Success,
         title: `${field === 'notes' ? 'Note' : field.charAt(0).toUpperCase() + field.slice(1)} copied`,
-        message: 'Latch clears it after 30 seconds.',
+        message: 'Bitlatch clears it after 30 seconds.',
       });
     } catch (error) {
       onFailure();

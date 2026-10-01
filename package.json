@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "vp run @latch/desktop#dev",
     "start": "vp run @latch/desktop#start",
-    "build": "vp run --filter @latch/desktop --filter latch --fail-if-no-match build && vp run @latch/extension#build:extras && node apps/desktop/build/build-safari.mjs",
+    "build": "vp run --filter @latch/desktop --filter bitlatch --fail-if-no-match build && vp run @latch/extension#build:extras && node apps/desktop/build/build-safari.mjs",
     "test:matcher": "node --test tests/matching.test.mjs",
     "check": "pnpm run test:matcher && vp run @latch/extension#postinstall && vp check",
     "format": "vp fmt",

@@ -6,7 +6,7 @@ export interface CipherUri {
   match?: number | null;
 }
 
-/** A web address Latch is willing to store on an item. */
+/** A web address Bitlatch is willing to store on an item. */
 export function webUrl(input: string): URL | null {
   return parsedWebUrl(input)?.url ?? null;
 }
@@ -28,7 +28,7 @@ function parsedWebUrl(input: string): { url: URL; explicitPort: boolean } | null
 }
 
 /**
- * A web address Latch is willing to hand a credential to. Plain HTTP puts the
+ * A web address Bitlatch is willing to hand a credential to. Plain HTTP puts the
  * password on the wire, so it is only filled where the traffic stays on this
  * machine or the local network, which is also where a certificate is not
  * possible. Routers and other local devices live here; the open internet does

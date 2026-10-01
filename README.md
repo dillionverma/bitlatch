@@ -1,14 +1,15 @@
 <p align="center">
-  <img src="assets/brand/macos/icon-256.png" alt="Latch icon" width="88" />
+  <img src="assets/brand/macos/icon-256.png" alt="Bitlatch icon" width="88" />
 </p>
 
-<h1 align="center">Latch</h1>
+<h1 align="center">Bitlatch</h1>
 
 <p align="center">
   <strong>A modern, unofficial Bitwarden client.</strong>
 </p>
 
 <p align="center">
+  <a href="https://bitlatch.app">Website</a> ·
   <a href="#highlights">Highlights</a> ·
   <a href="#screenshots">Screenshots</a> ·
   <a href="#installation">Installation</a> ·
@@ -16,18 +17,18 @@
 </p>
 
 <p align="center">
-  <img src="assets/readme/vault.webp" alt="Latch with a glass window over a macOS wallpaper: a clean sidebar, vault items, and a selected login with its password hidden. All accounts shown are demo data." width="1080" />
+  <img src="assets/readme/vault.webp" alt="Bitlatch with a glass window over a macOS wallpaper: a clean sidebar, vault items, and a selected login with its password hidden. All accounts shown are demo data." width="1080" />
 </p>
 
-Latch is an alternative client for your existing Bitwarden vault, designed around a cleaner interface and quicker workflows. Search from the keyboard, fill logins in your browser, and access credentials from Raycast. Keep your account and vault; there's nothing to migrate.
+Bitlatch is an alternative client for your existing Bitwarden vault, designed around a cleaner interface and quicker workflows. Search from the keyboard, fill logins in your browser, and access credentials from Raycast. Keep your account and vault; there's nothing to migrate.
 
-Latch is an independent project, not affiliated with or endorsed by Bitwarden.
+Bitlatch is an independent project, not affiliated with or endorsed by Bitwarden.
 
 ## Highlights
 
 - ✨ **A more considered interface.** Clear layouts, a light theme, and a glass finish on macOS.
 - ⚡ **Keep your hands on the keyboard.** Jump to search with ⌘K / Ctrl+K, find a login, and copy what you need.
-- 🌐 **Fill where you browse.** Bring Latch to Chrome, Aside, and other browsers. [See browser availability](#browser-extensions).
+- 🌐 **Fill where you browse.** Bring Bitlatch to Chrome, Aside, and other browsers. [See browser availability](#browser-extensions).
 - 🚀 **Your vault in Raycast.** Search, unlock, and copy credentials straight from your launcher on Mac.
 - 👆 **Less typing, more control.** Unlock with Touch ID on Mac, choose when your vault locks, and configure generated passwords.
 - 🔑 **Keep Bitwarden underneath.** Your existing account and vault, with authentication and cryptography handled by the official Bitwarden CLI.
@@ -35,12 +36,12 @@ Latch is an independent project, not affiliated with or endorsed by Bitwarden.
 ## Screenshots
 
 <p align="center">
-  <img src="assets/readme/popup.webp" alt="Latch extension popup in light mode with demo vault items." width="49%" />
-  <img src="assets/readme/autofill.webp" alt="Latch autofill suggestions in light mode on a demo sign-in page." width="49%" />
+  <img src="assets/readme/popup.webp" alt="Bitlatch extension popup in light mode with demo vault items." width="49%" />
+  <img src="assets/readme/autofill.webp" alt="Bitlatch autofill suggestions in light mode on a demo sign-in page." width="49%" />
 </p>
 
 <p align="center">
-  <img src="assets/readme/raycast.webp" alt="Latch vault search in Raycast with synthetic demo accounts on the macOS Golden Gate wallpaper." width="720" />
+  <img src="assets/readme/raycast.webp" alt="Bitlatch vault search in Raycast with synthetic demo accounts on the macOS Golden Gate wallpaper." width="720" />
 </p>
 
 ## Installation
@@ -51,7 +52,7 @@ _Coming soon. Planned command:_
 
 ```sh
 brew install bitwarden-cli
-brew install --cask dillionverma/tap/latch
+brew install --cask dillionverma/tap/bitlatch
 ```
 
 ### Direct download

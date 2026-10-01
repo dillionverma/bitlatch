@@ -28,15 +28,15 @@ function validateVersion() {
 function verifyAssets() {
   const version = tag.slice(1);
   const expected = [
-    `Latch-${version}-mac-arm64.dmg`,
-    `Latch-${version}-mac-arm64.zip`,
-    `Latch-${version}-linux-x86_64.AppImage`,
-    `Latch-${version}-linux-amd64.deb`,
-    `Latch-${version}-linux-arm64.AppImage`,
-    `Latch-${version}-linux-arm64.deb`,
-    `Latch-${version}-win-x64.exe`,
+    `Bitlatch-${version}-mac-arm64.dmg`,
+    `Bitlatch-${version}-mac-arm64.zip`,
+    `Bitlatch-${version}-linux-x86_64.AppImage`,
+    `Bitlatch-${version}-linux-amd64.deb`,
+    `Bitlatch-${version}-linux-arm64.AppImage`,
+    `Bitlatch-${version}-linux-arm64.deb`,
+    `Bitlatch-${version}-win-x64.exe`,
     ...['chrome', 'firefox', 'safari', 'sources', 'raycast'].map(
-      (target) => `latch-${version}-${target}.zip`,
+      (target) => `bitlatch-${version}-${target}.zip`,
     ),
   ];
   const files = readdirSync(directory)
@@ -78,7 +78,7 @@ function publish() {
       '--draft',
       '--prerelease',
       '--title',
-      `Latch ${tag}`,
+      `Bitlatch ${tag}`,
       '--notes-file',
       resolve(root, '.github/release-notes.md'),
     ]);

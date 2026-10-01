@@ -33,7 +33,7 @@ export async function installBrowser(options: BrowserRegistration, root?: string
   if (!windows) await chmod(launcher, 0o700);
   const common = {
     name: NATIVE_HOST,
-    description: 'Latch vault bridge',
+    description: 'Bitlatch vault bridge',
     path: launcher,
     type: 'stdio',
   };

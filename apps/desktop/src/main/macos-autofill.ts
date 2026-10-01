@@ -101,7 +101,7 @@ export class MacAutoFill {
       available: !!state.available && !!this.server && !this.stopped,
       enabled: this.enabled,
       ...(!state.available
-        ? { reason: 'macOS AutoFill requires a signed Latch app with its AutoFill extension.' }
+        ? { reason: 'macOS AutoFill requires a signed Bitlatch app with its AutoFill extension.' }
         : {}),
     };
   }
@@ -113,7 +113,7 @@ export class MacAutoFill {
 
   async enable(): Promise<MacAutoFillState> {
     if (!(await this.status()).available)
-      throw new UserError('Install a signed Latch build with macOS AutoFill support first.');
+      throw new UserError('Install a signed Bitlatch build with macOS AutoFill support first.');
     if (this.enabled) return this.status();
     if (this.requesting || Date.now() - this.lastRequest < 10_000)
       throw new UserError('Wait 10 seconds before asking macOS again.');
@@ -139,7 +139,7 @@ export class MacAutoFill {
 
   async safariSettings() {
     if (!(await this.safariStatus()).available)
-      throw new UserError('Install a signed Latch app with the Safari extension first.');
+      throw new UserError('Install a signed Bitlatch app with the Safari extension first.');
     try {
       await this.call('safariSettings');
     } catch {

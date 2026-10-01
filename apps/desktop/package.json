@@ -1,13 +1,13 @@
 {
   "version": "0.3.0",
   "private": true,
-  "description": "A redesigned client for your Bitwarden vault.",
-  "homepage": "https://github.com/dillionverma/latch",
+  "description": "Bitlatch, a modern, unofficial Bitwarden client.",
+  "homepage": "https://bitlatch.app",
   "author": "Dillion Verma",
   "license": "MIT",
   "type": "module",
   "main": "dist/desktop/main.cjs",
-  "desktopName": "latch.desktop",
+  "desktopName": "bitlatch.desktop",
   "name": "@latch/desktop",
   "scripts": {
     "dev": "node build/dev.mjs",

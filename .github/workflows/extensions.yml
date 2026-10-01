@@ -51,6 +51,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: release-raycast
-          path: release/latch-*-raycast.zip
+          path: release/bitlatch-*-raycast.zip
           if-no-files-found: error
           retention-days: 14

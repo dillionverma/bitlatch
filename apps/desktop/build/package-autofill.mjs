@@ -67,7 +67,7 @@ const group = `${host.team}.app.latch.vault`;
 const safariProfile = process.env.LATCH_SAFARI_PROFILE;
 const safari = safariProfile ? profile(safariProfile, 'app.latch.vault.safari', false) : undefined;
 if (safari && safari.team !== host.team)
-  throw new Error('Safari and Latch must use the same signing team.');
+  throw new Error('Safari and Bitlatch must use the same signing team.');
 const env = {
   ...process.env,
   LATCH_APP_GROUP: group,
@@ -101,7 +101,7 @@ execFileSync(
     stdio: 'inherit',
   },
 );
-const app = join(root, 'release/mac-arm64/Latch.app');
+const app = join(root, 'release/mac-arm64/Bitlatch.app');
 const appex = join(app, 'Contents/PlugIns/LatchAutoFill.appex');
 const signing = join(root, 'release/autofill-signing');
 await mkdir(signing, { recursive: true, mode: 0o700 });
@@ -193,5 +193,5 @@ if (release) {
   const { notarizeRelease } = await import('./notarize-release.mjs');
   await notarizeRelease({ root, app, identity, notarizationProfile, env });
 } else {
-  console.log('Signed AutoFill build: release/mac-arm64/Latch.app. Not installed or notarized.');
+  console.log('Signed AutoFill build: release/mac-arm64/Bitlatch.app. Not installed or notarized.');
 }

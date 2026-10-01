@@ -55,7 +55,7 @@ final class CredentialProvider: ASCredentialProviderViewController {
   }
 
   private func show(
-    _ message: String, title: String = "AutoFill from Latch", retry: Bool = false,
+    _ message: String, title: String = "AutoFill from Bitlatch", retry: Bool = false,
     options: [(String, () -> Void)] = []
   ) {
     loadViewIfNeeded()
@@ -97,7 +97,7 @@ final class CredentialProvider: ASCredentialProviderViewController {
         } else if let failure = error as? VaultClient.Failure {
           self.show(failure.localizedDescription, retry: true)
         } else {
-          self.show("Could not complete AutoFill. Unlock Latch and try again.", retry: true)
+          self.show("Could not complete AutoFill. Unlock Bitlatch and try again.", retry: true)
         }
       }
     }
@@ -113,7 +113,7 @@ final class CredentialProvider: ASCredentialProviderViewController {
     do {
       let verified = try await context.evaluatePolicy(
         .deviceOwnerAuthentication,
-        localizedReason: "use a Latch passkey for \(rp)")
+        localizedReason: "use a Bitlatch passkey for \(rp)")
       try Task.checkCancellation()
       guard verified else { throw CancellationError() }
       return true
@@ -153,7 +153,7 @@ final class CredentialProvider: ASCredentialProviderViewController {
     let urls = services.prefix(16).map(url).filter { $0.count <= 4096 }
     run { [self] in
       guard !urls.isEmpty else {
-        self.show("This app did not provide a website to match. Open Latch to copy your login.")
+        self.show("This app did not provide a website to match. Open Bitlatch to copy your login.")
         return
       }
       self.show("Looking for matching logins…")
@@ -171,7 +171,7 @@ final class CredentialProvider: ASCredentialProviderViewController {
       }
       self.show(
         options.isEmpty
-          ? "No matching logins. Add this website to a login in Latch." : "Choose a login.",
+          ? "No matching logins. Add this website to a login in Bitlatch." : "Choose a login.",
         retry: true, options: options)
     }
   }
@@ -202,7 +202,7 @@ final class CredentialProvider: ASCredentialProviderViewController {
       self?.prepareCredentialList(for: services, requestParameters: parameters)
     }
     run { [self] in
-      self.show("Looking for passkeys…", title: "Passkey from Latch")
+      self.show("Looking for passkeys…", title: "Passkey from Bitlatch")
       // Refuse oversized allow lists, never truncate security constraints.
       guard parameters.allowedCredentials.count <= 64 else {
         throw VaultClient.Failure("This passkey request is too large.")
@@ -216,7 +216,7 @@ final class CredentialProvider: ASCredentialProviderViewController {
         keys.isEmpty
           ? "No saved passkey for \(parameters.relyingPartyIdentifier)."
           : "Choose a passkey for \(parameters.relyingPartyIdentifier).",
-        title: "Passkey from Latch", retry: true,
+        title: "Passkey from Bitlatch", retry: true,
         options: keys.prefix(12).map { key in
           (
             "\(key.name) — \(key.userName)",
@@ -243,7 +243,7 @@ final class CredentialProvider: ASCredentialProviderViewController {
         record: record, credential: credential, rp: rp, hash: hash, preference: preference)
     }
     run { [self] in
-      self.show("Signing in to \(rp)…", title: "Passkey from Latch")
+      self.show("Signing in to \(rp)…", title: "Passkey from Bitlatch")
       let verified = try await self.verify(preference, rp: rp)
       try Task.checkCancellation()
       let result: Assertion = try await VaultClient().request([
@@ -271,7 +271,7 @@ final class CredentialProvider: ASCredentialProviderViewController {
     retryAction = { [weak self] in self?.prepareInterface(forPasskeyRegistration: request) }
     show(
       "Create a passkey for \(identity.relyingPartyIdentifier) as \(identity.userName)? It will be saved in your Bitwarden vault.",
-      title: "Save a passkey in Latch",
+      title: "Save a passkey in Bitlatch",
       options: [("Save Passkey", { [weak self] in self?.register(request, identity: identity) })])
   }
 
@@ -289,7 +289,7 @@ final class CredentialProvider: ASCredentialProviderViewController {
       else {
         throw VaultClient.Failure("This passkey request is not supported.")
       }
-      self.show("Creating a passkey for \(rp)…", title: "Save a passkey in Latch")
+      self.show("Creating a passkey for \(rp)…", title: "Save a passkey in Bitlatch")
       let verified = try await self.verify(request.userVerificationPreference, rp: rp)
       try Task.checkCancellation()
       let result: Registration = try await VaultClient().request([

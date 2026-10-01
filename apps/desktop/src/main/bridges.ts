@@ -175,7 +175,7 @@ export async function startBridges({
         await safariBridge?.stop().catch(() => undefined);
         if (safariBridge) transports.splice(transports.indexOf(safariBridge), 1);
         // Optional browser setup must not prevent access to the desktop vault.
-        console.warn('Latch Safari connection unavailable. Check signing and App Group setup.');
+        console.warn('Bitlatch Safari connection unavailable. Check signing and App Group setup.');
       }
     }
     // Registration is setup, not proof that an extension is connected. A failure

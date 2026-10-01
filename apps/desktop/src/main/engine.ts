@@ -8,8 +8,8 @@ import { UserError } from '@latch/shared/protocol';
 
 export const ENGINE_SETUP_MESSAGE =
   process.platform === 'darwin'
-    ? 'Install the official Bitwarden CLI with “brew install bitwarden-cli”, then restart Latch.'
-    : 'Install the official Bitwarden CLI and add it to PATH, or set LATCH_BW_PATH to its full path, then restart Latch.';
+    ? 'Install the official Bitwarden CLI with “brew install bitwarden-cli”, then restart Bitlatch.'
+    : 'Install the official Bitwarden CLI and add it to PATH, or set LATCH_BW_PATH to its full path, then restart Bitlatch.';
 
 /**
  * Puts a warm vault server in front of the one-shot CLI, so reads and writes

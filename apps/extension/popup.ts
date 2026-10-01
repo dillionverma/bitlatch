@@ -70,7 +70,7 @@ async function send<T>(request: object): Promise<Result<T>> {
   try {
     return (await browser.runtime.sendMessage(request)) as Result<T>;
   } catch {
-    return { ok: false, error: 'Open Latch on your computer to reconnect.' };
+    return { ok: false, error: 'Open Bitlatch on your computer to reconnect.' };
   }
 }
 function feedback(text: string, error = false) {
@@ -114,10 +114,10 @@ function setState(next: typeof state, error = '') {
     state === 'locked'
       ? 'Your vault is locked'
       : state === 'signed-out'
-        ? 'Sign in to Latch'
+        ? 'Sign in to Bitlatch'
         : state === 'disconnected'
-          ? 'Connect to Latch'
-          : 'Connecting to Latch';
+          ? 'Connect to Bitlatch'
+          : 'Connecting to Bitlatch';
   document.querySelector('#empty-description')!.textContent =
     error ||
     (state === 'locked'
@@ -126,7 +126,7 @@ function setState(next: typeof state, error = '') {
         ? 'Sign in on your computer to access your vault.'
         : 'Your vault stays on your computer.');
   connect.hidden = state === 'connecting';
-  connect.textContent = state === 'locked' ? 'Unlock in Latch' : 'Open Latch';
+  connect.textContent = state === 'locked' ? 'Unlock in Bitlatch' : 'Open Bitlatch';
   return changed;
 }
 async function openDesktop() {
@@ -195,8 +195,8 @@ function showDetail(item: ItemSummary) {
       'p',
       'detail-hint',
       item.type === 1
-        ? 'Fill from the Latch button in a login field. Copied values clear after 30 seconds.'
-        : 'Copy the note to read it, or open it in Latch. Copied values clear after 30 seconds.',
+        ? 'Fill from the Bitlatch button in a login field. Copied values clear after 30 seconds.'
+        : 'Copy the note to read it, or open it in Bitlatch. Copied values clear after 30 seconds.',
     ),
   );
   back.focus();

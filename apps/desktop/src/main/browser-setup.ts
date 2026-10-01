@@ -21,7 +21,7 @@ export async function browserSetup(macAutoFill: MacAutoFill): Promise<BrowserSet
       reason: safari.available
         ? undefined
         : process.platform === 'darwin'
-          ? 'Requires a signed Latch app with the Safari extension.'
+          ? 'Requires a signed Bitlatch app with the Safari extension.'
           : 'Safari is available on macOS.',
     },
     chrome: {

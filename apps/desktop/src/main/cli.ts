@@ -204,7 +204,7 @@ export class BitwardenCli implements CliPort {
       child.on('error', () =>
         reject(
           new UserError(
-            'The Bitwarden CLI could not start. Check its installation, then restart Latch.',
+            'The Bitwarden CLI could not start. Check its installation, then restart Bitlatch.',
           ),
         ),
       );
@@ -240,7 +240,7 @@ export function detectPrompt(output: string, handled = new Set<CliPrompt['kind']
   if (KNOWN_QUESTIONS['two-step-method'].test(text))
     prompts.push({ kind: 'two-step-method', methods: listedMethods(text) });
   if (KNOWN_QUESTIONS['two-step-code'].test(text)) prompts.push({ kind: 'two-step-code' });
-  // Any other question is one Latch cannot answer. Echoes of answered
+  // Any other question is one Bitlatch cannot answer. Echoes of answered
   // questions are still recognized, so they never count as unknown.
   const questions = text.match(/(^|\n)\? [^\n]*/g) ?? [];
   if (
@@ -287,7 +287,7 @@ export function cliError(rawOutput: string, overflow: boolean) {
     );
   if (/code is required|no provider selected/i.test(output))
     return new UserError(
-      'Bitwarden asked for a verification code that Latch could not collect. Try again, or use Personal API key sign-in.',
+      'Bitwarden asked for a verification code that Bitlatch could not collect. Try again, or use Personal API key sign-in.',
     );
   if (/two.?step|two.?factor|captcha|\bbot\b|verification|api key|client_secret/i.test(output)) {
     return new UserError(

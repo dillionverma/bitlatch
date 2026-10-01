@@ -40,7 +40,7 @@ export async function request<T = void>(
     if (typeof config.socketPath !== 'string' || !/^[a-f0-9]{64}$/.test(config.token))
       throw new Error();
   } catch {
-    throw new Error('Open the updated Latch app first.');
+    throw new Error('Open the updated Bitlatch app first.');
   }
   signal?.throwIfAborted();
   return new Promise((resolve, reject) => {
@@ -60,27 +60,27 @@ export async function request<T = void>(
     socket.setEncoding('utf8');
     socket.setTimeout(
       request.type === 'unlock' || request.type === 'biometricUnlock' ? 120_000 : 5000,
-      () => finish(new Error('Latch did not respond. Reopen Latch.')),
+      () => finish(new Error('Bitlatch did not respond. Reopen Bitlatch.')),
     );
-    socket.on('error', () => finish(new Error('Open the updated Latch app first.')));
-    socket.on('end', () => finish(new Error('Latch disconnected.')));
+    socket.on('error', () => finish(new Error('Open the updated Bitlatch app first.')));
+    socket.on('end', () => finish(new Error('Bitlatch disconnected.')));
     socket.on('connect', () =>
       socket.write(JSON.stringify({ token: config.token, request }) + '\n'),
     );
     socket.on('data', (chunk) => {
       buffer += chunk;
       if (Buffer.byteLength(buffer) > 1024 * 1024)
-        return finish(new Error('Latch response is too large.'));
+        return finish(new Error('Bitlatch response is too large.'));
       if (!buffer.includes('\n')) return;
       try {
         const result = JSON.parse(buffer.slice(0, buffer.indexOf('\n')));
         if (result.ok === true) finish(undefined, result.value);
         else
           finish(
-            new Error(typeof result.error === 'string' ? result.error : 'Latch request failed.'),
+            new Error(typeof result.error === 'string' ? result.error : 'Bitlatch request failed.'),
           );
       } catch {
-        finish(new Error('Invalid Latch response.'));
+        finish(new Error('Invalid Bitlatch response.'));
       }
     });
   });

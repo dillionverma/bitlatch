@@ -35,7 +35,7 @@ export function mark() {
 export function brand(label: string) {
   const header = element('div', 'brand');
   const name = element('span', 'brand-name');
-  name.append(mark(), element('span', '', 'Latch'));
+  name.append(mark(), element('span', '', 'Bitlatch'));
   header.append(name, element('span', 'origin', label));
   return header;
 }

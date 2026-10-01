@@ -151,7 +151,7 @@ export interface FillCredential {
   password: string;
 }
 
-/** What Latch would do with a sign-in the browser just watched happen. */
+/** What Bitlatch would do with a sign-in the browser just watched happen. */
 export interface CaptureOffer {
   action: 'none' | 'save' | 'update';
   /** The item that would be written, for the prompt to name. */

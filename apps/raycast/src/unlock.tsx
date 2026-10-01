@@ -29,7 +29,7 @@ export function Unlock({ state, onUnlock }: { state: SearchResult; onUnlock: () 
   }
   return (
     <Form
-      navigationTitle="Unlock Latch"
+      navigationTitle="Unlock Bitlatch"
       isLoading={busy}
       enableDrafts={false}
       actions={
@@ -43,14 +43,14 @@ export function Unlock({ state, onUnlock }: { state: SearchResult; onUnlock: () 
             />
           )}
           <Action
-            title="Open Latch"
+            title="Open Bitlatch"
             icon={Icon.AppWindow}
-            onAction={() => open('/Applications/Latch.app')}
+            onAction={() => open('/Applications/Bitlatch.app')}
           />
         </ActionPanel>
       }
     >
-      <Form.Description title="Account" text={state.email || 'Your Latch vault'} />
+      <Form.Description title="Account" text={state.email || 'Your Bitlatch vault'} />
       <Form.PasswordField
         id="password"
         title="Master Password"

@@ -118,8 +118,8 @@ export async function buildAutoFill(root) {
 <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 <key>CFBundleDevelopmentRegion</key><string>en</string>
 <key>CFBundleSupportedPlatforms</key><array><string>MacOSX</string></array>
-<key>CFBundleName</key><string>Latch</string>
-<key>CFBundleDisplayName</key><string>Latch</string>
+<key>CFBundleName</key><string>Bitlatch</string>
+<key>CFBundleDisplayName</key><string>Bitlatch</string>
 <key>CFBundleExecutable</key><string>LatchAutoFill</string>
 <key>CFBundleIconName</key><string>Latch</string>
 <key>CFBundleIconFile</key><string>Latch.icns</string>

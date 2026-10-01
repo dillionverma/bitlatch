@@ -40,7 +40,7 @@ static napi_value invoke(napi_env env, napi_callback_info info) {
     free(operation); free(input);
     napi_throw_type_error(env, NULL, "Invalid AutoFill arguments"); return NULL;
   }
-  napi_create_string_utf8(env, "Latch AutoFill", NAPI_AUTO_LENGTH, &resource);
+  napi_create_string_utf8(env, "Bitlatch AutoFill", NAPI_AUTO_LENGTH, &resource);
   napi_threadsafe_function callback;
   if (napi_create_threadsafe_function(env, args[2], NULL, resource, 1, 1,
       NULL, NULL, NULL, deliver, &callback) == napi_ok)

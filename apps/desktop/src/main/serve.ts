@@ -385,7 +385,7 @@ export class WarmBitwardenCli implements CliPort {
             try {
               envelope = JSON.parse(text) as Envelope;
             } catch {
-              return reject(new Error('The vault server sent a reply Latch could not read.'));
+              return reject(new Error('The vault server sent a reply Bitlatch could not read.'));
             }
             if (envelope.success === false || (response.statusCode ?? 0) >= 400)
               return reject(cliError(envelope.message ?? '', false));
@@ -493,7 +493,7 @@ const UNLOCK: Route = {
 const SYNC: Route = { method: 'POST', path: '/sync', pick: json, syncs: true };
 
 /**
- * Maps the vault commands Latch runs often onto the server's REST API. Anything
+ * Maps the vault commands Bitlatch runs often onto the server's REST API. Anything
  * not listed here keeps using a one-shot CLI run.
  */
 export function routeFor(args: string[], options: RunOptions = {}): Route | undefined {
@@ -567,7 +567,7 @@ class PinnedAgent extends Agent {
 /**
  * Joins two sockets to each other and removes the directory that introduced
  * them. What is left has no port and no name on disk, so the vault server can
- * only ever be reached by the end Latch keeps.
+ * only ever be reached by the end Bitlatch keeps.
  */
 async function socketPair() {
   const directory = await mkdtemp(join(tmpdir(), 'latch-serve-'));

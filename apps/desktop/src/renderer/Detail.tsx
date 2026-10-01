@@ -187,7 +187,7 @@ export function Detail({
           <div className="task-actions">
             {item.restorable && <Badge variant="secondary">In Trash</Badge>}
             {!item.editable && !item.restorable && (
-              <Badge variant="outline">Read-only in Latch</Badge>
+              <Badge variant="outline">Read-only in Bitlatch</Badge>
             )}
           </div>
         )}
@@ -296,7 +296,7 @@ export function Detail({
             <Fingerprint />
             <AlertTitle>Passkey</AlertTitle>
             <AlertDescription>
-              Signs in through macOS AutoFill when Latch is unlocked. Edit or remove it in
+              Signs in through macOS AutoFill when Bitlatch is unlocked. Edit or remove it in
               Bitwarden.
             </AlertDescription>
           </Alert>
@@ -309,7 +309,7 @@ export function Detail({
         )}
         {item.type !== 1 && item.type !== 2 && (
           <Alert>
-            <AlertTitle>Read-only in Latch</AlertTitle>
+            <AlertTitle>Read-only in Bitlatch</AlertTitle>
             <AlertDescription>
               Use the official Bitwarden client for this item's full details.
             </AlertDescription>

@@ -312,7 +312,7 @@ export class Vault extends EventEmitter {
     if (this.pending !== pending) return undefined;
     if (prompt.kind === 'unknown') {
       pending.failure = new UserError(
-        'Bitwarden asked a question Latch cannot answer. Use Personal API key sign-in.',
+        'Bitwarden asked a question Bitlatch cannot answer. Use Personal API key sign-in.',
       );
       return undefined;
     }
@@ -693,7 +693,7 @@ export class Vault extends EventEmitter {
     if (this.state.status !== 'unlocked' || !password) return { action: 'none' };
     const site = fillableUrl(url);
     if (!site) return { action: 'none' };
-    // Items with passkeys still count as saved; Latch just never edits them.
+    // Items with passkeys still count as saved; Bitlatch just never edits them.
     const known = [...this.ciphers.values()].filter(
       (cipher) =>
         cipher.type === 1 &&
@@ -856,7 +856,7 @@ export class Vault extends EventEmitter {
     const credential = latest.login?.fido2Credentials?.find(
       (entry) => entry.credentialId === credentialId,
     );
-    if (!credential) throw new UserError('This passkey is no longer in your vault. Sync Latch.');
+    if (!credential) throw new UserError('This passkey is no longer in your vault. Sync Bitlatch.');
     credential.counter = String(Math.max(counter, (Number(credential.counter) || 0) + 1));
     const payload = Buffer.from(JSON.stringify(latest)).toString('base64');
     const saved = JSON.parse(
@@ -883,7 +883,7 @@ export class Vault extends EventEmitter {
     if (!isValidRpId(input.rpId))
       throw new UserError('This website did not provide a valid passkey identifier.');
     if (!input.algorithms.includes(ES256))
-      throw new UserError('This website does not accept the key type Latch can create.');
+      throw new UserError('This website does not accept the key type Bitlatch can create.');
     const clientDataHash = fromBase64Url(input.clientDataHash);
     if (clientDataHash.length !== 32) throw new UserError('The passkey request is malformed.');
     const userHandle = fromBase64Url(input.userHandle);
@@ -893,7 +893,7 @@ export class Vault extends EventEmitter {
     for (const cipher of this.ciphers.values())
       for (const credential of passkeysOf(cipher))
         if (excluded.some((raw) => sameCredential(credential.credentialId, raw)))
-          throw new UserError('A passkey for this account is already saved in Latch.');
+          throw new UserError('A passkey for this account is already saved in Bitlatch.');
     const key = createCredentialKey();
     const credential: Fido2Credential = {
       credentialId: key.credentialId,
@@ -1081,7 +1081,7 @@ export class Vault extends EventEmitter {
 
   private requireUnlocked() {
     if (this.state.status !== 'unlocked' || !this.session)
-      throw new UserError('Unlock Latch to continue.');
+      throw new UserError('Unlock Bitlatch to continue.');
   }
 
   private assertGeneration(generation: number) {
@@ -1129,7 +1129,7 @@ function passkeysOf(cipher: Cipher): Fido2Credential[] {
   if (cipher.type !== 1 || cipher.deletedDate || isRestricted(cipher)) return [];
   return (cipher.login?.fido2Credentials ?? []).filter(usableCredential);
 }
-/** Whether Latch will move an item to the trash. Type does not matter here. */
+/** Whether Bitlatch will move an item to the trash. Type does not matter here. */
 function isRemovable(cipher: Cipher) {
   return !isRestricted(cipher) && !cipher.login?.fido2Credentials?.length;
 }

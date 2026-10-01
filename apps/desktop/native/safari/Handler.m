@@ -55,7 +55,7 @@ static NSDictionary *Request(NSDictionary *request) {
   id message = input.userInfo[SFExtensionMessageKey];
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
     NSDictionary *response = [message isKindOfClass:NSDictionary.class] ? Request(message) : nil;
-    if (!response) response = @{ @"ok": @NO, @"error": @"Open Latch on your Mac to connect your vault." };
+    if (!response) response = @{ @"ok": @NO, @"error": @"Open Bitlatch on your Mac to connect your vault." };
     NSExtensionItem *output = [NSExtensionItem new];
     output.userInfo = @{ SFExtensionMessageKey: response };
     [context completeRequestReturningItems:@[output] completionHandler:nil];

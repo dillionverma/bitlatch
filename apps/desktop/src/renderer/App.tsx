@@ -152,7 +152,7 @@ export function App() {
             ? response.value
             : {
                 ...initialState,
-                setupError: 'Could not connect to Latch. Reopen the app to try again.',
+                setupError: 'Could not connect to Bitlatch. Reopen the app to try again.',
               },
         );
       })
@@ -160,7 +160,7 @@ export function App() {
         if (active && version === stateVersion.current)
           receiveState({
             ...initialState,
-            setupError: 'Could not connect to Latch. Reopen the app to try again.',
+            setupError: 'Could not connect to Bitlatch. Reopen the app to try again.',
           });
       });
     return () => {
@@ -202,7 +202,7 @@ export function App() {
     return (
       <div className="boot" role="status">
         <Mark size={30} />
-        <span>Latch</span>
+        <span>Bitlatch</span>
       </div>
     );
   if (state.status !== 'unlocked')

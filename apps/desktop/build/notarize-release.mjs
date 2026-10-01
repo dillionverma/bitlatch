@@ -22,7 +22,7 @@ export async function notarizeRelease({ root, app, identity, notarizationProfile
   };
   const temporary = await mkdtemp(join(tmpdir(), 'latch-notarize-'));
   try {
-    const submission = join(temporary, 'Latch.zip');
+    const submission = join(temporary, 'Bitlatch.zip');
     run('ditto', ['-c', '-k', '--keepParent', app, submission]);
     notarize(submission);
     staple(app);

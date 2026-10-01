@@ -4,7 +4,7 @@
       "layers": [
         {
           "image-name": "glyph.svg",
-          "name": "Latch",
+          "name": "Bitlatch",
           "glass": true,
           "position": {
             "scale": 1,

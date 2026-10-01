@@ -22,7 +22,7 @@ export default defineBackground(() => {
     if (import.meta.env.BROWSER === 'safari') {
       return new Promise((resolve) => {
         const timer = setTimeout(
-          () => resolve({ ok: false, error: 'Latch is not responding.' }),
+          () => resolve({ ok: false, error: 'Bitlatch is not responding.' }),
           10000,
         );
         browser.runtime.sendNativeMessage(HOST, request).then(
@@ -32,7 +32,7 @@ export default defineBackground(() => {
           },
           () => {
             clearTimeout(timer);
-            resolve({ ok: false, error: 'Open Latch and enable its Safari extension.' });
+            resolve({ ok: false, error: 'Open Bitlatch and enable its Safari extension.' });
           },
         );
       });
@@ -54,7 +54,7 @@ export default defineBackground(() => {
             clearTimeout(entry.timer);
             entry.resolve({
               ok: false,
-              error: 'Open Latch on your computer to connect your vault.',
+              error: 'Open Bitlatch on your computer to connect your vault.',
             });
           }
           pending = [];
@@ -80,7 +80,7 @@ export default defineBackground(() => {
       clearTimeout(entry.timer);
       entry.resolve({
         ok: false,
-        error: 'Latch is not responding. Open the desktop app and try again.',
+        error: 'Bitlatch is not responding. Open the desktop app and try again.',
       });
     }
     pending = [];
@@ -122,12 +122,12 @@ export default defineBackground(() => {
       const text = count ? (count >= 12 ? '12+' : String(count)) : '';
       const title =
         !url || !/^https?:\/\//.test(url)
-          ? 'Latch'
+          ? 'Bitlatch'
           : !result?.ok
-            ? 'Latch — open the desktop app'
+            ? 'Bitlatch — open the desktop app'
             : !unlocked
-              ? 'Latch — vault locked'
-              : `Latch — ${text || 'No'} matching ${count === 1 ? 'login' : 'logins'}`;
+              ? 'Bitlatch — vault locked'
+              : `Bitlatch — ${text || 'No'} matching ${count === 1 ? 'login' : 'logins'}`;
       if (!clear && badgeLabel === title) return;
       badgeLabel = title;
       await browser.action.setBadgeBackgroundColor({ color: '#334155' });
@@ -147,7 +147,7 @@ export default defineBackground(() => {
     if (tab.active && (change.url || change.status === 'complete')) void refreshBadge(true);
   });
   browser.windows.onFocusChanged.addListener(() => void refreshBadge(true));
-  // Also retry after Latch starts or restarts; a missing port is not permanent.
+  // Also retry after Bitlatch starts or restarts; a missing port is not permanent.
   setInterval(() => {
     void refreshBadge();
   }, 5000);
@@ -207,7 +207,7 @@ export default defineBackground(() => {
       return { ok: false, error: 'Unsupported request.' };
     })()
       .then(respond)
-      .catch(() => respond({ ok: false, error: 'Unable to connect to Latch.' }));
+      .catch(() => respond({ ok: false, error: 'Unable to connect to Bitlatch.' }));
     return true;
   });
 });

@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 const source = resolve(root, 'apps/raycast');
-const output = resolve(root, 'release/raycast/latch');
+const output = resolve(root, 'release/raycast/bitlatch');
 const lockfile = resolve(source, 'store/package-lock.json');
 const updateLock = process.argv.includes('--update-lock');
 const readJson = (file) => JSON.parse(readFileSync(file, 'utf8'));
@@ -60,9 +60,9 @@ run('npm', ['ci']);
 run('npm', ['run', 'build']);
 run('npm', ['run', 'lint']);
 const { version } = readJson(resolve(root, 'apps/desktop/package.json'));
-const archive = resolve(root, `release/latch-${version}-raycast.zip`);
+const archive = resolve(root, `release/bitlatch-${version}-raycast.zip`);
 rmSync(archive, { force: true });
-execFileSync('zip', ['-qr', archive, 'latch', '-x', '*/node_modules/*', '*/dist/*'], {
+execFileSync('zip', ['-qr', archive, 'bitlatch', '-x', '*/node_modules/*', '*/dist/*'], {
   cwd: resolve(output, '..'),
   stdio: 'inherit',
 });
