@@ -1,6 +1,5 @@
 import { browser } from 'wxt/browser';
 import '@latch/shared/theme.css';
-import './content/appearance.css';
 import './popup.css';
 import { element, mark } from './content/render';
 import type { BrowserVaultQuery } from '@latch/shared/protocol';
@@ -103,10 +102,12 @@ function setState(next: typeof state, error = '') {
     connecting: 'Connecting…',
   }[state];
   lock.hidden = state !== 'unlocked';
+  open.hidden = state === 'locked';
   empty.hidden = state === 'unlocked';
   vaultBrowser.hidden = state !== 'unlocked' || Boolean(selected);
   detail.hidden = state !== 'unlocked' || !selected;
   unlockForm.hidden = state !== 'locked';
+  document.querySelector('footer')!.hidden = state !== 'unlocked';
   if (changed) {
     generation++;
     requestVersion++;
@@ -133,15 +134,15 @@ function setState(next: typeof state, error = '') {
         : state === 'disconnected'
           ? 'Connect to Bitlatch'
           : 'Connecting to Bitlatch';
-  document.querySelector('#empty-description')!.textContent =
+  const description = document.querySelector<HTMLElement>('#empty-description')!;
+  description.hidden = state === 'locked';
+  description.textContent =
     error ||
-    (state === 'locked'
-      ? 'Unlock to search and fill from your browser.'
-      : state === 'signed-out'
-        ? 'Sign in on your computer to access your vault.'
-        : 'Your vault stays on your computer.');
-  connect.hidden = state === 'connecting';
-  connect.textContent = state === 'locked' ? 'Open desktop app' : 'Open Bitlatch';
+    (state === 'signed-out'
+      ? 'Sign in on your computer to access your vault.'
+      : 'Your vault stays on your computer.');
+  connect.hidden = state === 'connecting' || state === 'locked';
+  connect.textContent = 'Open Bitlatch';
   return changed;
 }
 async function openDesktop() {

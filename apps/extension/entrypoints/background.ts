@@ -212,6 +212,13 @@ export default defineBackground(() => {
         return native<VaultStatus>({ type: 'open' });
       if (type === 'openPopup' && senderUrl(sender)) {
         try {
+          const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+          if (
+            !tab ||
+            tab.id !== sender.tab?.id ||
+            !(await browser.windows.get(tab.windowId)).focused
+          )
+            return { ok: false, error: 'Select this tab to unlock.' };
           await browser.action.openPopup();
           return { ok: true, value: null };
         } catch {

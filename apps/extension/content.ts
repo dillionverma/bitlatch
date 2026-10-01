@@ -2,7 +2,6 @@ import { browser } from 'wxt/browser';
 import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { isLocalHost } from '@latch/shared/urls';
 import sharedTheme from '@latch/shared/theme.css?inline';
-import appearance from './content/appearance.css?inline';
 import contentStyles from './content/styles.css?inline';
 import { brand, element, mark } from './content/render';
 import {
@@ -16,7 +15,6 @@ import {
 } from './content/fields';
 import type {
   BrowserMatches,
-  BrowserUnlockState,
   CaptureOffer,
   FillCredential,
   Result,
@@ -44,7 +42,7 @@ export function startContent(ctx: ContentScriptContext) {
     'all:initial!important;position:fixed!important;top:0!important;left:0!important;z-index:2147483647!important;width:0!important;height:0!important;pointer-events:none!important;color-scheme:light dark!important;';
   const shadow = host.attachShadow({ mode: 'closed' });
   const style = document.createElement('style');
-  style.textContent = sharedTheme + appearance + contentStyles;
+  style.textContent = sharedTheme + contentStyles;
   const trigger = document.createElement('button');
   trigger.className = 'trigger';
   trigger.type = 'button';
@@ -76,78 +74,11 @@ export function startContent(ctx: ContentScriptContext) {
   let saveVersion = 0;
   let lifecycleVersion = 0;
   let filling = false;
-  let unlocking = false;
   let saveTimer: ReturnType<typeof ctx.setTimeout> | undefined;
   let statusTimer: ReturnType<typeof ctx.setTimeout> | undefined;
   let statusPending = false;
   let statusFailures = 0;
   let displayedOffer: CaptureOffer | undefined;
-  let schemeFor: Element | null | undefined;
-  let colorContext: OffscreenCanvasRenderingContext2D | null | undefined;
-
-  /** sRGB channels and alpha, or undefined when the value cannot be read. */
-  function parseColor(value: string): [number, number, number, number] | undefined {
-    if (value === 'transparent') return [0, 0, 0, 0];
-    const rgb =
-      /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/.exec(value);
-    if (rgb) {
-      const alpha =
-        rgb[4] === undefined ? 1 : parseFloat(rgb[4]) / (rgb[4].endsWith('%') ? 100 : 1);
-      return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3]), alpha];
-    }
-    // Any other computed syntax (oklch, color()) goes through the canvas parser.
-    if (colorContext === undefined) {
-      try {
-        colorContext = new OffscreenCanvas(1, 1).getContext('2d');
-      } catch {
-        colorContext = null;
-      }
-    }
-    if (!colorContext) return undefined;
-    colorContext.fillStyle = value;
-    const serialized = colorContext.fillStyle;
-    if (typeof serialized !== 'string') return undefined;
-    const hex = /^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(serialized);
-    if (hex) return [parseInt(hex[1]!, 16), parseInt(hex[2]!, 16), parseInt(hex[3]!, 16), 1];
-    return serialized.startsWith('rgb') ? parseColor(serialized) : undefined;
-  }
-
-  /**
-   * Whether the page paints light or dark behind the field, so the picker
-   * matches the form it sits on rather than the system appearance.
-   */
-  function pageScheme(anchor: Element | null): 'light' | 'dark' {
-    const declared = getComputedStyle(document.documentElement).colorScheme;
-    const systemDark = matchMedia('(prefers-color-scheme: dark)').matches;
-    const canvasDark = declared.includes('dark') && (!declared.includes('light') || systemDark);
-    const layers: [number, number, number, number][] = [];
-    let node: Element | null = anchor?.parentElement ?? document.body;
-    for (; node; node = node.parentElement) {
-      const styles = getComputedStyle(node);
-      // A gradient or image is unknown; treat it as see-through.
-      if (styles.backgroundImage !== 'none') continue;
-      const color = parseColor(styles.backgroundColor);
-      if (color && color[3] > 0) layers.push(color);
-    }
-    let [r, g, b] = canvasDark ? [18, 18, 18] : [255, 255, 255];
-    for (const [lr, lg, lb, a] of layers.reverse()) {
-      r = lr * a + r * (1 - a);
-      g = lg * a + g * (1 - a);
-      b = lb * a + b * (1 - a);
-    }
-    const channel = (v: number) => {
-      const c = v / 255;
-      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-    };
-    const luminance = 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
-    return luminance < 0.3 ? 'dark' : 'light';
-  }
-
-  function applyScheme() {
-    schemeFor = active;
-    host.style.setProperty('color-scheme', pageScheme(active), 'important');
-  }
-
   // The native host is request/response only. Watch status only while UI is
   // visible; never poll for geometry or read secrets to determine lock state.
   function watchStatus() {
@@ -263,7 +194,6 @@ export function startContent(ctx: ContentScriptContext) {
     const layer =
       active.closest('dialog:modal, [popover]:popover-open') ?? document.documentElement;
     if (host.parentElement !== layer) layer.append(host);
-    if (schemeFor !== active) applyScheme();
     const triggerSize = Math.min(28, box.height);
     trigger.style.width = trigger.style.height = `${triggerSize}px`;
     trigger.style.display = 'flex';
@@ -317,7 +247,7 @@ export function startContent(ctx: ContentScriptContext) {
     }
   }
 
-  async function show() {
+  async function show(requestUnlock = false) {
     if (!active || filling) return;
     const restoreFocus = panel.contains(shadow.activeElement);
     if (restoreFocus) panel.focus({ preventScroll: true });
@@ -325,17 +255,23 @@ export function startContent(ctx: ContentScriptContext) {
     open = true;
     trigger.setAttribute('aria-expanded', 'true');
     panel.replaceChildren(element('div', 'hint', 'Connecting to Bitlatch…'));
-    applyScheme();
     panel.style.display = 'flex';
     watchStatus();
     position();
     const response = await send<BrowserMatches>({ type: 'matches' });
     if (version !== requestVersion || !open) return;
     statusFailures = 0;
+    let unlockError = '';
     // A failed or locked match response is also a verified invalidation signal.
     // Do not leave an earlier save offer actionable until the next status poll.
     if (!response.ok || response.value.state !== 'unlocked') {
       invalidateUI();
+      if (response.ok && response.value.state === 'locked' && requestUnlock) {
+        const unlockVersion = requestVersion;
+        const opened = await send({ type: 'openPopup' });
+        if (opened.ok || unlockVersion !== requestVersion) return;
+        unlockError = opened.error;
+      }
       open = true;
       trigger.setAttribute('aria-expanded', 'true');
       panel.style.display = 'flex';
@@ -349,76 +285,30 @@ export function startContent(ctx: ContentScriptContext) {
     if (!response.ok || response.value.state !== 'unlocked') {
       const locked = response.ok && response.value.state === 'locked';
       const viewVersion = requestVersion;
-      const field = active;
       const row = element('button', 'row');
       row.type = 'button';
       row.append(
         mark(),
-        element(
-          'span',
-          'text',
-          !response.ok
-            ? 'Open Bitlatch on your computer'
-            : response.value.state === 'signed-out'
-              ? 'Sign in to Bitlatch to fill'
-              : 'Unlock in toolbar',
-        ),
-      );
-      const hint = element(
-        'div',
-        'hint',
-        locked ? 'Use your master password in the Bitlatch popup.' : 'Opens the desktop app',
+        element('span', 'text', locked ? 'Unlock' : response.ok ? 'Sign in' : 'Open Bitlatch'),
       );
       row.addEventListener('click', async (event) => {
         if (!event.isTrusted) return;
-        const result = await send({ type: locked ? 'openPopup' : 'open' });
+        if (locked) {
+          void show(true);
+          return;
+        }
+        const result = await send({ type: 'open' });
         if (viewVersion !== requestVersion || !open) return;
-        if (!result.ok) hint.textContent = result.error;
-        else if (locked) close();
-      });
-      results.append(row, hint);
-      if (locked) {
-        void send<BrowserUnlockState>({ type: 'unlockState' }).then((result) => {
-          if (
-            viewVersion !== requestVersion ||
-            !open ||
-            !result.ok ||
-            !result.value.canUseBiometrics
-          )
-            return;
-          const biometric = element('button', 'row');
-          biometric.type = 'button';
-          biometric.setAttribute('aria-disabled', String(unlocking));
-          const label = element(
-            'span',
-            'text',
-            unlocking ? 'Waiting for Touch ID…' : 'Unlock with Touch ID',
-          );
-          biometric.append(mark(), label);
-          biometric.addEventListener('click', async (event) => {
-            if (!event.isTrusted || unlocking) return;
-            unlocking = true;
-            biometric.setAttribute('aria-disabled', 'true');
-            label.textContent = 'Waiting for Touch ID…';
-            const unlocked = await send<VaultStatus>({ type: 'biometricUnlock' });
-            unlocking = false;
-            if (!open || active !== field) return;
-            if (unlocked.ok) void show();
-            else {
-              // A focus change can rebuild the picker while the OS prompt is open.
-              if (viewVersion !== requestVersion) await show();
-              if (!open || active !== field) return;
-              biometric.setAttribute('aria-disabled', 'false');
-              label.textContent = 'Unlock with Touch ID';
-              panel.append(element('div', 'hint', unlocked.error));
-              position();
-            }
-          });
-          results.prepend(biometric);
+        if (!result.ok) {
+          results.append(element('div', 'hint', result.error));
           position();
-        });
-      }
-      if (!response.ok) panel.append(element('div', 'hint', response.error));
+        }
+      });
+      results.append(row);
+      if (unlockError) results.append(element('div', 'hint', unlockError));
+      position();
+      if (restoreFocus) row.focus({ preventScroll: true });
+      return;
     } else if (!response.value.items.length) {
       results.append(element('div', 'hint', 'No logins for this website.'));
     } else {
@@ -670,7 +560,6 @@ export function startContent(ctx: ContentScriptContext) {
     });
     actions.append(no, yes);
     savePanel.replaceChildren(brand(location.host), title, sub, feedback, actions);
-    applyScheme();
     savePanel.style.display = 'block';
     position();
     watchStatus();
@@ -782,7 +671,7 @@ export function startContent(ctx: ContentScriptContext) {
       if (active !== event.target) close();
       active = event.target;
       position();
-      if (event.isTrusted) void show();
+      if (event.isTrusted) void show(navigator.userActivation.isActive);
     }
   });
   ctx.addEventListener(
@@ -864,11 +753,8 @@ export function startContent(ctx: ContentScriptContext) {
   trigger.addEventListener('click', (event) => {
     if (event.isTrusted) {
       if (open) close();
-      else void show();
+      else void show(true);
     }
-  });
-  ctx.addEventListener(matchMedia('(prefers-color-scheme: dark)'), 'change', () => {
-    if (trigger.style.display !== 'none' || open || savePanel.childElementCount) applyScheme();
   });
   ctx.addEventListener(window, 'resize', scan, { passive: true });
   ctx.addEventListener(document, 'toggle', scan, true);

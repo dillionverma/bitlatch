@@ -1,7 +1,6 @@
 /* Canonical static tokens: desktop, extension popup and closed shadow root.
    No reset, Tailwind directives, remote assets or page-dependent variables.
-   The desktop and popup follow the system. The content script pins the host's
-   color-scheme to whatever the page paints behind the field. */
+   All extension and desktop surfaces follow the system appearance. */
 :root,
 :host {
   color-scheme: light dark;
@@ -57,4 +56,11 @@
   --switch-thumb: var(--primary-foreground);
   --destructive-surface: color-mix(in oklch, var(--destructive) 10%, var(--background));
   --destructive-hover: color-mix(in oklch, var(--destructive) 18%, var(--background));
+}
+
+@media (prefers-contrast: more) {
+  :root,
+  :host {
+    --border: var(--input);
+  }
 }

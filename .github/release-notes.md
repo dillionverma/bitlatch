@@ -1,7 +1,7 @@
 ## What's new
 
-- Unlock from the browser popup with your master password or Touch ID.
-- Inline Touch ID unlock and smarter autofill icons around dialogs and security-code fields.
+- Unlock opens directly in the browser popup.
+- Cleaner unlock screen and extension colors matching the desktop app.
 
 ## Downloads
 

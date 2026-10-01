@@ -112,7 +112,7 @@ main {
   height: 32px;
   border: 1px solid var(--input);
   border-radius: 6px;
-  background: var(--search-background);
+  background: var(--card);
   flex: none;
 }
 #search-icon {
