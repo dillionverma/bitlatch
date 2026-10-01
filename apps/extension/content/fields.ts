@@ -13,13 +13,35 @@ export function visible(input: HTMLInputElement) {
     styles.display !== 'none' &&
     Number(styles.opacity) !== 0 &&
     !input.disabled &&
-    !input.readOnly
+    !input.readOnly &&
+    !input.closest('[inert]')
+  );
+}
+
+function isCodeInput(input: HTMLInputElement) {
+  if (input.autocomplete.split(/\s+/).includes('one-time-code')) return true;
+  const description = [
+    input.name,
+    input.id,
+    input.placeholder,
+    input.getAttribute('aria-label'),
+    ...Array.from(input.labels ?? [], (label) => label.textContent),
+    ...(input.getAttribute('aria-labelledby') ?? '')
+      .split(/\s+/)
+      .map((id) => document.getElementById(id)?.textContent),
+  ]
+    .join(' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]/g, ' ');
+  return /\b(?:otp|totp|2fa|mfa|one time (?:code|password)|(?:security|verification|authentication|confirmation|sms|auth) code|(?:enter|type) (?:the |your )?code)\b/i.test(
+    description,
   );
 }
 
 export function isLoginInput(target: unknown): target is HTMLInputElement {
   if (!(target instanceof HTMLInputElement) || !visible(target)) return false;
-  if (target.autocomplete === 'new-password') return false;
+  if (target.autocomplete.split(/\s+/).includes('new-password') || isCodeInput(target))
+    return false;
   if (target.type === 'password') return true;
   if (!['email', 'text', 'tel'].includes(target.type)) return false;
   if (target.autocomplete.split(/\s+/).includes('username')) return true;
@@ -123,7 +145,8 @@ export function fillTargets(field: HTMLInputElement) {
   if (passwords.some((input) => input.autocomplete === 'new-password') || passwords.length > 1)
     return undefined;
   const candidates = Array.from(scope.querySelectorAll<HTMLInputElement>('input')).filter(
-    (input) => visible(input) && ['text', 'email', 'tel'].includes(input.type),
+    (input) =>
+      visible(input) && !isCodeInput(input) && ['text', 'email', 'tel'].includes(input.type),
   );
   const username =
     field.type !== 'password'

@@ -10,7 +10,7 @@ import {
 } from '@latch/shared/protocol';
 import { LocalTransport } from './local-transport';
 import { installBrowser } from './browser-registration';
-import type { BrowserConnection } from '@latch/shared/types';
+import type { BrowserConnection, BrowserUnlockState } from '@latch/shared/types';
 import { iconHostname, type WebsiteIcons } from './website-icons';
 import type { Vault } from './vault';
 import type { MacAutoFill } from './macos-autofill';
@@ -59,6 +59,17 @@ export async function startBridges({
         return vault.snapshot().status;
       }
       if (request.type === 'status') return vault.snapshot().status;
+      if (request.type === 'unlockState') {
+        const { status, biometrics, biometricsOn } = vault.snapshot();
+        return {
+          state: status,
+          canUseBiometrics: biometricsOn && biometrics === 'ready',
+        } satisfies BrowserUnlockState;
+      }
+      if (request.type === 'unlock' || request.type === 'biometricUnlock') {
+        await handleRequest(request);
+        return vault.snapshot().status;
+      }
       if (request.type === 'browse') return vault.browserItems(request.query, request.url);
       if (request.type === 'lock') {
         await handleRequest(request);
@@ -89,15 +100,21 @@ export async function startBridges({
     const responseGuard = (request: BrowserRequest) => {
       const startedAt = epoch();
       return () => {
-        if (!['open', 'status', 'lock'].includes(request.type) && startedAt !== epoch())
+        if (
+          !['open', 'status', 'unlockState', 'lock'].includes(request.type) &&
+          startedAt !== epoch()
+        )
           throw new UserError('Vault locked. Try again after unlocking.');
       };
     };
+    const browserRequestTimeout = (request: BrowserRequest) =>
+      request.type === 'unlock' || request.type === 'biometricUnlock' ? 120_000 : 10_000;
     const bridge = new LocalTransport({
       schema: browserRequestSchema,
       dataDir,
       handle: handleBrowserRequest,
       responseGuard,
+      requestTimeout: browserRequestTimeout,
     });
     transports.push(bridge);
     await bridge.start();
@@ -168,6 +185,7 @@ export async function startBridges({
           socketDirectory: container,
           handle: handleBrowserRequest,
           responseGuard,
+          requestTimeout: browserRequestTimeout,
         });
         transports.push(safariBridge);
         await safariBridge.start();

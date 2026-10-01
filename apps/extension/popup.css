@@ -268,6 +268,33 @@ h1 {
   font-size: 12px;
   line-height: 17px;
 }
+#unlock-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 16px;
+  color: var(--foreground);
+}
+#unlock-form label {
+  text-align: left;
+  font-size: 12px;
+}
+#master-password {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+}
+#password-unlock {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: transparent;
+}
+#biometric-unlock {
+  margin-bottom: 8px;
+}
 .no-results {
   padding: 56px 20px;
   text-align: center;

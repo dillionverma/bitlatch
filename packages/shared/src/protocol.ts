@@ -127,6 +127,9 @@ export type BrowserVaultQuery = z.infer<typeof browserVaultQuerySchema>;
 
 export const browserRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('status') }).strict(),
+  z.object({ type: z.literal('unlockState') }).strict(),
+  z.object({ type: z.literal('unlock'), password: z.string().min(1).max(1_024) }).strict(),
+  z.object({ type: z.literal('biometricUnlock') }).strict(),
   z
     .object({
       type: z.literal('browse'),

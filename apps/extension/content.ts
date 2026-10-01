@@ -16,6 +16,7 @@ import {
 } from './content/fields';
 import type {
   BrowserMatches,
+  BrowserUnlockState,
   CaptureOffer,
   FillCredential,
   Result,
@@ -55,6 +56,7 @@ export function startContent(ctx: ContentScriptContext) {
   const panel = document.createElement('div');
   panel.className = 'panel';
   panel.id = 'latch-logins';
+  panel.tabIndex = -1;
   panel.setAttribute('role', 'dialog');
   panel.setAttribute('aria-label', 'Bitlatch logins');
   const savePanel = document.createElement('div');
@@ -74,6 +76,7 @@ export function startContent(ctx: ContentScriptContext) {
   let saveVersion = 0;
   let lifecycleVersion = 0;
   let filling = false;
+  let unlocking = false;
   let saveTimer: ReturnType<typeof ctx.setTimeout> | undefined;
   let statusTimer: ReturnType<typeof ctx.setTimeout> | undefined;
   let statusPending = false;
@@ -220,6 +223,18 @@ export function startContent(ctx: ContentScriptContext) {
     };
   }
 
+  function fieldExposed(input: HTMLInputElement) {
+    const box = input.getBoundingClientRect();
+    const y = Math.max(0, Math.min(innerHeight - 1, box.top + box.height / 2));
+    const points = [box.left + box.width / 2, box.right - Math.min(28, box.height) / 2 - 4];
+    return points.every((x) => {
+      const top = document
+        .elementsFromPoint(Math.max(0, Math.min(innerWidth - 1, x)), y)
+        .find((element) => element !== host);
+      return top === input;
+    });
+  }
+
   function position() {
     const previousWidth = panel.offsetWidth;
     const previousHeight = panel.offsetHeight;
@@ -234,7 +249,7 @@ export function startContent(ctx: ContentScriptContext) {
     savePanel.style.maxHeight = `${Math.max(0, view.height - 16)}px`;
     savePanel.style.left = `${Math.max(left, right - width)}px`;
     savePanel.style.top = `${top}px`;
-    if (!active?.isConnected || !isLoginInput(active)) {
+    if (!active?.isConnected || !isLoginInput(active) || !fieldExposed(active)) {
       trigger.style.display = 'none';
       close();
       return;
@@ -245,6 +260,9 @@ export function startContent(ctx: ContentScriptContext) {
       close();
       return;
     }
+    const layer =
+      active.closest('dialog:modal, [popover]:popover-open') ?? document.documentElement;
+    if (host.parentElement !== layer) layer.append(host);
     if (schemeFor !== active) applyScheme();
     const triggerSize = Math.min(28, box.height);
     trigger.style.width = trigger.style.height = `${triggerSize}px`;
@@ -302,6 +320,7 @@ export function startContent(ctx: ContentScriptContext) {
   async function show() {
     if (!active || filling) return;
     const restoreFocus = panel.contains(shadow.activeElement);
+    if (restoreFocus) panel.focus({ preventScroll: true });
     const version = ++requestVersion;
     open = true;
     trigger.setAttribute('aria-expanded', 'true');
@@ -328,6 +347,9 @@ export function startContent(ctx: ContentScriptContext) {
     const results = element('div', 'results');
     panel.append(results);
     if (!response.ok || response.value.state !== 'unlocked') {
+      const locked = response.ok && response.value.state === 'locked';
+      const viewVersion = requestVersion;
+      const field = active;
       const row = element('button', 'row');
       row.type = 'button';
       row.append(
@@ -339,13 +361,63 @@ export function startContent(ctx: ContentScriptContext) {
             ? 'Open Bitlatch on your computer'
             : response.value.state === 'signed-out'
               ? 'Sign in to Bitlatch to fill'
-              : 'Unlock Bitlatch to fill',
+              : 'Unlock in toolbar',
         ),
       );
-      row.addEventListener('click', (event) => {
-        if (event.isTrusted) void send({ type: 'open' });
+      const hint = element(
+        'div',
+        'hint',
+        locked ? 'Use your master password in the Bitlatch popup.' : 'Opens the desktop app',
+      );
+      row.addEventListener('click', async (event) => {
+        if (!event.isTrusted) return;
+        const result = await send({ type: locked ? 'openPopup' : 'open' });
+        if (viewVersion !== requestVersion || !open) return;
+        if (!result.ok) hint.textContent = result.error;
+        else if (locked) close();
       });
-      results.append(row, element('div', 'hint', 'Opens the desktop app'));
+      results.append(row, hint);
+      if (locked) {
+        void send<BrowserUnlockState>({ type: 'unlockState' }).then((result) => {
+          if (
+            viewVersion !== requestVersion ||
+            !open ||
+            !result.ok ||
+            !result.value.canUseBiometrics
+          )
+            return;
+          const biometric = element('button', 'row');
+          biometric.type = 'button';
+          biometric.setAttribute('aria-disabled', String(unlocking));
+          const label = element(
+            'span',
+            'text',
+            unlocking ? 'Waiting for Touch ID…' : 'Unlock with Touch ID',
+          );
+          biometric.append(mark(), label);
+          biometric.addEventListener('click', async (event) => {
+            if (!event.isTrusted || unlocking) return;
+            unlocking = true;
+            biometric.setAttribute('aria-disabled', 'true');
+            label.textContent = 'Waiting for Touch ID…';
+            const unlocked = await send<VaultStatus>({ type: 'biometricUnlock' });
+            unlocking = false;
+            if (!open || active !== field) return;
+            if (unlocked.ok) void show();
+            else {
+              // A focus change can rebuild the picker while the OS prompt is open.
+              if (viewVersion !== requestVersion) await show();
+              if (!open || active !== field) return;
+              biometric.setAttribute('aria-disabled', 'false');
+              label.textContent = 'Unlock with Touch ID';
+              panel.append(element('div', 'hint', unlocked.error));
+              position();
+            }
+          });
+          results.prepend(biometric);
+          position();
+        });
+      }
       if (!response.ok) panel.append(element('div', 'hint', response.error));
     } else if (!response.value.items.length) {
       results.append(element('div', 'hint', 'No logins for this website.'));
@@ -408,7 +480,7 @@ export function startContent(ctx: ContentScriptContext) {
 
   async function fill(id: string) {
     const field = active;
-    if (!field?.isConnected) return;
+    if (!field?.isConnected || !isLoginInput(field) || !fieldExposed(field)) return;
     if (filling) return;
     filling = true;
     const version = requestVersion;
@@ -437,7 +509,12 @@ export function startContent(ctx: ContentScriptContext) {
       position();
       return;
     }
-    if (!field.isConnected || !visible(field) || location.href !== page) {
+    if (
+      !field.isConnected ||
+      !isLoginInput(field) ||
+      !fieldExposed(field) ||
+      location.href !== page
+    ) {
       response.value.password = '';
       return;
     }
@@ -635,15 +712,18 @@ export function startContent(ctx: ContentScriptContext) {
   function scan() {
     scanScheduled = false;
     if (!host.isConnected) document.documentElement.append(host);
-    if (active?.isConnected && isLoginInput(active)) {
+    if (active?.isConnected && isLoginInput(active) && fieldExposed(active)) {
       position();
       return;
     }
+    close();
     active =
       Array.from(document.querySelectorAll<HTMLInputElement>('input')).find(
-        (input) => isLoginInput(input) && input.type === 'password',
+        (input) => isLoginInput(input) && input.type === 'password' && fieldExposed(input),
       ) ??
-      Array.from(document.querySelectorAll<HTMLInputElement>('input')).find(isLoginInput) ??
+      Array.from(document.querySelectorAll<HTMLInputElement>('input')).find(
+        (input) => isLoginInput(input) && fieldExposed(input),
+      ) ??
       null;
     position();
     if (active) void maybeAutoFill();
@@ -770,7 +850,13 @@ export function startContent(ctx: ContentScriptContext) {
       rows[next]?.scrollIntoView({ block: 'nearest' });
     }
   });
-  shadow.addEventListener('focusout', () => {
+  shadow.addEventListener('focusout', (event) => {
+    if (
+      event instanceof FocusEvent &&
+      event.relatedTarget instanceof Node &&
+      (shadow.contains(event.relatedTarget) || event.relatedTarget === active)
+    )
+      return;
     queueMicrotask(() => {
       if (!shadow.activeElement && document.activeElement !== active) close();
     });
@@ -784,7 +870,10 @@ export function startContent(ctx: ContentScriptContext) {
   ctx.addEventListener(matchMedia('(prefers-color-scheme: dark)'), 'change', () => {
     if (trigger.style.display !== 'none' || open || savePanel.childElementCount) applyScheme();
   });
-  ctx.addEventListener(window, 'resize', position, { passive: true });
+  ctx.addEventListener(window, 'resize', scan, { passive: true });
+  ctx.addEventListener(document, 'toggle', scan, true);
+  ctx.addEventListener(document, 'transitionend', scan, true);
+  ctx.addEventListener(document, 'animationend', scan, true);
   ctx.addEventListener(window, 'scroll', position, { passive: true, capture: true });
   if (window.visualViewport)
     ctx.addEventListener(window.visualViewport, 'resize', position, { passive: true });
@@ -804,10 +893,27 @@ export function startContent(ctx: ContentScriptContext) {
       !mutations.some((mutation) => !host.contains(mutation.target) && mutation.target !== host)
     )
       return;
+    position();
     scanScheduled = true;
     ctx.setTimeout(scan, 160);
   });
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: [
+      'class',
+      'style',
+      'hidden',
+      'aria-hidden',
+      'inert',
+      'open',
+      'type',
+      'autocomplete',
+      'disabled',
+      'readonly',
+    ],
+  });
   ctx.onInvalidated(() => {
     invalidateUI();
     hideSave();

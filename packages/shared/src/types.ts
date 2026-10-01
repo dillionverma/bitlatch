@@ -163,6 +163,11 @@ export interface BrowserMatches {
   items: ItemSummary[];
 }
 
+export interface BrowserUnlockState {
+  state: VaultStatus;
+  canUseBiometrics: boolean;
+}
+
 export interface BrowserVaultPage {
   state: VaultStatus;
   revision: number;

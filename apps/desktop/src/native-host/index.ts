@@ -53,7 +53,12 @@ async function forward(request: unknown): Promise<Result<unknown>> {
     const socket = createConnection(config.socketPath);
     socket.setEncoding('utf8');
     let output = '';
-    socket.setTimeout(8_000, () => socket.destroy(new Error('Timed out')));
+    const unlocking =
+      request !== null &&
+      typeof request === 'object' &&
+      'type' in request &&
+      (request.type === 'unlock' || request.type === 'biometricUnlock');
+    socket.setTimeout(unlocking ? 120_000 : 8_000, () => socket.destroy(new Error('Timed out')));
     socket.on('connect', () =>
       socket.write(`${JSON.stringify({ token: config.token, request })}\n`),
     );

@@ -1,7 +1,7 @@
 ## What's new
 
-- Browser extension tagline now matches the app.
-- GitHub repository is now `dillionverma/bitlatch`.
+- Unlock from the browser popup with your master password or Touch ID.
+- Inline Touch ID unlock and smarter autofill icons around dialogs and security-code fields.
 
 ## Downloads
 

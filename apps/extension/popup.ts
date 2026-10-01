@@ -4,7 +4,13 @@ import './content/appearance.css';
 import './popup.css';
 import { element, mark } from './content/render';
 import type { BrowserVaultQuery } from '@latch/shared/protocol';
-import type { BrowserVaultPage, ItemSummary, Result, VaultStatus } from '@latch/shared/types';
+import type {
+  BrowserUnlockState,
+  BrowserVaultPage,
+  ItemSummary,
+  Result,
+  VaultStatus,
+} from '@latch/shared/types';
 
 const status = document.querySelector<HTMLElement>('#status')!;
 const vaultBrowser = document.querySelector<HTMLElement>('#browser')!;
@@ -22,6 +28,10 @@ const refresh = document.querySelector<HTMLButtonElement>('#refresh')!;
 const checkbox = document.querySelector<HTMLInputElement>('#autofill')!;
 const domain = document.querySelector<HTMLElement>('#domain')!;
 const message = document.querySelector<HTMLElement>('#message')!;
+const unlockForm = document.querySelector<HTMLFormElement>('#unlock-form')!;
+const masterPassword = document.querySelector<HTMLInputElement>('#master-password')!;
+const passwordUnlock = document.querySelector<HTMLButtonElement>('#password-unlock')!;
+const biometricUnlock = document.querySelector<HTMLButtonElement>('#biometric-unlock')!;
 
 const paths = {
   open: 'M9 3H3v12h12V9 M9 1h8v8 M17 1 7 11',
@@ -61,6 +71,7 @@ let revision = -1;
 let generation = 0;
 let requestVersion = 0;
 let disposed = false;
+let unlocking = false;
 let query: BrowserVaultQuery = { query: '', scope: 'all', itemType: 'all', offset: 0 };
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 let statusTimer: ReturnType<typeof setTimeout> | undefined;
@@ -95,9 +106,14 @@ function setState(next: typeof state, error = '') {
   empty.hidden = state === 'unlocked';
   vaultBrowser.hidden = state !== 'unlocked' || Boolean(selected);
   detail.hidden = state !== 'unlocked' || !selected;
+  unlockForm.hidden = state !== 'locked';
+  if (changed) {
+    generation++;
+    requestVersion++;
+    masterPassword.value = '';
+    feedback('');
+  }
   if (state === 'unlocked') return changed;
-  generation++;
-  requestVersion++;
   clearTimeout(searchTimer);
   results.removeAttribute('aria-busy');
   selected = undefined;
@@ -109,7 +125,6 @@ function setState(next: typeof state, error = '') {
   search.value = '';
   query.query = '';
   count.textContent = '';
-  feedback('');
   document.querySelector('#empty-title')!.textContent =
     state === 'locked'
       ? 'Your vault is locked'
@@ -121,12 +136,12 @@ function setState(next: typeof state, error = '') {
   document.querySelector('#empty-description')!.textContent =
     error ||
     (state === 'locked'
-      ? 'Unlock in the desktop app to browse your vault.'
+      ? 'Unlock to search and fill from your browser.'
       : state === 'signed-out'
         ? 'Sign in on your computer to access your vault.'
         : 'Your vault stays on your computer.');
   connect.hidden = state === 'connecting';
-  connect.textContent = state === 'locked' ? 'Unlock in Bitlatch' : 'Open Bitlatch';
+  connect.textContent = state === 'locked' ? 'Open desktop app' : 'Open Bitlatch';
   return changed;
 }
 async function openDesktop() {
@@ -137,6 +152,37 @@ async function openDesktop() {
 }
 open.addEventListener('click', () => void openDesktop());
 connect.addEventListener('click', () => void openDesktop());
+async function unlockVault(biometric: boolean) {
+  if (unlocking || state !== 'locked') return;
+  const request = biometric
+    ? { type: 'biometricUnlock' as const }
+    : { type: 'unlock' as const, password: masterPassword.value };
+  masterPassword.value = '';
+  unlocking = true;
+  passwordUnlock.disabled = biometricUnlock.disabled = masterPassword.disabled = true;
+  passwordUnlock.textContent = biometric ? 'Waiting for Touch ID…' : 'Unlocking…';
+  feedback('');
+  const lifetime = generation;
+  const pendingUnlock = send<VaultStatus>(request);
+  if (request.type === 'unlock') request.password = '';
+  const response = await pendingUnlock;
+  unlocking = false;
+  passwordUnlock.disabled = biometricUnlock.disabled = masterPassword.disabled = false;
+  passwordUnlock.textContent = 'Unlock vault';
+  if (disposed || lifetime !== generation) return;
+  if (!response.ok) {
+    feedback(response.error, true);
+    masterPassword.focus();
+  }
+  void refreshStatus();
+}
+unlockForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  if (event.isTrusted) void unlockVault(false);
+});
+biometricUnlock.addEventListener('click', (event) => {
+  if (event.isTrusted) void unlockVault(true);
+});
 lock.addEventListener('click', async () => {
   setState('locked');
   const lifetime = generation;
@@ -376,13 +422,15 @@ document.addEventListener('keydown', (event) => {
 async function refreshStatus() {
   clearTimeout(statusTimer);
   const lifetime = generation;
-  const response = await send<VaultStatus>({ type: 'status' });
+  const response = await send<BrowserUnlockState>({ type: 'unlockState' });
   if (disposed) return;
   if (lifetime === generation) {
     const changed = setState(
-      response.ok ? response.value : 'disconnected',
+      response.ok ? response.value.state : 'disconnected',
       response.ok ? '' : response.error,
     );
+    biometricUnlock.hidden = !response.ok || !response.value.canUseBiometrics;
+    if (changed && state === 'locked') masterPassword.focus();
     if (changed && state === 'unlocked') {
       void loadItems();
       search.focus();
@@ -394,6 +442,7 @@ window.addEventListener('pagehide', () => {
   disposed = true;
   generation++;
   search.value = '';
+  masterPassword.value = '';
   query.query = '';
   clearTimeout(statusTimer);
   clearTimeout(searchTimer);

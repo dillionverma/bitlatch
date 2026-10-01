@@ -17,7 +17,8 @@ static NSDictionary *Request(NSDictionary *request) {
   int fd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (fd < 0) return nil;
   // Bound native messaging independently of Safari background lifetime.
-  struct timeval timeout = {8, 0};
+  BOOL unlocking = [request[@"type"] isEqual:@"unlock"] || [request[@"type"] isEqual:@"biometricUnlock"];
+  struct timeval timeout = {unlocking ? 120 : 8, 0};
   setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
   setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
   int noSignal = 1;

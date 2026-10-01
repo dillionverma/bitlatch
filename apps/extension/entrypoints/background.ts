@@ -1,9 +1,14 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import { browser, type Browser } from 'wxt/browser';
-import { browserRequestSchema, browserVaultQuerySchema } from '@latch/shared/protocol';
+import {
+  browserRequestSchema,
+  browserVaultQuerySchema,
+  type BrowserRequest,
+} from '@latch/shared/protocol';
 import type {
   BrowserMatches,
   BrowserVaultPage,
+  BrowserUnlockState,
   CaptureOffer,
   FillCredential,
   Result,
@@ -18,12 +23,13 @@ export default defineBackground(() => {
     timer: ReturnType<typeof setTimeout>;
   }[] = [];
 
-  function native<T>(request: object): Promise<Result<T>> {
+  function native<T>(request: BrowserRequest): Promise<Result<T>> {
+    const unlocking = request.type === 'unlock' || request.type === 'biometricUnlock';
     if (import.meta.env.BROWSER === 'safari') {
       return new Promise((resolve) => {
         const timer = setTimeout(
           () => resolve({ ok: false, error: 'Bitlatch is not responding.' }),
-          10000,
+          unlocking ? 125_000 : 10_000,
         );
         browser.runtime.sendNativeMessage(HOST, request).then(
           (value) => {
@@ -35,6 +41,33 @@ export default defineBackground(() => {
             resolve({ ok: false, error: 'Open Bitlatch and enable its Safari extension.' });
           },
         );
+      });
+    }
+    // Keep OS authentication off the shared FIFO so status and lock still respond.
+    if (unlocking) {
+      return new Promise((resolve) => {
+        const unlockPort = browser.runtime.connectNative(HOST);
+        const timer = setTimeout(() => {
+          resolve({ ok: false, error: 'Unlock timed out. Try again.' });
+          unlockPort.disconnect();
+        }, 125_000);
+        unlockPort.onMessage.addListener((result: Result<T>) => {
+          clearTimeout(timer);
+          resolve(result);
+          unlockPort.disconnect();
+        });
+        unlockPort.onDisconnect.addListener(() => {
+          void browser.runtime.lastError;
+          clearTimeout(timer);
+          resolve({ ok: false, error: 'Open Bitlatch on your computer to reconnect.' });
+        });
+        try {
+          unlockPort.postMessage(request);
+        } catch {
+          clearTimeout(timer);
+          unlockPort.disconnect();
+          resolve({ ok: false, error: 'Open Bitlatch on your computer to reconnect.' });
+        }
       });
     }
     return new Promise((resolve) => {
@@ -177,6 +210,26 @@ export default defineBackground(() => {
       }
       if (type === 'open' && (isPopup || senderUrl(sender)))
         return native<VaultStatus>({ type: 'open' });
+      if (type === 'openPopup' && senderUrl(sender)) {
+        try {
+          await browser.action.openPopup();
+          return { ok: true, value: null };
+        } catch {
+          return { ok: false, error: 'Click Bitlatch in your browser toolbar to unlock.' };
+        }
+      }
+      if (type === 'unlockState' && (isPopup || senderUrl(sender)))
+        return native<BrowserUnlockState>({ type: 'unlockState' });
+      if (
+        (isPopup && type === 'unlock') ||
+        (type === 'biometricUnlock' && (isPopup || senderUrl(sender)))
+      ) {
+        const request = browserRequestSchema.safeParse(message);
+        if (!request.success) return { ok: false, error: 'Invalid unlock request.' };
+        const result = await native<VaultStatus>(request.data);
+        void refreshBadge(true);
+        return result;
+      }
       // Status contains only the lock state. Content callers still require the
       // same trusted same-origin sender metadata as matches and fills.
       if (type === 'status' && (isPopup || senderUrl(sender)))

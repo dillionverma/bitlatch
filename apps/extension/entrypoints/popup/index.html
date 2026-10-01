@@ -65,6 +65,18 @@
         <span id="empty-icon" aria-hidden="true"></span>
         <h1 id="empty-title">Connecting to Bitlatch</h1>
         <p id="empty-description">Your vault stays on your computer.</p>
+        <form id="unlock-form" hidden>
+          <button id="biometric-unlock" type="button" hidden>Unlock with Touch ID</button>
+          <label for="master-password">Master password</label>
+          <input
+            id="master-password"
+            type="password"
+            autocomplete="off"
+            maxlength="1024"
+            required
+          />
+          <button id="password-unlock" type="submit">Unlock vault</button>
+        </form>
         <button id="connect" hidden>Open Bitlatch</button>
       </section>
     </main>
