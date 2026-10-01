@@ -138,16 +138,18 @@ lifecycle.startup = app
     );
     session.defaultSession.setPermissionCheckHandler(() => false);
     const requestedMaterial = process.env.LATCH_MATERIAL;
-    nativeTheme.themeSource = 'light';
+    nativeTheme.themeSource = 'system';
     appearance = prepareWindowAppearance({
-      // Use native glass on verified macOS builds, with built-in vibrancy as fallback.
-      allowGlass: true,
+      // Keep native vibrancy as the default; glass remains an explicit opt-in.
+      allowGlass: requestedMaterial === 'glass',
       override:
         requestedMaterial === 'vibrancy' ||
         requestedMaterial === 'unavailable' ||
         requestedMaterial === 'solid'
           ? requestedMaterial
-          : undefined,
+          : requestedMaterial === 'glass'
+            ? 'glass'
+            : 'vibrancy',
     });
     window = new BrowserWindow({
       ...appearance.windowOptions,
