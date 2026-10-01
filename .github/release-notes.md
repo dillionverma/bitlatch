@@ -1,7 +1,7 @@
 ## What's new
 
-- Unlock opens directly in the browser popup.
-- Cleaner unlock screen and extension colors matching the desktop app.
+- Current-site logins appear first in the browser popup, with one-click Fill.
+- Website logos and a compact layout matching the desktop app.
 
 ## Downloads
 

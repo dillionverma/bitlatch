@@ -4,6 +4,7 @@ import './popup.css';
 import { element, mark } from './content/render';
 import type { BrowserVaultQuery } from '@latch/shared/protocol';
 import type {
+  BrowserSuggestions,
   BrowserUnlockState,
   BrowserVaultPage,
   ItemSummary,
@@ -65,6 +66,7 @@ document.querySelector('#empty-icon')!.append(icon('lock'));
 let state: VaultStatus | 'disconnected' | 'connecting' = 'connecting';
 let selected: ItemSummary | undefined;
 let items: ItemSummary[] = [];
+let suggestions: BrowserSuggestions | undefined;
 let total = 0;
 let revision = -1;
 let generation = 0;
@@ -119,6 +121,9 @@ function setState(next: typeof state, error = '') {
   results.removeAttribute('aria-busy');
   selected = undefined;
   items = [];
+  suggestions = undefined;
+  iconCache.clear();
+  resetIcons();
   total = 0;
   revision = -1;
   results.replaceChildren();
@@ -192,12 +197,96 @@ lock.addEventListener('click', async () => {
   if (!response.ok) setState('disconnected', response.error);
 });
 
+const iconCache = new Map<string, string | null>();
+const iconItems = new WeakMap<Element, ItemSummary>();
+let iconQueue: { node: HTMLElement; item: ItemSummary; lifetime: number }[] = [];
+let loadingIcons = 0;
+const iconObserver = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    iconObserver.unobserve(entry.target);
+    const item = iconItems.get(entry.target);
+    if (item && entry.target instanceof HTMLElement)
+      iconQueue.push({ node: entry.target, item, lifetime: generation });
+  }
+  drainIcons();
+});
+function resetIcons() {
+  iconObserver.disconnect();
+  iconQueue = [];
+}
+function showIcon(node: HTMLElement, value: string | null, lifetime: number) {
+  if (!value || !/^data:image\/png;base64,[A-Za-z0-9+/]+=*$/.test(value)) return;
+  const image = document.createElement('img');
+  image.className = 'website-logo';
+  image.alt = '';
+  image.draggable = false;
+  image.addEventListener('load', () => {
+    if (!disposed && lifetime === generation && node.isConnected) node.replaceChildren(image);
+  });
+  image.src = value;
+}
+function drainIcons() {
+  while (loadingIcons < 3 && iconQueue.length) {
+    const next = iconQueue.shift()!;
+    if (disposed || next.lifetime !== generation || !next.node.isConnected) continue;
+    if (iconCache.has(next.item.id)) {
+      showIcon(next.node, iconCache.get(next.item.id) ?? null, next.lifetime);
+      continue;
+    }
+    loadingIcons++;
+    void send<string | null>({ type: 'websiteIcon', id: next.item.id })
+      .then((response) => {
+        if (disposed || next.lifetime !== generation || !response.ok) return;
+        if (iconCache.size >= 256) iconCache.delete(iconCache.keys().next().value!);
+        iconCache.set(next.item.id, response.value);
+        showIcon(next.node, response.value, next.lifetime);
+      })
+      .finally(() => {
+        loadingIcons--;
+        drainIcons();
+      });
+  }
+}
 function tile(item: ItemSummary) {
   const node = element('span', 'tile');
   node.setAttribute('aria-hidden', 'true');
   if (item.type === 2) node.append(icon('note'));
-  else node.textContent = item.name.slice(0, 1).toUpperCase();
+  else {
+    node.textContent = (Array.from(item.name.trim())[0] ?? '?').toUpperCase();
+    if (item.website) {
+      iconItems.set(node, item);
+      iconObserver.observe(node);
+    }
+  }
   return node;
+}
+function fillButton(item: ItemSummary) {
+  const button = element('button', 'fill-button', 'Fill');
+  button.setAttribute('aria-label', `Fill ${item.name}`);
+  button.addEventListener('click', async () => {
+    const context = suggestions;
+    if (!context || context.tabId === null) return;
+    const lifetime = generation;
+    button.disabled = true;
+    button.textContent = 'Filling…';
+    feedback('');
+    const response = await send<null>({
+      type: 'fillActiveTab',
+      id: item.id,
+      tabId: context.tabId,
+      url: context.url,
+    });
+    if (disposed || lifetime !== generation) return;
+    button.disabled = false;
+    button.textContent = 'Fill';
+    if (response.ok) window.close();
+    else {
+      feedback(response.error, true);
+      void refreshStatus();
+    }
+  });
+  return button;
 }
 function showList(focusId?: string) {
   selected = undefined;
@@ -211,6 +300,7 @@ function showList(focusId?: string) {
   (row ?? search).focus();
 }
 function showDetail(item: ItemSummary) {
+  resetIcons();
   selected = item;
   vaultBrowser.hidden = true;
   detail.hidden = false;
@@ -231,21 +321,13 @@ function showDetail(item: ItemSummary) {
   );
   heading.append(tile(item), title);
   detail.append(back, heading);
+  if (suggestions?.items.some((entry) => entry.id === item.id)) detail.append(fillButton(item));
   if (item.type === 1) {
     addField(item, 'Username', item.username || 'No username', 'username');
     addField(item, 'Password', '••••••••••••', 'password');
     addField(item, 'Website', item.website || 'No website', 'website');
   }
   addField(item, 'Notes', item.type === 2 ? 'Secure note' : 'Saved with this login', 'notes');
-  detail.append(
-    element(
-      'p',
-      'detail-hint',
-      item.type === 1
-        ? 'Fill from the Bitlatch button in a login field. Copied values clear after 30 seconds.'
-        : 'Copy the note to read it, or open it in Bitlatch. Copied values clear after 30 seconds.',
-    ),
-  );
   back.focus();
 }
 function addField(
@@ -275,31 +357,67 @@ function addField(
   row.append(text, copy);
   detail.append(row);
 }
+function itemRow(item: ItemSummary, canFill: boolean) {
+  const container = element('div', 'item-row');
+  const row = element('button', 'item');
+  row.dataset.id = item.id;
+  const text = element('span', 'item-text');
+  text.append(
+    element('span', 'item-name', item.name),
+    element(
+      'span',
+      'item-sub',
+      item.type === 2 ? 'Secure note' : item.username || item.website || 'Login',
+    ),
+  );
+  row.append(tile(item), text);
+  if (item.favorite) {
+    const star = element('span', 'favorite', '☆');
+    star.setAttribute('aria-hidden', 'true');
+    row.setAttribute('aria-label', `${item.name}, ${item.username || 'Login'}, favorite`);
+    row.append(star);
+  }
+  row.addEventListener('click', () => showDetail(item));
+  container.append(row);
+  if (canFill) container.append(fillButton(item));
+  return container;
+}
 function renderItems() {
-  count.textContent = `${total} ${total === 1 ? 'item' : 'items'}`;
+  resetIcons();
+  count.textContent = String(total);
+  document.querySelector('#list-title')!.textContent = query.query
+    ? 'Search results'
+    : query.scope === 'favorites'
+      ? 'Favorites'
+      : query.scope === 'site'
+        ? 'This site'
+        : 'Your vault';
   results.replaceChildren();
+  const suggested =
+    query.scope === 'all' && !query.query.trim() && query.itemType !== 'note'
+      ? (suggestions?.items ?? [])
+      : [];
+  const suggestedIds = new Set(suggested.map((item) => item.id));
+  if (suggested.length) {
+    const heading = element('h2', 'group-heading', 'This site');
+    heading.append(element('span', '', new URL(suggestions!.url).host));
+    results.append(heading, ...suggested.map((item) => itemRow(item, true)));
+    if (items.some((item) => !suggestedIds.has(item.id)))
+      results.append(element('h2', 'group-heading', 'All items'));
+  }
   for (const item of items) {
-    const row = element('button', 'item');
-    row.dataset.id = item.id;
-    const text = element('span', 'item-text');
-    text.append(
-      element('span', 'item-name', item.name),
-      element(
-        'span',
-        'item-sub',
-        item.type === 2 ? 'Secure note' : item.username || item.website || 'Login',
+    if (suggestedIds.has(item.id)) continue;
+    results.append(
+      itemRow(
+        item,
+        Boolean(
+          suggestions?.url &&
+          (query.scope === 'site' || suggestions.items.some((entry) => entry.id === item.id)),
+        ),
       ),
     );
-    row.append(tile(item), text);
-    if (item.favorite) {
-      const star = element('span', 'favorite', '☆');
-      star.setAttribute('aria-label', 'Favorite');
-      row.append(star);
-    }
-    row.addEventListener('click', () => showDetail(item));
-    results.append(row);
   }
-  if (!items.length)
+  if (!items.length && !suggested.length)
     results.append(
       element(
         'p',
@@ -326,10 +444,13 @@ async function loadItems(append = false) {
   const version = ++requestVersion;
   const lifetime = generation;
   results.setAttribute('aria-busy', 'true');
-  const response = await send<BrowserVaultPage>({
-    type: 'browse',
-    query: { ...query, offset: append ? items.length : 0 },
-  });
+  const [response, matches] = await Promise.all([
+    send<BrowserVaultPage>({
+      type: 'browse',
+      query: { ...query, offset: append ? items.length : 0 },
+    }),
+    append ? Promise.resolve(null) : send<BrowserSuggestions>({ type: 'suggestions' }),
+  ]);
   if (disposed || lifetime !== generation || version !== requestVersion) return;
   results.removeAttribute('aria-busy');
   if (!response.ok) {
@@ -344,13 +465,21 @@ async function loadItems(append = false) {
     await loadItems();
     return;
   }
+  if (matches?.ok && matches.value.state !== 'unlocked') {
+    setState(matches.value.state);
+    return;
+  }
   setState('unlocked');
+  if (!append) suggestions = matches?.ok ? matches.value : undefined;
   revision = response.value.revision;
   total = response.value.total;
-  const previousCount = items.length;
+  const firstAddedId = response.value.items[0]?.id;
   items = append ? [...items, ...response.value.items] : response.value.items;
   renderItems();
-  if (append) results.querySelectorAll<HTMLButtonElement>('.item')[previousCount]?.focus();
+  if (append)
+    [...results.querySelectorAll<HTMLButtonElement>('.item')]
+      .find((row) => row.dataset.id === firstAddedId)
+      ?.focus();
 }
 function changeQuery() {
   clearTimeout(searchTimer);
@@ -360,6 +489,7 @@ function changeQuery() {
   detail.hidden = true;
   vaultBrowser.hidden = false;
   items = [];
+  resetIcons();
   results.replaceChildren();
   count.textContent = 'Searching…';
   feedback('');
@@ -387,6 +517,7 @@ itemType.addEventListener('change', () => {
 });
 refresh.addEventListener('click', () => {
   feedback('');
+  iconCache.clear();
   void loadItems();
 });
 results.addEventListener('keydown', (event) => {
@@ -449,6 +580,9 @@ window.addEventListener('pagehide', () => {
   clearTimeout(searchTimer);
   clearTimeout(feedbackTimer);
   items = [];
+  suggestions = undefined;
+  iconCache.clear();
+  resetIcons();
   selected = undefined;
   results.replaceChildren();
   detail.replaceChildren();

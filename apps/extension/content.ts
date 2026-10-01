@@ -1,4 +1,4 @@
-import { browser } from 'wxt/browser';
+import { browser, type Browser } from 'wxt/browser';
 import type { ContentScriptContext } from 'wxt/utils/content-script-context';
 import { isLocalHost } from '@latch/shared/urls';
 import sharedTheme from '@latch/shared/theme.css?inline';
@@ -368,10 +368,11 @@ export function startContent(ctx: ContentScriptContext) {
     image.src = icon.value;
   }
 
-  async function fill(id: string) {
+  async function fill(id: string): Promise<Result<null>> {
     const field = active;
-    if (!field?.isConnected || !isLoginInput(field) || !fieldExposed(field)) return;
-    if (filling) return;
+    if (document.hidden || !field?.isConnected || !isLoginInput(field) || !fieldExposed(field))
+      return { ok: false, error: 'No login field is available on this page.' };
+    if (filling) return { ok: false, error: 'A login is already being filled.' };
     filling = true;
     const version = requestVersion;
     const lifetime = lifecycleVersion;
@@ -386,7 +387,7 @@ export function startContent(ctx: ContentScriptContext) {
     const response = await send<FillCredential>({ type: 'fill', id });
     if (version !== requestVersion || lifetime !== lifecycleVersion) {
       if (response.ok) response.value.password = '';
-      return;
+      return { ok: false, error: 'The page changed. Try filling again.' };
     }
     filling = false;
     panel.removeAttribute('aria-busy');
@@ -397,24 +398,24 @@ export function startContent(ctx: ContentScriptContext) {
     if (!response.ok) {
       showFillError(response.error);
       position();
-      return;
+      return response;
     }
     if (
+      document.hidden ||
       !field.isConnected ||
       !isLoginInput(field) ||
       !fieldExposed(field) ||
       location.href !== page
     ) {
       response.value.password = '';
-      return;
+      return { ok: false, error: 'The page changed. Try filling again.' };
     }
     const targets = fillTargets(field);
     if (!targets) {
       response.value.password = '';
-      showFillError(
-        'This looks like a signup or password-change form. Copy from Bitlatch instead.',
-      );
-      return;
+      const error = 'This looks like a signup or password-change form. Copy from Bitlatch instead.';
+      showFillError(error);
+      return { ok: false, error };
     }
     const { username, password } = targets;
     if (username && response.value.username) setValue(username, response.value.username);
@@ -423,7 +424,48 @@ export function startContent(ctx: ContentScriptContext) {
     close();
     suppressNextFocus = document.activeElement !== (password ?? username ?? field);
     (password ?? username ?? field).focus();
+    return { ok: true, value: null };
   }
+
+  const onPopupFill = (
+    message: unknown,
+    sender: Browser.runtime.MessageSender,
+    respond: (result: Result<null>) => void,
+  ) => {
+    if (
+      !message ||
+      typeof message !== 'object' ||
+      !('type' in message) ||
+      message.type !== 'fillFromPopup' ||
+      sender.id !== browser.runtime.id ||
+      sender.tab
+    )
+      return false;
+    if (
+      !('id' in message) ||
+      typeof message.id !== 'string' ||
+      !('url' in message) ||
+      typeof message.url !== 'string' ||
+      message.url !== location.href ||
+      window !== window.top ||
+      document.hidden ||
+      ctx.isInvalid
+    ) {
+      respond({ ok: false, error: 'The page changed. Open Bitlatch again.' });
+      return false;
+    }
+    if (filling) {
+      respond({ ok: false, error: 'A login is already being filled.' });
+      return false;
+    }
+    close();
+    active = loginField();
+    void fill(message.id)
+      .then(respond)
+      .catch(() => respond({ ok: false, error: 'Unable to fill this login.' }));
+    return true;
+  };
+  browser.runtime.onMessage.addListener(onPopupFill);
 
   function showFillError(message: string) {
     panel.querySelector('.error')?.remove();
@@ -598,6 +640,19 @@ export function startContent(ctx: ContentScriptContext) {
     await displayOffer(await send<CaptureOffer>({ type: 'pendingCapture' }), version, lifetime);
   }
 
+  function loginField() {
+    if (active?.isConnected && isLoginInput(active) && fieldExposed(active)) return active;
+    return (
+      Array.from(document.querySelectorAll<HTMLInputElement>('input')).find(
+        (input) => isLoginInput(input) && input.type === 'password' && fieldExposed(input),
+      ) ??
+      Array.from(document.querySelectorAll<HTMLInputElement>('input')).find(
+        (input) => isLoginInput(input) && fieldExposed(input),
+      ) ??
+      null
+    );
+  }
+
   function scan() {
     scanScheduled = false;
     if (!host.isConnected) document.documentElement.append(host);
@@ -606,14 +661,7 @@ export function startContent(ctx: ContentScriptContext) {
       return;
     }
     close();
-    active =
-      Array.from(document.querySelectorAll<HTMLInputElement>('input')).find(
-        (input) => isLoginInput(input) && input.type === 'password' && fieldExposed(input),
-      ) ??
-      Array.from(document.querySelectorAll<HTMLInputElement>('input')).find(
-        (input) => isLoginInput(input) && fieldExposed(input),
-      ) ??
-      null;
+    active = loginField();
     position();
     if (active) void maybeAutoFill();
   }
@@ -801,6 +849,7 @@ export function startContent(ctx: ContentScriptContext) {
     ],
   });
   ctx.onInvalidated(() => {
+    browser.runtime.onMessage.removeListener(onPopupFill);
     invalidateUI();
     hideSave();
     observer.disconnect();

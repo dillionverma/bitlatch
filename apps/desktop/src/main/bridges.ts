@@ -81,6 +81,10 @@ export async function startBridges({
         return null;
       }
       if (request.type === 'matches') return vault.matches(request.url);
+      if (request.type === 'websiteIcon') {
+        vault.requireBrowserItem(request.id);
+        return handleRequest(request);
+      }
       if (request.type === 'capture')
         return vault.capture(request.url, request.username, request.password);
       if (request.type === 'pendingCapture') return vault.pendingCapture(request.url);

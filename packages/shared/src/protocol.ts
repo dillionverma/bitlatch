@@ -149,6 +149,7 @@ export const browserRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('matches'), url: z.string().max(4_096) }).strict(),
   z.object({ type: z.literal('fill'), url: z.string().max(4_096), id }).strict(),
   z.object({ type: z.literal('icon'), url: z.string().max(4_096), id }).strict(),
+  z.object({ type: z.literal('websiteIcon'), id }).strict(),
   z
     .object({
       type: z.literal('capture'),

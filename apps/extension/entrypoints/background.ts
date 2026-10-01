@@ -7,6 +7,7 @@ import {
 } from '@latch/shared/protocol';
 import type {
   BrowserMatches,
+  BrowserSuggestions,
   BrowserVaultPage,
   BrowserUnlockState,
   CaptureOffer,
@@ -43,14 +44,17 @@ export default defineBackground(() => {
         );
       });
     }
-    // Keep OS authentication off the shared FIFO so status and lock still respond.
-    if (unlocking) {
+    // Authentication and icon downloads must not block status, lock, or fill.
+    if (unlocking || request.type === 'websiteIcon') {
       return new Promise((resolve) => {
         const unlockPort = browser.runtime.connectNative(HOST);
-        const timer = setTimeout(() => {
-          resolve({ ok: false, error: 'Unlock timed out. Try again.' });
-          unlockPort.disconnect();
-        }, 125_000);
+        const timer = setTimeout(
+          () => {
+            resolve({ ok: false, error: 'Bitlatch is not responding. Try again.' });
+            unlockPort.disconnect();
+          },
+          unlocking ? 125_000 : 10_000,
+        );
         unlockPort.onMessage.addListener((result: Result<T>) => {
           clearTimeout(timer);
           resolve(result);
@@ -194,6 +198,52 @@ export default defineBackground(() => {
         sender.id === browser.runtime.id &&
         !sender.tab &&
         sender.url === browser.runtime.getURL('/popup.html');
+      if (isPopup && type === 'suggestions') {
+        const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+        const url = tab?.url && /^https?:\/\//.test(tab.url) ? tab.url : '';
+        const result = await native<BrowserMatches>({ type: 'matches', url });
+        if (!result.ok) return result;
+        return {
+          ok: true,
+          value: { ...result.value, tabId: tab?.id ?? null, url } satisfies BrowserSuggestions,
+        };
+      }
+      if (isPopup && type === 'websiteIcon') {
+        const request = browserRequestSchema.safeParse(message);
+        if (!request.success) return { ok: false, error: 'Invalid icon request.' };
+        return native<string | null>(request.data);
+      }
+      if (
+        isPopup &&
+        type === 'fillActiveTab' &&
+        'id' in message &&
+        'url' in message &&
+        'tabId' in message
+      ) {
+        const request = browserRequestSchema.safeParse({
+          type: 'fill',
+          id: message.id,
+          url: message.url,
+        });
+        if (!request.success) return { ok: false, error: 'Invalid fill request.' };
+        const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+        if (
+          !tab?.id ||
+          tab.id !== message.tabId ||
+          tab.url !== message.url ||
+          !(await browser.windows.get(tab.windowId)).focused
+        )
+          return { ok: false, error: 'This page changed. Refresh your suggestions.' };
+        try {
+          return await browser.tabs.sendMessage(
+            tab.id,
+            { type: 'fillFromPopup', id: message.id, url: tab.url },
+            { frameId: 0 },
+          );
+        } catch {
+          return { ok: false, error: 'Reload this page to enable autofill.' };
+        }
+      }
       if (isPopup && type === 'browse' && 'query' in message) {
         const query = browserVaultQuerySchema.safeParse(message.query);
         if (!query.success) return { ok: false, error: 'Invalid search.' };
