@@ -5,7 +5,7 @@
 <h1 align="center">Latch</h1>
 
 <p align="center">
-  <strong>Your Bitwarden vault. A better way to use it.</strong>
+  <strong>A modern, unofficial Bitwarden client.</strong>
 </p>
 
 <p align="center">
@@ -20,6 +20,8 @@
 </p>
 
 Latch is an alternative client for your existing Bitwarden vault, designed around a cleaner interface and quicker workflows. Search from the keyboard, fill logins in your browser, and access credentials from Raycast. Keep your account and vault; there's nothing to migrate.
+
+Latch is an independent project, not affiliated with or endorsed by Bitwarden.
 
 ## Highlights
 
