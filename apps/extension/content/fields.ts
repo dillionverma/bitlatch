@@ -49,7 +49,7 @@ export function isLoginInput(target: unknown): target is HTMLInputElement {
   if (!scope) return false;
   if (
     Array.from(scope.querySelectorAll<HTMLInputElement>('input[type="password"]')).some(
-      (input) => visible(input) && input.autocomplete !== 'new-password',
+      (input) => visible(input) && !input.autocomplete.split(/\s+/).includes('new-password'),
     )
   )
     return true;
@@ -138,15 +138,69 @@ export function readForm(form: ParentNode) {
 
 /** Refuse signup/change-password forms before selecting fill targets. */
 export function fillTargets(field: HTMLInputElement) {
-  const scope: ParentNode = field.form ?? document;
-  const passwords = Array.from(
-    scope.querySelectorAll<HTMLInputElement>('input[type="password"]'),
+  const owner = field.form;
+  let inputs = (
+    owner
+      ? Array.from(owner.elements).filter(
+          (input): input is HTMLInputElement =>
+            input instanceof HTMLInputElement && input.form === owner,
+        )
+      : Array.from(document.querySelectorAll<HTMLInputElement>('input')).filter(
+          (input) => input.form === null,
+        )
   ).filter(visible);
-  if (passwords.some((input) => input.autocomplete === 'new-password') || passwords.length > 1)
+  let passwords = inputs.filter((input) => input.type === 'password');
+  if (passwords.some((input) => input.autocomplete.split(/\s+/).includes('new-password')))
     return undefined;
-  const candidates = Array.from(scope.querySelectorAll<HTMLInputElement>('input')).filter(
-    (input) =>
-      visible(input) && !isCodeInput(input) && ['text', 'email', 'tel'].includes(input.type),
+  if (passwords.length > 1) {
+    const groups = new Set<HTMLElement>();
+    for (const password of passwords) {
+      if (owner && !owner.contains(password)) return undefined;
+      let scope: HTMLElement | undefined;
+      for (
+        let group = password.parentElement;
+        group && group !== owner;
+        group = group.parentElement
+      )
+        if (group.matches('fieldset, [role="form"], dialog, [role="dialog"]')) scope = group;
+      if (!scope || groups.has(scope)) return undefined;
+      groups.add(scope);
+    }
+    for (const group of groups) {
+      const actions = group.querySelectorAll<HTMLElement>(
+        'button, [role="button"], input[type="submit"], input[type="button"], a[href]',
+      );
+      if (
+        !Array.from(actions).some((action) => {
+          const label = (
+            action instanceof HTMLInputElement ? action.value : (action.textContent ?? '')
+          )
+            .trim()
+            .replace(/\s+/g, ' ')
+            .toLowerCase();
+          const rect = action.getBoundingClientRect();
+          return (
+            (label === 'sign in' || label === 'log in') &&
+            rect.width > 0 &&
+            rect.height > 0 &&
+            action.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) &&
+            !action.closest('[inert]') &&
+            !(
+              (action instanceof HTMLInputElement || action instanceof HTMLButtonElement) &&
+              action.disabled
+            )
+          );
+        })
+      )
+        return undefined;
+    }
+    const selected = Array.from(groups).find((group) => group.contains(field));
+    if (!selected) return undefined;
+    inputs = inputs.filter((input) => selected.contains(input));
+    passwords = inputs.filter((input) => input.type === 'password');
+  }
+  const candidates = inputs.filter(
+    (input) => !isCodeInput(input) && ['text', 'email', 'tel'].includes(input.type),
   );
   const username =
     field.type !== 'password'
