@@ -34,18 +34,42 @@ const challengeAnswer = z.union([
   z.object({ cancel: z.literal(true) }).strict(),
 ]);
 const id = z.string().uuid();
-const loginDraft = z
-  .object({
-    id: id.optional(),
-    revisionDate: z.string().nullable().optional(),
-    name: z.string().trim().min(1).max(500),
-    username: boundedText,
-    password: boundedText,
-    website: z.string().max(2_048),
-    notes: z.string().max(100_000),
-    favorite: z.boolean(),
-  })
-  .strict();
+const draftBase = {
+  id: id.optional(),
+  revisionDate: z.string().nullable().optional(),
+  name: z.string().trim().min(1).max(500),
+  notes: z.string().max(100_000),
+  favorite: z.boolean(),
+};
+const sourceIndex = z.number().int().min(0).max(100_000);
+export const uriMatchSchema = z.union([z.null(), z.literal([0, 1, 2, 3, 5])]);
+export const itemDraftSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      ...draftBase,
+      type: z.literal(1),
+      username: boundedText,
+      password: boundedText,
+      uris: z
+        .array(
+          z.discriminatedUnion('action', [
+            z.object({ action: z.literal('keep'), sourceIndex }).strict(),
+            z
+              .object({
+                action: z.literal('write'),
+                sourceIndex: sourceIndex.optional(),
+                uri: z.string().min(1).max(2_048),
+                match: uriMatchSchema,
+              })
+              .strict(),
+          ]),
+        )
+        .max(1_000),
+    })
+    .strict(),
+  z.object({ ...draftBase, type: z.literal(2) }).strict(),
+]);
+export { MAX_BROWSER_MESSAGE_BYTES } from './types';
 
 export const desktopRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('lockTimeout') }).strict(),
@@ -92,10 +116,11 @@ export const desktopRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('lock') }).strict(),
   z.object({ type: z.literal('logout') }).strict(),
   z.object({ type: z.literal('sync') }).strict(),
+  z.object({ type: z.literal('commitCapture'), url: z.string().max(4_096) }).strict(),
   z.object({ type: z.literal('items') }).strict(),
   z.object({ type: z.literal('trash') }).strict(),
   z.object({ type: z.literal('detail'), id }).strict(),
-  z.object({ type: z.literal('save'), draft: loginDraft }).strict(),
+  z.object({ type: z.literal('save'), draft: itemDraftSchema }).strict(),
   z.object({ type: z.literal('setFavorite'), id, favorite: z.boolean() }).strict(),
   z.object({ type: z.literal('delete'), id }).strict(),
   z.object({ type: z.literal('restore'), id }).strict(),
@@ -118,7 +143,7 @@ export const desktopRequestSchema = z.discriminatedUnion('type', [
 export const browserVaultQuerySchema = z
   .object({
     query: z.string().max(500),
-    scope: z.enum(['all', 'favorites', 'site']),
+    scope: z.enum(['all', 'favorites', 'site', 'trash']),
     itemType: z.enum(['all', 'login', 'note']),
     offset: z.number().int().min(0).max(1_000_000),
   })
@@ -126,6 +151,13 @@ export const browserVaultQuerySchema = z
 export type BrowserVaultQuery = z.infer<typeof browserVaultQuerySchema>;
 
 export const browserRequestSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('detail'), id }).strict(),
+  z.object({ type: z.literal('save'), draft: itemDraftSchema }).strict(),
+  z.object({ type: z.literal('delete'), id }).strict(),
+  z.object({ type: z.literal('restore'), id }).strict(),
+  z.object({ type: z.literal('setFavorite'), id, favorite: z.boolean() }).strict(),
+  z.object({ type: z.literal('generate'), options: passwordOptionsSchema }).strict(),
+  z.object({ type: z.literal('sync') }).strict(),
   z.object({ type: z.literal('status') }).strict(),
   z.object({ type: z.literal('unlockState') }).strict(),
   z.object({ type: z.literal('unlock'), password: z.string().min(1).max(1_024) }).strict(),

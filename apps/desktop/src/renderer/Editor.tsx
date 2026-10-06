@@ -1,6 +1,8 @@
 import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { Check, Eye, EyeSlash as EyeOff, X } from '@phosphor-icons/react';
-import type { ItemDetail, LoginDraft } from '@latch/shared/types';
+import type { ItemDetail, ItemDraft, UriDraft } from '@latch/shared/types';
+import { itemDraft, uriMatchOptions } from '@latch/shared/item-drafts';
+import { uriMatchSchema } from '@latch/shared/protocol';
 import type { Notifier } from './Toasts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,22 +38,13 @@ export function Editor({
   onSaved: (item: ItemDetail) => void;
   notify: Notifier;
 }) {
-  const isNote = item?.type === 2;
-  const [initial] = useState<LoginDraft>(() =>
+  const [initial] = useState<ItemDraft>(() =>
     item
-      ? {
-          id: item.id,
-          revisionDate: item.revisionDate,
-          name: item.name,
-          username: item.username,
-          password: item.password,
-          website: item.website,
-          notes: item.notes,
-          favorite: item.favorite,
-        }
-      : { name: '', username: '', password: '', website: '', notes: '', favorite: false },
+      ? itemDraft(item)
+      : { type: 1, name: '', username: '', password: '', uris: [], notes: '', favorite: false },
   );
   const [draft, setDraft] = useState(initial);
+  const isNote = draft.type === 2;
   const [busy, setBusy] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [error, setError] = useState('');
@@ -77,9 +70,7 @@ export function Editor({
       unsubscribe();
     };
   }, []);
-  const dirty = (Object.keys(draft) as (keyof LoginDraft)[]).some(
-    (key) => draft[key] !== initial[key],
-  );
+  const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
   async function close() {
     if (operation.current || !alive.current) return;
     if (!dirty) {
@@ -104,8 +95,24 @@ export function Editor({
       }
     }
   }
-  function update<K extends keyof LoginDraft>(key: K, value: LoginDraft[K]) {
-    setDraft((current) => ({ ...current, [key]: value }));
+  function update(key: 'name' | 'notes', value: string): void;
+  function update(key: 'favorite', value: boolean): void;
+  function update(key: 'name' | 'notes' | 'favorite', value: string | boolean) {
+    setDraft((current) =>
+      key === 'favorite' && typeof value === 'boolean'
+        ? { ...current, favorite: value }
+        : key !== 'favorite' && typeof value === 'string'
+          ? { ...current, [key]: value }
+          : current,
+    );
+  }
+  function loginField(key: 'username' | 'password', value: string) {
+    setDraft((current) => (current.type === 1 ? { ...current, [key]: value } : current));
+  }
+  function uriRows(change: (rows: UriDraft[]) => UriDraft[]) {
+    setDraft((current) =>
+      current.type === 1 ? { ...current, uris: change(current.uris) } : current,
+    );
   }
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -174,7 +181,13 @@ export function Editor({
       >
         <DialogHeader className="task-header">
           <DialogTitle>
-            {item ? (isNote ? 'Edit secure note' : 'Edit login') : 'New login'}
+            {item
+              ? isNote
+                ? 'Edit secure note'
+                : 'Edit login'
+              : isNote
+                ? 'New secure note'
+                : 'New login'}
           </DialogTitle>
           <DialogDescription>Saved in your personal Bitwarden vault.</DialogDescription>
           <Button
@@ -197,6 +210,38 @@ export function Editor({
         >
           <div className="task-body">
             <FieldGroup>
+              {!item && (
+                <Field>
+                  <FieldLabel htmlFor="editor-type">Item type</FieldLabel>
+                  <select
+                    id="editor-type"
+                    value={draft.type}
+                    disabled={busy}
+                    onChange={(event) => {
+                      if (event.target.value === '2')
+                        setDraft({
+                          type: 2,
+                          name: draft.name,
+                          notes: draft.notes,
+                          favorite: draft.favorite,
+                        });
+                      else
+                        setDraft({
+                          type: 1,
+                          name: draft.name,
+                          notes: draft.notes,
+                          favorite: draft.favorite,
+                          username: '',
+                          password: '',
+                          uris: [],
+                        });
+                    }}
+                  >
+                    <option value="1">Login</option>
+                    <option value="2">Secure note</option>
+                  </select>
+                </Field>
+              )}
               <Field>
                 <FieldLabel htmlFor="editor-name">Name</FieldLabel>
                 <Input
@@ -211,23 +256,83 @@ export function Editor({
               </Field>
               {!isNote && (
                 <>
-                  <Field>
-                    <FieldLabel htmlFor="editor-website">Website</FieldLabel>
-                    <Input
-                      id="editor-website"
-                      type="url"
-                      value={draft.website}
-                      onChange={(event) => update('website', event.target.value)}
-                      placeholder="https://example.com"
-                      disabled={busy}
-                    />
-                  </Field>
+                  {draft.type === 1 && (
+                    <Field>
+                      <FieldLabel>Websites</FieldLabel>
+                      {draft.uris.map((row, index) => (
+                        <div key={index} className="task-uri-row">
+                          {row.action === 'keep' ? (
+                            <p className="text-xs text-muted-foreground">
+                              {item?.uris[row.sourceIndex]?.uri ?? 'Empty imported URI'}. Imported
+                              matching rule is preserved. Edit it in Bitwarden or remove this row.
+                            </p>
+                          ) : (
+                            <>
+                              <Input
+                                aria-label={`Website ${index + 1}`}
+                                value={row.uri}
+                                placeholder="https://example.com"
+                                maxLength={2048}
+                                disabled={busy}
+                                onChange={(event) =>
+                                  uriRows((rows) =>
+                                    rows.map((entry, i) =>
+                                      i === index ? { ...row, uri: event.target.value } : entry,
+                                    ),
+                                  )
+                                }
+                              />
+                              <select
+                                aria-label={`Match rule ${index + 1}`}
+                                value={row.match === null ? '' : String(row.match)}
+                                disabled={busy}
+                                onChange={(event) => {
+                                  const match = uriMatchSchema.parse(
+                                    event.target.value === '' ? null : Number(event.target.value),
+                                  );
+                                  uriRows((rows) =>
+                                    rows.map((entry, i) =>
+                                      i === index ? { ...row, match } : entry,
+                                    ),
+                                  );
+                                }}
+                              >
+                                {uriMatchOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </>
+                          )}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() => uriRows((rows) => rows.filter((_, i) => i !== index))}
+                          >
+                            Remove website
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() =>
+                          uriRows((rows) => [...rows, { action: 'write', uri: '', match: null }])
+                        }
+                      >
+                        Add website
+                      </Button>
+                    </Field>
+                  )}
                   <Field>
                     <FieldLabel htmlFor="editor-username">Username</FieldLabel>
                     <Input
                       id="editor-username"
-                      value={draft.username}
-                      onChange={(event) => update('username', event.target.value)}
+                      value={draft.type === 1 ? draft.username : ''}
+                      onChange={(event) => loginField('username', event.target.value)}
                       autoComplete="off"
                       disabled={busy}
                     />
@@ -237,7 +342,7 @@ export function Editor({
                       <FieldLabel htmlFor="editor-password">Password</FieldLabel>
                       <PasswordGenerator
                         disabled={busy}
-                        onUse={(password) => update('password', password)}
+                        onUse={(password) => loginField('password', password)}
                       />
                     </div>
                     <InputGroup>
@@ -245,8 +350,8 @@ export function Editor({
                         id="editor-password"
                         type={revealed ? 'text' : 'password'}
                         autoComplete="new-password"
-                        value={draft.password}
-                        onChange={(event) => update('password', event.target.value)}
+                        value={draft.type === 1 ? draft.password : ''}
+                        onChange={(event) => loginField('password', event.target.value)}
                         disabled={busy}
                       />
                       <InputGroupAddon align="inline-end">

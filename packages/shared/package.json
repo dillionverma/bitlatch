@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./item-drafts": "./src/item-drafts.ts",
     "./types": "./src/types.ts",
     "./protocol": "./src/protocol.ts",
     "./brand": "./src/brand.ts",

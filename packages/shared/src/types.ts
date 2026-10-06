@@ -1,3 +1,5 @@
+export const MAX_BROWSER_MESSAGE_BYTES = 900_000;
+
 export type WindowMaterial = 'glass' | 'vibrancy' | 'solid';
 export type WindowCommand = 'search' | 'new' | 'settings';
 export type NativeConfirmation = 'discard' | 'trash';
@@ -119,6 +121,7 @@ export interface ItemSummary {
 
 export interface ItemDetail extends ItemSummary {
   password: string;
+  uris: { sourceIndex: number; uri: string | null; match: number | null }[];
   notes: string;
   revisionDate: string | null;
   createdDate: string | null;
@@ -135,16 +138,17 @@ export interface LoginInput {
   clientSecret?: string;
 }
 
-export interface LoginDraft {
+export type UriMatch = null | 0 | 1 | 2 | 3 | 5;
+export type UriDraft =
+  | { action: 'keep'; sourceIndex: number }
+  | { action: 'write'; sourceIndex?: number; uri: string; match: UriMatch };
+export type ItemDraft = {
   id?: string;
   revisionDate?: string | null;
   name: string;
-  username: string;
-  password: string;
-  website: string;
   notes: string;
   favorite: boolean;
-}
+} & ({ type: 1; username: string; password: string; uris: UriDraft[] } | { type: 2 });
 
 export interface FillCredential {
   username: string;
@@ -216,7 +220,7 @@ export interface LatchApi {
   items(): Promise<Result<ItemSummary[]>>;
   trash(): Promise<Result<ItemSummary[]>>;
   detail(id: string): Promise<Result<ItemDetail>>;
-  save(draft: LoginDraft): Promise<Result<ItemDetail>>;
+  save(draft: ItemDraft): Promise<Result<ItemDetail>>;
   setFavorite(id: string, favorite: boolean): Promise<Result<ItemSummary>>;
   remove(id: string): Promise<Result<VaultState>>;
   restore(id: string): Promise<Result<VaultState>>;

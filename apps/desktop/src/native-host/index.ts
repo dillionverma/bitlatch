@@ -58,7 +58,26 @@ async function forward(request: unknown): Promise<Result<unknown>> {
       typeof request === 'object' &&
       'type' in request &&
       (request.type === 'unlock' || request.type === 'biometricUnlock');
-    socket.setTimeout(unlocking ? 120_000 : 8_000, () => socket.destroy(new Error('Timed out')));
+    const writing =
+      request !== null &&
+      typeof request === 'object' &&
+      'type' in request &&
+      ['save', 'delete', 'restore', 'setFavorite', 'sync', 'commitCapture'].includes(
+        String(request.type),
+      );
+    const readingTrash =
+      request !== null &&
+      typeof request === 'object' &&
+      'type' in request &&
+      request.type === 'browse' &&
+      'query' in request &&
+      request.query !== null &&
+      typeof request.query === 'object' &&
+      'scope' in request.query &&
+      request.query.scope === 'trash';
+    socket.setTimeout(unlocking || writing || readingTrash ? 120_000 : 8_000, () =>
+      socket.destroy(new Error('Timed out')),
+    );
     socket.on('connect', () =>
       socket.write(`${JSON.stringify({ token: config.token, request })}\n`),
     );

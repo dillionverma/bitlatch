@@ -2,6 +2,7 @@ import { defineBackground } from 'wxt/utils/define-background';
 import { browser, type Browser } from 'wxt/browser';
 import {
   browserRequestSchema,
+  MAX_BROWSER_MESSAGE_BYTES,
   browserVaultQuerySchema,
   type BrowserRequest,
 } from '@latch/shared/protocol';
@@ -25,12 +26,25 @@ export default defineBackground(() => {
   }[] = [];
 
   function native<T>(request: BrowserRequest): Promise<Result<T>> {
+    if (
+      new TextEncoder().encode(JSON.stringify(request)).byteLength >=
+      MAX_BROWSER_MESSAGE_BYTES - 128
+    )
+      return Promise.resolve({
+        ok: false,
+        error: 'This item is too large for the browser. Open it in the desktop app.',
+      });
     const unlocking = request.type === 'unlock' || request.type === 'biometricUnlock';
+    const writing = ['save', 'delete', 'restore', 'setFavorite', 'sync', 'commitCapture'].includes(
+      request.type,
+    );
+    const readingTrash = request.type === 'browse' && request.query.scope === 'trash';
+    const timeout = unlocking || writing || readingTrash ? 125_000 : 10_000;
     if (import.meta.env.BROWSER === 'safari') {
       return new Promise((resolve) => {
         const timer = setTimeout(
           () => resolve({ ok: false, error: 'Bitlatch is not responding.' }),
-          unlocking ? 125_000 : 10_000,
+          timeout,
         );
         browser.runtime.sendNativeMessage(HOST, request).then(
           (value) => {
@@ -45,16 +59,19 @@ export default defineBackground(() => {
       });
     }
     // Authentication and icon downloads must not block status, lock, or fill.
-    if (unlocking || request.type === 'websiteIcon') {
+    if (
+      unlocking ||
+      writing ||
+      readingTrash ||
+      request.type === 'lock' ||
+      request.type === 'websiteIcon'
+    ) {
       return new Promise((resolve) => {
         const unlockPort = browser.runtime.connectNative(HOST);
-        const timer = setTimeout(
-          () => {
-            resolve({ ok: false, error: 'Bitlatch is not responding. Try again.' });
-            unlockPort.disconnect();
-          },
-          unlocking ? 125_000 : 10_000,
-        );
+        const timer = setTimeout(() => {
+          resolve({ ok: false, error: 'Bitlatch is not responding. Try again.' });
+          unlockPort.disconnect();
+        }, timeout);
         unlockPort.onMessage.addListener((result: Result<T>) => {
           clearTimeout(timer);
           resolve(result);
@@ -251,7 +268,20 @@ export default defineBackground(() => {
         const url = tab?.url && /^https?:\/\//.test(tab.url) ? tab.url : '';
         return native<BrowserVaultPage>({ type, query: query.data, url });
       }
-      if (isPopup && (type === 'copy' || type === 'lock')) {
+      if (
+        isPopup &&
+        [
+          'copy',
+          'lock',
+          'detail',
+          'save',
+          'delete',
+          'restore',
+          'setFavorite',
+          'generate',
+          'sync',
+        ].includes(String(type))
+      ) {
         const request = browserRequestSchema.safeParse(message);
         if (!request.success) return { ok: false, error: 'Invalid vault request.' };
         const result = await native<unknown>(request.data);

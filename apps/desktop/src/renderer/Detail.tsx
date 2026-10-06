@@ -10,6 +10,7 @@ import {
   Trash as Trash2,
   WarningCircle as CircleAlert,
 } from '@phosphor-icons/react';
+import { uriMatchOptions } from '@latch/shared/item-drafts';
 import type { ItemDetail } from '@latch/shared/types';
 import { ItemIcon, displayWebsite, typeName } from './items';
 import type { Notifier } from './Toasts';
@@ -271,21 +272,22 @@ export function Detail({
                 </div>
               </>
             )}
-            {item.website && (
-              <>
-                {item.type === 1 && <Separator />}
+            {item.uris.map((row) => (
+              <div key={row.sourceIndex}>
+                <Separator />
                 <div className="task-credential">
                   <div>
-                    <p id="detail-website-label" className="text-xs text-muted-foreground">
-                      Website
+                    <p className="text-xs text-muted-foreground">
+                      Website ·{' '}
+                      {uriMatchOptions.find(
+                        (option) => option.value === (row.match === null ? '' : String(row.match)),
+                      )?.label ?? 'Imported rule'}
                     </p>
-                    <span className="field-value text-sm" aria-labelledby="detail-website-label">
-                      {item.website}
-                    </span>
+                    <span className="field-value text-sm">{row.uri ?? 'Empty URI'}</span>
                   </div>
                 </div>
-              </>
-            )}
+              </div>
+            ))}
           </section>
         )}
         <span role="status" className="sr-only">

@@ -317,6 +317,7 @@ async function mutateVault(
         | 'unlock'
         | 'logout'
         | 'sync'
+        | 'commitCapture'
         | 'save'
         | 'setFavorite'
         | 'delete'
@@ -346,6 +347,8 @@ async function mutateVault(
         return await vault.logout();
       case 'sync':
         return await vault.sync();
+      case 'commitCapture':
+        return await vault.commitCapture(request.url);
       case 'save':
         return await vault.save(request.draft);
       case 'setFavorite':

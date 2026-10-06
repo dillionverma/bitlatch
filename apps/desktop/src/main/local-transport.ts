@@ -116,7 +116,13 @@ export class LocalTransport<Request> {
         } catch {
           response = { ok: false, error: 'Vault locked. Try again after unlocking.' };
         }
-        if (!socket.destroyed) socket.end(`${JSON.stringify(response)}\n`);
+        let body = JSON.stringify(response);
+        if (Buffer.byteLength(body) >= MAX_MESSAGE_BYTES)
+          body = JSON.stringify({
+            ok: false,
+            error: 'This item is too large for the browser. Open it in the desktop app.',
+          });
+        if (!socket.destroyed) socket.end(`${body}\n`);
       });
     });
   }

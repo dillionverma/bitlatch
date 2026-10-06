@@ -27,7 +27,7 @@ import type {
   ItemDetail,
   ItemSummary,
   LoginChallenge,
-  LoginDraft,
+  ItemDraft,
   LoginInput,
   PasswordOptions,
   TwoStepMethod,
@@ -530,6 +530,11 @@ export class Vault extends EventEmitter {
     return {
       ...summarize(cipher),
       password: cipher.login?.password ?? '',
+      uris: (cipher.login?.uris ?? []).map((row, sourceIndex) => ({
+        sourceIndex,
+        uri: row.uri,
+        match: row.match ?? null,
+      })),
       notes: cipher.notes ?? '',
       revisionDate: cipher.revisionDate ?? null,
       createdDate: cipher.creationDate ?? null,
@@ -559,6 +564,8 @@ export class Vault extends EventEmitter {
     const generation = this.generation;
     const cipher = this.item(id);
     if (!cipher.deletedDate) throw new UserError('This item is not in the trash.');
+    if (!isRemovable(cipher))
+      throw new UserError('Restore this item in the official Bitwarden client.');
     await this.cli.run(['restore', 'item', id], { session: this.session });
     this.assertGeneration(generation);
     this.mark(id, null);
@@ -595,7 +602,8 @@ export class Vault extends EventEmitter {
     };
   }
 
-  browserItems(query: BrowserVaultQuery, url: string): BrowserVaultPage {
+  async browserItems(query: BrowserVaultQuery, url: string): Promise<BrowserVaultPage> {
+    if (query.scope === 'trash' && this.state.status === 'unlocked') await this.trash();
     const page: BrowserVaultPage = {
       state: this.state.status,
       revision: this.itemsRevision,
@@ -607,18 +615,22 @@ export class Vault extends EventEmitter {
     const items = [...this.ciphers.values()]
       .filter(
         (cipher) =>
-          !cipher.deletedDate && !isRestricted(cipher) && (cipher.type === 1 || cipher.type === 2),
+          Boolean(cipher.deletedDate) === (query.scope === 'trash') &&
+          !isRestricted(cipher) &&
+          (cipher.type === 1 || cipher.type === 2),
       )
       .filter((cipher) => query.scope !== 'site' || (fillableUrl(url) && canFill(cipher, url)))
+      .filter((cipher) =>
+        terms.every((term) =>
+          `${cipher.name} ${cipher.login?.username ?? ''} ${(cipher.login?.uris ?? []).map((row) => row.uri ?? '').join(' ')}`
+            .toLocaleLowerCase()
+            .includes(term),
+        ),
+      )
       .map(summarize)
       .filter((item) => query.scope !== 'favorites' || item.favorite)
       .filter(
         (item) => query.itemType === 'all' || item.type === (query.itemType === 'login' ? 1 : 2),
-      )
-      .filter((item) =>
-        terms.every((term) =>
-          `${item.name} ${item.username} ${item.website}`.toLocaleLowerCase().includes(term),
-        ),
       )
       .sort(
         (a, b) =>
@@ -643,9 +655,13 @@ export class Vault extends EventEmitter {
     return page;
   }
 
-  requireBrowserItem(id: string) {
+  requireBrowserItem(id: string, allowTrash = false) {
     const cipher = this.item(id);
-    if (cipher.deletedDate || isRestricted(cipher) || (cipher.type !== 1 && cipher.type !== 2))
+    if (
+      (!allowTrash && cipher.deletedDate) ||
+      isRestricted(cipher) ||
+      (cipher.type !== 1 && cipher.type !== 2)
+    )
       throw new UserError('Open this item in the desktop app.');
   }
 
@@ -750,20 +766,25 @@ export class Vault extends EventEmitter {
       await this.save({
         id: captured.id!,
         revisionDate: existing.revisionDate ?? null,
+        type: 1,
         name: existing.name,
         username: captured.username,
         password: captured.password,
-        website: existing.login?.uris?.[0]?.uri ?? captured.origin,
+        uris: (existing.login?.uris ?? []).map((_, sourceIndex) => ({
+          action: 'keep',
+          sourceIndex,
+        })),
         notes: existing.notes ?? '',
         favorite: Boolean(existing.favorite),
       });
       return { action: 'update' as const, name: existing.name };
     }
     await this.save({
+      type: 1,
       name: captured.name,
       username: captured.username,
       password: captured.password,
-      website: captured.origin,
+      uris: [{ action: 'write', uri: captured.origin, match: null }],
       notes: '',
       favorite: false,
     });
@@ -972,34 +993,32 @@ export class Vault extends EventEmitter {
     return summarize(saved);
   }
 
-  async save(draft: LoginDraft) {
+  async save(draft: ItemDraft) {
     this.requireUnlocked();
     const generation = this.generation;
-    if (draft.website && !webUrl(draft.website))
-      throw new UserError('Enter a full website address, like https://example.com.');
     let cipher: Cipher;
     if (draft.id) {
       const existing = this.item(draft.id);
-      if (!isEditable(existing))
+      if (existing.deletedDate || !isEditable(existing))
         throw new UserError('Edit this item in the official Bitwarden client.');
       const latest = JSON.parse(
         await this.cli.run(['get', 'item', draft.id], { session: this.session }),
       ) as Cipher;
-      if (latest.revisionDate !== draft.revisionDate)
+      this.assertGeneration(generation);
+      if ((latest.revisionDate ?? null) !== (draft.revisionDate ?? null))
         throw new UserError('This item changed elsewhere. Sync, reopen it, and try again.');
-      if (!isEditable(latest))
+      if (latest.deletedDate || !isEditable(latest) || latest.type !== draft.type)
         throw new UserError('Edit this item in the official Bitwarden client.');
-      cipher = { ...latest, login: { ...latest.login } };
+      cipher = { ...latest };
     } else {
       cipher = {
         id: '',
-        type: 1,
+        type: draft.type,
         name: '',
         organizationId: null,
         collectionIds: [],
         folderId: null,
         reprompt: 0,
-        login: { uris: [] },
       };
     }
     this.assertGeneration(generation);
@@ -1008,28 +1027,31 @@ export class Vault extends EventEmitter {
       notes: draft.notes || null,
       favorite: draft.favorite,
     });
-    if (cipher.type === 2) {
-      // A secure note keeps its text in notes and has no login to write.
+    if (draft.type === 2) {
       delete cipher.login;
       cipher.secureNote ??= { type: 0 };
     } else {
-      const previousUris = cipher.login?.uris ?? [];
-      const nextUris = draft.website
-        ? [
-            {
-              ...previousUris[0],
-              uri: draft.website,
-              match: previousUris[0]?.match ?? null,
-            },
-            ...previousUris.slice(1),
-          ]
-        : previousUris.slice(1);
-      cipher.login = {
-        ...cipher.login,
-        username: draft.username,
-        password: draft.password,
-        uris: nextUris,
-      };
+      const previous = cipher.login?.uris ?? [];
+      const seen = new Set<number>();
+      const uris = draft.uris.map((row): CipherUri => {
+        const index = row.sourceIndex;
+        if (index !== undefined) {
+          if (!Number.isInteger(index) || index < 0 || index >= previous.length || seen.has(index))
+            throw new UserError('The website list changed. Reopen this item and try again.');
+          seen.add(index);
+        }
+        if (row.action === 'keep') return previous[row.sourceIndex]!;
+        const original = index === undefined ? undefined : previous[index];
+        let uri = row.uri;
+        if (row.uri !== original?.uri || row.match !== (original?.match ?? null)) {
+          const address = row.uri.includes('://') ? row.uri : `https://${row.uri}`;
+          if (!webUrl(address))
+            throw new UserError('Enter a website address, like https://example.com.');
+          uri = address;
+        }
+        return { ...original, uri, match: row.match };
+      });
+      cipher.login = { ...cipher.login, username: draft.username, password: draft.password, uris };
     }
     const payload = Buffer.from(JSON.stringify(cipher)).toString('base64');
     const args = draft.id ? ['edit', 'item', draft.id] : ['create', 'item'];

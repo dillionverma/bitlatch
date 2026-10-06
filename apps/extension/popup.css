@@ -48,6 +48,7 @@ button:disabled {
 }
 button:focus-visible,
 input:focus-visible,
+textarea:focus-visible,
 select:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 1px;
@@ -136,6 +137,7 @@ main {
 }
 .filters {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -171,7 +173,7 @@ main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 40px;
+  min-height: 40px;
   gap: 8px;
   padding: 0 12px;
   color: var(--muted-foreground);
@@ -467,4 +469,59 @@ footer label {
   #scopes button[aria-pressed='true'] {
     outline: 1px solid Highlight;
   }
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.editor-form,
+.editor-field,
+.websites,
+.website-row {
+  display: grid;
+  gap: 8px;
+}
+.editor-form {
+  padding: 16px 0;
+}
+.editor-form input:not([type='checkbox']),
+.editor-form textarea,
+.editor-form select {
+  width: 100%;
+  padding: 9px;
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+}
+.editor-field > span,
+.field-label {
+  font-size: 12px;
+}
+.website-row {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.generator {
+  padding: 10px 0;
+}
+.generator label {
+  display: block;
+  margin: 6px 0;
+}
+.generator input[type='number'] {
+  width: 80px;
+  margin-left: 10px;
+}
+.muted {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.list-heading {
+  flex-wrap: wrap;
 }

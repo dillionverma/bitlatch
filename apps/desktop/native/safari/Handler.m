@@ -18,14 +18,16 @@ static NSDictionary *Request(NSDictionary *request) {
   if (fd < 0) return nil;
   // Bound native messaging independently of Safari background lifetime.
   BOOL unlocking = [request[@"type"] isEqual:@"unlock"] || [request[@"type"] isEqual:@"biometricUnlock"];
-  struct timeval timeout = {unlocking ? 120 : 8, 0};
+  BOOL writing = [@[@"save", @"delete", @"restore", @"setFavorite", @"sync", @"commitCapture"] containsObject:request[@"type"]];
+  BOOL readingTrash = [request[@"type"] isEqual:@"browse"] && [request[@"query"] isKindOfClass:NSDictionary.class] && [request[@"query"][@"scope"] isEqual:@"trash"];
+  struct timeval timeout = {unlocking || writing || readingTrash ? 120 : 8, 0};
   setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
   setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
   int noSignal = 1;
   setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, sizeof(noSignal));
   if (connect(fd, (struct sockaddr *)&address, sizeof(address)) != 0) { close(fd); return nil; }
   NSMutableData *payload = [[NSJSONSerialization dataWithJSONObject:@{@"token": config[@"token"], @"request": request} options:0 error:nil] mutableCopy];
-  if (!payload || payload.length > 65536) { close(fd); return nil; }
+  if (!payload || payload.length >= 900000) { close(fd); return nil; }
   [payload appendBytes:"\n" length:1];
   size_t sent = 0;
   while (sent < payload.length) {

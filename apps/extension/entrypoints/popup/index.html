@@ -41,7 +41,8 @@
           <div id="scopes" role="group" aria-label="Filter items">
             <button data-scope="all" aria-pressed="true">All items</button
             ><button data-scope="favorites" aria-pressed="false">Favorites</button
-            ><button data-scope="site" aria-pressed="false">This site</button>
+            ><button data-scope="site" aria-pressed="false">This site</button
+            ><button data-scope="trash" aria-pressed="false">Trash</button>
           </div>
           <select id="item-type" aria-label="Item type">
             <option value="all">All types</option>
@@ -51,12 +52,13 @@
         </div>
         <div class="list-heading">
           <h1 id="list-title">All items</h1>
-          <span id="count" role="status"></span
+          <button id="new-login">New login</button><button id="new-note">New note</button
+          ><span id="count" role="status"></span
           ><button
             id="refresh"
             class="icon-button"
-            aria-label="Refresh items"
-            title="Refresh items"
+            aria-label="Sync vault"
+            title="Sync vault"
           ></button>
         </div>
         <div id="results" tabindex="-1" aria-label="Vault results"></div>

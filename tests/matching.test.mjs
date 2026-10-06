@@ -7,8 +7,9 @@ import {
   webUrl,
 } from '../apps/desktop/src/main/matching.ts';
 
-const hostModes = [undefined, null, 1];
-const siteModes = [...hostModes, 0];
+const hostModes = [1];
+const baseModes = [undefined, null, 0];
+const siteModes = [...hostModes, ...baseModes];
 const supportedModes = [...siteModes, 2, 3];
 
 function cases(rows, match) {
@@ -145,7 +146,7 @@ for (const match of siteModes) {
 }
 
 for (const match of hostModes) {
-  void describe(`default stays exact-host, mode ${match}`, () => {
+  void describe(`explicit host stays exact-host, mode ${match}`, () => {
     cases(
       [
         ['parent does not match child', 'https://example.com', 'https://login.example.com/', false],
@@ -157,72 +158,84 @@ for (const match of hostModes) {
   });
 }
 
-void describe('explicit base-domain matching', () => {
-  cases(
-    [
-      ['parent and child', 'https://example.com', 'https://login.example.com/', true],
-      ['child and parent', 'https://login.example.com', 'https://example.com/', true],
-      ['siblings', 'https://a.example.com', 'https://b.example.com/', true],
-      ['multi-label public suffix', 'https://a.example.co.uk', 'https://b.example.co.uk/', true],
-      ['different registrable domain', 'https://a.example.co.uk', 'https://other.co.uk/', false],
-      ['different TLD', 'https://example.com', 'https://example.net/', false],
+for (const match of baseModes)
+  void describe(`base-domain matching, mode ${match}`, () => {
+    cases(
       [
-        'explicit port across siblings',
-        'https://a.example.com:8443',
-        'https://b.example.com:8443/',
-        true,
+        ['parent and child', 'https://example.com', 'https://login.example.com/', true],
+        ['child and parent', 'https://login.example.com', 'https://example.com/', true],
+        ['siblings', 'https://a.example.com', 'https://b.example.com/', true],
+        ['Chase sibling hosts', 'secure.chase.com', 'https://www.chase.com/', true],
+        ['multi-label public suffix', 'https://a.example.co.uk', 'https://b.example.co.uk/', true],
+        ['different registrable domain', 'https://a.example.co.uk', 'https://other.co.uk/', false],
+        ['different TLD', 'https://example.com', 'https://example.net/', false],
+        [
+          'explicit port across siblings',
+          'https://a.example.com:8443',
+          'https://b.example.com:8443/',
+          true,
+        ],
+        [
+          'explicit port mismatch across siblings',
+          'https://a.example.com:8443',
+          'https://b.example.com/',
+          false,
+        ],
+        [
+          'explicit default port across siblings',
+          'https://a.example.com:443',
+          'https://b.example.com:8443/',
+          false,
+        ],
+        [
+          'private suffix tenant isolation',
+          'https://alice.github.io',
+          'https://bob.github.io/',
+          false,
+        ],
+        [
+          'private tenant subdomain',
+          'https://alice.github.io',
+          'https://login.alice.github.io/',
+          true,
+        ],
+        [
+          'appspot tenant isolation',
+          'https://alice.appspot.com',
+          'https://bob.appspot.com/',
+          false,
+        ],
+        ['public suffix alone', 'https://co.uk', 'https://example.co.uk/', false],
+        ['private suffix alone', 'https://github.io', 'https://alice.github.io/', false],
+        [
+          'local parent does not include child',
+          'https://skynet.local',
+          'https://admin.skynet.local/',
+          false,
+        ],
+        [
+          'local siblings stay separate',
+          'https://a.skynet.local',
+          'https://b.skynet.local/',
+          false,
+        ],
+        [
+          'unknown suffix siblings stay separate',
+          'https://a.company.internal',
+          'https://b.company.internal/',
+          false,
+        ],
+        ['localhost children stay separate', 'https://a.localhost', 'https://b.localhost/', false],
+        [
+          'IP-looking hostname is not an IP',
+          'https://192.168.0.11',
+          'https://x.192.168.0.11/',
+          false,
+        ],
       ],
-      [
-        'explicit port mismatch across siblings',
-        'https://a.example.com:8443',
-        'https://b.example.com/',
-        false,
-      ],
-      [
-        'explicit default port across siblings',
-        'https://a.example.com:443',
-        'https://b.example.com:8443/',
-        false,
-      ],
-      [
-        'private suffix tenant isolation',
-        'https://alice.github.io',
-        'https://bob.github.io/',
-        false,
-      ],
-      [
-        'private tenant subdomain',
-        'https://alice.github.io',
-        'https://login.alice.github.io/',
-        true,
-      ],
-      ['appspot tenant isolation', 'https://alice.appspot.com', 'https://bob.appspot.com/', false],
-      ['public suffix alone', 'https://co.uk', 'https://example.co.uk/', false],
-      ['private suffix alone', 'https://github.io', 'https://alice.github.io/', false],
-      [
-        'local parent does not include child',
-        'https://skynet.local',
-        'https://admin.skynet.local/',
-        false,
-      ],
-      ['local siblings stay separate', 'https://a.skynet.local', 'https://b.skynet.local/', false],
-      [
-        'unknown suffix siblings stay separate',
-        'https://a.company.internal',
-        'https://b.company.internal/',
-        false,
-      ],
-      ['localhost children stay separate', 'https://a.localhost', 'https://b.localhost/', false],
-      [
-        'IP-looking hostname is not an IP',
-        'https://192.168.0.11',
-        'https://x.192.168.0.11/',
-        false,
-      ],
-    ],
-    0,
-  );
-});
+      match,
+    );
+  });
 
 void describe('exact matching', () => {
   cases(

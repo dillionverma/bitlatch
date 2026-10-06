@@ -14,3 +14,24 @@ export function isLocalHost(hostname: string): boolean {
     (first === 169 && second === 254)
   );
 }
+
+/** A web address Bitlatch is willing to store on an item. */
+export function webUrl(input: string): URL | null {
+  return parsedWebUrl(input)?.url ?? null;
+}
+
+export function parsedWebUrl(input: string): { url: URL; explicitPort: boolean } | null {
+  // Reject repairs that URL would silently make to malformed authorities.
+  if (/[\s\p{Cc}\\]/u.test(input)) return null;
+  const authority = /^https?:\/\/([^/?#]+)/i.exec(input)?.[1];
+  if (!authority) return null;
+  const host = /^(?:\[[0-9a-f:.]+\]|[^:@[\]]+)(?::(\d+))?$/i.exec(authority);
+  if (!host) return null;
+  try {
+    const url = new URL(input);
+    if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) return null;
+    return { url, explicitPort: host[1] !== undefined };
+  } catch {
+    return null;
+  }
+}

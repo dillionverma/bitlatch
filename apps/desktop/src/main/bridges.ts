@@ -71,24 +71,41 @@ export async function startBridges({
         return vault.snapshot().status;
       }
       if (request.type === 'browse') return vault.browserItems(request.query, request.url);
+      if (request.type === 'detail') {
+        vault.requireBrowserItem(request.id, true);
+        return handleRequest(request);
+      }
+      if (request.type === 'save') {
+        if (request.draft.id) vault.requireBrowserItem(request.draft.id);
+        return handleRequest(request);
+      }
+      if (
+        request.type === 'delete' ||
+        request.type === 'restore' ||
+        request.type === 'setFavorite'
+      ) {
+        vault.requireBrowserItem(request.id, request.type === 'restore');
+        return handleRequest(request);
+      }
+      if (request.type === 'generate' || request.type === 'sync') return handleRequest(request);
       if (request.type === 'lock') {
         await handleRequest(request);
         return vault.snapshot().status;
       }
       if (request.type === 'copy') {
-        vault.requireBrowserItem(request.id);
+        vault.requireBrowserItem(request.id, true);
         await handleRequest(request);
         return null;
       }
       if (request.type === 'matches') return vault.matches(request.url);
       if (request.type === 'websiteIcon') {
-        vault.requireBrowserItem(request.id);
+        vault.requireBrowserItem(request.id, true);
         return handleRequest(request);
       }
       if (request.type === 'capture')
         return vault.capture(request.url, request.username, request.password);
       if (request.type === 'pendingCapture') return vault.pendingCapture(request.url);
-      if (request.type === 'commitCapture') return vault.commitCapture(request.url);
+      if (request.type === 'commitCapture') return handleRequest(request);
       if (request.type === 'dismissCapture') return vault.dismissCapture();
       if (request.type === 'icon') {
         // Only an item the page may already see gets an icon; no secret is read.
@@ -99,7 +116,9 @@ export async function startBridges({
         const icon = await websiteIcons.get(item.website);
         return startedAt === epoch() && vault.snapshot().status === 'unlocked' ? icon : null;
       }
-      return vault.fill(request.id, request.url);
+      if (request.type === 'fill') return vault.fill(request.id, request.url);
+      const unhandled: never = request;
+      throw new UserError(`Unsupported browser request: ${String(unhandled)}`);
     };
     const responseGuard = (request: BrowserRequest) => {
       const startedAt = epoch();
@@ -112,7 +131,15 @@ export async function startBridges({
       };
     };
     const browserRequestTimeout = (request: BrowserRequest) =>
-      request.type === 'unlock' || request.type === 'biometricUnlock' ? 120_000 : 10_000;
+      request.type === 'unlock' ||
+      request.type === 'biometricUnlock' ||
+      (request.type === 'browse' && request.query.scope === 'trash')
+        ? 120_000
+        : ['save', 'delete', 'restore', 'setFavorite', 'sync', 'commitCapture'].includes(
+              request.type,
+            )
+          ? 120_000
+          : 10_000;
     const bridge = new LocalTransport({
       schema: browserRequestSchema,
       dataDir,

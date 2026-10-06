@@ -1,30 +1,10 @@
-import { isLocalHost } from '@latch/shared/urls';
+import { isLocalHost, webUrl, parsedWebUrl } from '@latch/shared/urls';
+export { webUrl } from '@latch/shared/urls';
 import { parse } from 'tldts';
 
 export interface CipherUri {
   uri: string | null;
   match?: number | null;
-}
-
-/** A web address Bitlatch is willing to store on an item. */
-export function webUrl(input: string): URL | null {
-  return parsedWebUrl(input)?.url ?? null;
-}
-
-function parsedWebUrl(input: string): { url: URL; explicitPort: boolean } | null {
-  // Reject repairs that URL would silently make to malformed authorities.
-  if (/[\s\p{Cc}\\]/u.test(input)) return null;
-  const authority = /^https?:\/\/([^/?#]+)/i.exec(input)?.[1];
-  if (!authority) return null;
-  const host = /^(?:\[[0-9a-f:.]+\]|[^:@[\]]+)(?::(\d+))?$/i.exec(authority);
-  if (!host) return null;
-  try {
-    const url = new URL(input);
-    if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) return null;
-    return { url, explicitPort: host[1] !== undefined };
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -41,7 +21,7 @@ export function fillableUrl(input: string): URL | null {
 }
 
 export function matchesUri(entry: CipherUri, target: string): boolean {
-  const mode = entry.match ?? 1;
+  const mode = entry.match ?? 0;
   if (!entry.uri || ![0, 1, 2, 3].includes(mode)) return false;
   const destination = fillableUrl(target);
   if (!destination) return false;
@@ -66,8 +46,6 @@ export function matchesUri(entry: CipherUri, target: string): boolean {
   // URL removes explicit default ports, so retain their presence from the input.
   if (parsed.explicitPort && saved.port !== destination.port) return false;
   if (saved.hostname === destination.hostname) return true;
-  // The CLI does not expose the client's default rule. Only an explicit base-
-  // domain rule may include sibling subdomains, and only under a known suffix.
   if (mode !== 0) return false;
   const savedDomain = registrableDomain(saved.hostname);
   return savedDomain !== null && savedDomain === registrableDomain(destination.hostname);

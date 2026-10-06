@@ -2,12 +2,18 @@ import { browser } from 'wxt/browser';
 import '@latch/shared/theme.css';
 import './popup.css';
 import { element, mark } from './content/render';
+import { itemDraft, uriMatchOptions } from '@latch/shared/item-drafts';
+import { uriMatchSchema } from '@latch/shared/protocol';
+import { defaultPasswordOptions } from '@latch/shared/types';
 import type { BrowserVaultQuery } from '@latch/shared/protocol';
 import type {
   BrowserSuggestions,
   BrowserUnlockState,
   BrowserVaultPage,
   ItemSummary,
+  ItemDetail,
+  ItemDraft,
+  PasswordOptions,
   Result,
   VaultStatus,
 } from '@latch/shared/types';
@@ -64,7 +70,35 @@ document.querySelector('#search-icon')!.append(icon('search'));
 document.querySelector('#empty-icon')!.append(icon('lock'));
 
 let state: VaultStatus | 'disconnected' | 'connecting' = 'connecting';
-let selected: ItemSummary | undefined;
+type View =
+  | { kind: 'list' }
+  | { kind: 'detail'; id: string; item: ItemDetail | null }
+  | { kind: 'editor'; draft: ItemDraft; initial: string; item: ItemDetail | null };
+let view: View = { kind: 'list' };
+let viewVersion = 0;
+let working = false;
+function clearView() {
+  if (view.kind === 'editor') {
+    view.draft.notes = '';
+    view.initial = '';
+    if (view.draft.type === 1) {
+      view.draft.password = '';
+      view.draft.username = '';
+      view.draft.uris = [];
+    }
+  }
+  if (view.kind !== 'list' && view.item) {
+    view.item.password = '';
+    view.item.notes = '';
+  }
+  detail.querySelectorAll('input, textarea').forEach((node) => {
+    if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) node.value = '';
+  });
+  view = { kind: 'list' };
+  viewVersion++;
+  working = false;
+  detail.replaceChildren();
+}
 let items: ItemSummary[] = [];
 let suggestions: BrowserSuggestions | undefined;
 let total = 0;
@@ -106,8 +140,8 @@ function setState(next: typeof state, error = '') {
   lock.hidden = state !== 'unlocked';
   open.hidden = state === 'locked';
   empty.hidden = state === 'unlocked';
-  vaultBrowser.hidden = state !== 'unlocked' || Boolean(selected);
-  detail.hidden = state !== 'unlocked' || !selected;
+  vaultBrowser.hidden = state !== 'unlocked' || view.kind !== 'list';
+  detail.hidden = state !== 'unlocked' || view.kind === 'list';
   unlockForm.hidden = state !== 'locked';
   document.querySelector('footer')!.hidden = state !== 'unlocked';
   if (changed) {
@@ -119,7 +153,7 @@ function setState(next: typeof state, error = '') {
   if (state === 'unlocked') return changed;
   clearTimeout(searchTimer);
   results.removeAttribute('aria-busy');
-  selected = undefined;
+  clearView();
   items = [];
   suggestions = undefined;
   iconCache.clear();
@@ -289,9 +323,8 @@ function fillButton(item: ItemSummary) {
   return button;
 }
 function showList(focusId?: string) {
-  selected = undefined;
+  clearView();
   detail.hidden = true;
-  detail.replaceChildren();
   vaultBrowser.hidden = false;
   renderItems();
   const row = [...results.querySelectorAll<HTMLButtonElement>('.item')].find(
@@ -299,16 +332,69 @@ function showList(focusId?: string) {
   );
   (row ?? search).focus();
 }
-function showDetail(item: ItemSummary) {
+function button(text: string, action: () => void) {
+  const node = element('button', '', text);
+  node.type = 'button';
+  node.addEventListener('click', action);
+  return node;
+}
+function current(version: number, lifetime: number) {
+  return !disposed && state === 'unlocked' && lifetime === generation && version === viewVersion;
+}
+async function operation<T>(request: object, onDone: (value: T) => void, pending = 'Saving…') {
+  if (working || state !== 'unlocked') return;
+  working = true;
+  const version = viewVersion;
+  const lifetime = generation;
+  const controls = [...detail.querySelectorAll('button, input, textarea, select')];
+  controls.forEach((node) => {
+    if ('disabled' in node) node.disabled = true;
+  });
+  feedback(pending);
+  const response = await send<T>(request);
+  if (!current(version, lifetime)) return;
+  working = false;
+  controls.forEach((node) => {
+    if ('disabled' in node) node.disabled = false;
+  });
+  if (response.ok) {
+    feedback('');
+    onDone(response.value);
+  } else {
+    feedback(response.error, true);
+    void refreshStatus();
+  }
+}
+async function showDetail(summary: ItemSummary) {
+  clearView();
   resetIcons();
-  selected = item;
+  view = { kind: 'detail', id: summary.id, item: null };
   vaultBrowser.hidden = true;
   detail.hidden = false;
-  detail.replaceChildren();
+  detail.append(
+    button('All results', () => showList(summary.id)),
+    element('p', '', 'Loading item…'),
+  );
   feedback('');
-  const back = element('button', 'back', 'All results');
+  const version = viewVersion;
+  const lifetime = generation;
+  const response = await send<ItemDetail>({ type: 'detail', id: summary.id });
+  if (!current(version, lifetime)) return;
+  if (!response.ok) {
+    feedback(response.error, true);
+    void refreshStatus();
+    return;
+  }
+  view = { kind: 'detail', id: summary.id, item: response.value };
+  renderDetail(response.value);
+}
+function renderDetail(item: ItemDetail) {
+  detail.replaceChildren();
+  const back = button('All results', () => {
+    if (!working) showList(item.id);
+  });
+  back.className = 'back';
   back.prepend(icon('back'));
-  back.addEventListener('click', () => showList(item.id));
   const heading = element('div', 'detail-heading');
   const title = element('div', '');
   title.append(
@@ -316,47 +402,352 @@ function showDetail(item: ItemSummary) {
     element(
       'p',
       '',
-      item.type === 2 ? 'Secure note' : item.hasPasskey ? 'Login · Passkey' : 'Login',
+      item.restorable
+        ? 'In Trash'
+        : item.type === 2
+          ? 'Secure note'
+          : item.hasPasskey
+            ? 'Login · Passkey'
+            : 'Login',
     ),
   );
   heading.append(tile(item), title);
   detail.append(back, heading);
-  if (suggestions?.items.some((entry) => entry.id === item.id)) detail.append(fillButton(item));
+  const actions = element('div', 'detail-actions');
+  if (item.editable) {
+    actions.append(
+      button('Edit', () => showEditor(itemDraft(item), item)),
+      button(item.favorite ? 'Unfavorite' : 'Favorite', () => {
+        void operation<ItemSummary>(
+          { type: 'setFavorite', id: item.id, favorite: !item.favorite },
+          (updated) => {
+            void showDetail(updated);
+            void loadItems();
+          },
+        );
+      }),
+    );
+  }
+  if (item.deletable)
+    actions.append(
+      button('Move to Trash', () => {
+        if (!confirm(`Move "${item.name}" to Trash? You can restore it later.`)) return;
+        void operation(
+          { type: 'delete', id: item.id },
+          () => {
+            showList();
+            void loadItems();
+            feedback('Moved to Trash');
+          },
+          'Moving to Trash…',
+        );
+      }),
+    );
+  if (item.restorable)
+    actions.append(
+      button('Restore', () => {
+        void operation(
+          { type: 'restore', id: item.id },
+          () => {
+            showList();
+            void loadItems();
+            feedback('Restored to your vault');
+          },
+          'Restoring…',
+        );
+      }),
+    );
+  if (!item.editable && !item.restorable)
+    actions.append(element('p', 'muted', 'Edit this item in Bitwarden.'));
+  detail.append(actions);
+  if (
+    !item.restorable &&
+    query.scope !== 'trash' &&
+    suggestions?.items.some((entry) => entry.id === item.id)
+  )
+    detail.append(fillButton(item));
   if (item.type === 1) {
     addField(item, 'Username', item.username || 'No username', 'username');
-    addField(item, 'Password', '••••••••••••', 'password');
-    addField(item, 'Website', item.website || 'No website', 'website');
+    const row = addField(
+      item,
+      'Password',
+      item.password ? '••••••••••••' : 'No password',
+      'password',
+    );
+    const value = row.querySelector('.field-value')!;
+    let revealed = false;
+    if (item.password)
+      row.append(
+        button('Reveal', () => {
+          revealed = !revealed;
+          value.textContent = revealed ? item.password : '••••••••••••';
+          const reveal = row.lastElementChild;
+          if (reveal) reveal.textContent = revealed ? 'Hide' : 'Reveal';
+        }),
+      );
+    for (const uri of item.uris) {
+      const match =
+        uriMatchOptions.find(
+          (option) => option.value === (uri.match === null ? '' : String(uri.match)),
+        )?.label ?? 'Imported rule';
+      addField(
+        item,
+        `Website · ${match}`,
+        uri.uri ?? 'Empty URI',
+        uri.sourceIndex === 0 ? 'website' : undefined,
+      );
+    }
   }
-  addField(item, 'Notes', item.type === 2 ? 'Secure note' : 'Saved with this login', 'notes');
+  addField(item, 'Notes', item.notes || 'No notes', 'notes');
   back.focus();
 }
 function addField(
   item: ItemSummary,
   label: string,
   value: string,
-  field: 'username' | 'password' | 'website' | 'notes',
+  field?: 'username' | 'password' | 'notes' | 'website',
 ) {
   const row = element('div', 'field');
   const text = element('div', 'field-text');
   text.append(element('span', 'field-label', label), element('span', 'field-value', value));
-  const copy = element('button', '', 'Copy');
-  copy.prepend(icon('copy'));
-  copy.setAttribute('aria-label', `Copy ${label.toLowerCase()}`);
-  copy.addEventListener('click', async () => {
-    const lifetime = generation;
-    copy.disabled = true;
-    const response = await send<null>({ type: 'copy', id: item.id, field });
-    if (disposed || lifetime !== generation || selected?.id !== item.id) return;
-    copy.disabled = false;
-    if (response.ok) feedback(`${label} copied`);
-    else {
-      feedback(response.error, true);
-      void refreshStatus();
-    }
-  });
-  row.append(text, copy);
+  row.append(text);
+  if (field) {
+    const copy = button('Copy', () => {
+      void operation(
+        { type: 'copy', id: item.id, field },
+        () => feedback(`${label} copied`),
+        'Copying…',
+      );
+    });
+    copy.setAttribute('aria-label', `Copy ${label.toLowerCase()}`);
+    row.append(copy);
+  }
   detail.append(row);
+  return row;
 }
+function showEditor(draft: ItemDraft, item: ItemDetail | null = null) {
+  viewVersion++;
+  view = { kind: 'editor', draft, initial: JSON.stringify(draft), item };
+  resetIcons();
+  vaultBrowser.hidden = true;
+  detail.hidden = false;
+  feedback('');
+  renderEditor();
+}
+function leaveEditor() {
+  if (working || view.kind !== 'editor') return;
+  if (JSON.stringify(view.draft) !== view.initial && !confirm('Discard unsaved changes?')) return;
+  const item = view.item;
+  if (item) void showDetail(item);
+  else showList();
+}
+function renderEditor() {
+  if (view.kind !== 'editor') return;
+  const editing = view;
+  const draft = editing.draft;
+  detail.replaceChildren();
+  detail.append(
+    button('Cancel', leaveEditor),
+    element('h1', '', `${draft.id ? 'Edit' : 'New'} ${draft.type === 1 ? 'login' : 'secure note'}`),
+  );
+  const form = document.createElement('form');
+  form.className = 'editor-form';
+  const field = (
+    label: string,
+    value: string,
+    update: (value: string) => void,
+    type = 'text',
+    limit = 16384,
+  ) => {
+    const wrapper = element('label', 'editor-field');
+    wrapper.append(element('span', '', label));
+    const input = document.createElement('input');
+    input.type = type;
+    input.value = value;
+    input.maxLength = limit;
+    input.autocomplete = 'off';
+    input.addEventListener('input', () => update(input.value));
+    wrapper.append(input);
+    form.append(wrapper);
+    return input;
+  };
+  const name = field(
+    'Name',
+    draft.name,
+    (value) => {
+      draft.name = value;
+    },
+    'text',
+    500,
+  );
+  name.required = true;
+  if (draft.type === 1) {
+    field('Username', draft.username, (value) => {
+      draft.username = value;
+    });
+    const password = field(
+      'Password',
+      draft.password,
+      (value) => {
+        draft.password = value;
+      },
+      'password',
+    );
+    form.append(
+      button('Reveal password', () => {
+        password.type = password.type === 'password' ? 'text' : 'password';
+      }),
+    );
+    const generator = element('details', 'generator');
+    generator.append(element('summary', '', 'Generate password'));
+    const options: PasswordOptions = { ...defaultPasswordOptions };
+    const lengthLabel = element('label', '', 'Length');
+    const length = document.createElement('input');
+    length.type = 'number';
+    length.min = '8';
+    length.max = '128';
+    length.value = String(options.length);
+    length.setAttribute('aria-label', 'Password length');
+    lengthLabel.append(length);
+    generator.append(lengthLabel);
+    for (const key of [
+      'lowercase',
+      'uppercase',
+      'numbers',
+      'symbols',
+      'excludeAmbiguous',
+    ] as const) {
+      const label = element(
+        'label',
+        '',
+        key === 'excludeAmbiguous' ? 'Avoid ambiguous characters' : key,
+      );
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.checked = options[key];
+      check.addEventListener('change', () => {
+        options[key] = check.checked;
+      });
+      label.prepend(check);
+      generator.append(label);
+    }
+    generator.append(
+      button('Use generated password', () => {
+        if (!length.reportValidity()) return;
+        options.length = Number(length.value);
+        void operation<string>(
+          { type: 'generate', options },
+          (value) => {
+            draft.password = value;
+            password.value = value;
+            feedback('Generated password added');
+          },
+          'Generating…',
+        );
+      }),
+    );
+    form.append(generator);
+    const websites = element('div', 'websites');
+    form.append(websites);
+    const renderWebsites = () => {
+      websites.replaceChildren(element('h2', '', 'Websites'));
+      draft.uris.forEach((row, index) => {
+        const container = element('div', 'website-row');
+        if (row.action === 'keep') {
+          container.append(
+            element(
+              'p',
+              'muted',
+              `${editing.item?.uris[row.sourceIndex]?.uri ?? 'Empty imported URI'}. Imported rule preserved. Edit it in Bitwarden or remove this row.`,
+            ),
+          );
+        } else {
+          const uri = document.createElement('input');
+          uri.value = row.uri;
+          uri.placeholder = 'https://example.com';
+          uri.maxLength = 2048;
+          uri.required = true;
+          uri.setAttribute('aria-label', `Website ${index + 1}`);
+          uri.addEventListener('input', () => {
+            row.uri = uri.value;
+          });
+          const match = document.createElement('select');
+          match.setAttribute('aria-label', `Match rule ${index + 1}`);
+          for (const option of uriMatchOptions) {
+            const node = element('option', '', option.label);
+            node.value = option.value;
+            match.append(node);
+          }
+          match.value = row.match === null ? '' : String(row.match);
+          match.addEventListener('change', () => {
+            row.match = uriMatchSchema.parse(match.value === '' ? null : Number(match.value));
+          });
+          container.append(uri, match);
+        }
+        container.append(
+          button('Remove website', () => {
+            draft.uris.splice(index, 1);
+            renderWebsites();
+          }),
+        );
+        websites.append(container);
+      });
+      websites.append(
+        button('Add website', () => {
+          draft.uris.push({ action: 'write', uri: '', match: null });
+          renderWebsites();
+          websites
+            .querySelectorAll('input')
+            [draft.uris.filter((row) => row.action === 'write').length - 1]?.focus();
+        }),
+      );
+    };
+    renderWebsites();
+  }
+  const noteLabel = element('label', 'editor-field');
+  noteLabel.append(element('span', '', 'Notes'));
+  const notes = document.createElement('textarea');
+  notes.value = draft.notes;
+  notes.maxLength = 100000;
+  notes.rows = draft.type === 2 ? 8 : 4;
+  notes.addEventListener('input', () => {
+    draft.notes = notes.value;
+  });
+  noteLabel.append(notes);
+  form.append(noteLabel);
+  const favorite = element('label', '', 'Favorite');
+  const check = document.createElement('input');
+  check.type = 'checkbox';
+  check.checked = draft.favorite;
+  check.addEventListener('change', () => {
+    draft.favorite = check.checked;
+  });
+  favorite.prepend(check);
+  form.append(favorite);
+  const save = element('button', 'primary', 'Save');
+  save.type = 'submit';
+  form.append(save);
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void operation<ItemDetail>({ type: 'save', draft }, (saved) => {
+      clearView();
+      view = { kind: 'detail', id: saved.id, item: saved };
+      renderDetail(saved);
+      void loadItems();
+      feedback('Saved to Bitwarden');
+    });
+  });
+  detail.append(form);
+  name.focus();
+}
+function newItem(type: 1 | 2) {
+  const base = { name: '', notes: '', favorite: false };
+  showEditor(
+    type === 2 ? { ...base, type } : { ...base, type, username: '', password: '', uris: [] },
+  );
+}
+document.querySelector('#new-login')!.addEventListener('click', () => newItem(1));
+document.querySelector('#new-note')!.addEventListener('click', () => newItem(2));
 function itemRow(item: ItemSummary, canFill: boolean) {
   const container = element('div', 'item-row');
   const row = element('button', 'item');
@@ -391,7 +782,9 @@ function renderItems() {
       ? 'Favorites'
       : query.scope === 'site'
         ? 'This site'
-        : 'Your vault';
+        : query.scope === 'trash'
+          ? 'Trash'
+          : 'Your vault';
   results.replaceChildren();
   const suggested =
     query.scope === 'all' && !query.query.trim() && query.itemType !== 'note'
@@ -484,7 +877,7 @@ async function loadItems(append = false) {
 function changeQuery() {
   clearTimeout(searchTimer);
   requestVersion++;
-  selected = undefined;
+  clearView();
   detail.replaceChildren();
   detail.hidden = true;
   vaultBrowser.hidden = false;
@@ -502,7 +895,7 @@ search.addEventListener('input', () => {
 scopes.addEventListener('click', (event) => {
   if (!(event.target instanceof HTMLButtonElement)) return;
   const scope = event.target.dataset.scope;
-  if (scope !== 'all' && scope !== 'favorites' && scope !== 'site') return;
+  if (scope !== 'all' && scope !== 'favorites' && scope !== 'site' && scope !== 'trash') return;
   query.scope = scope;
   scopes
     .querySelectorAll('button')
@@ -515,10 +908,24 @@ itemType.addEventListener('change', () => {
   query.itemType = type;
   changeQuery();
 });
-refresh.addEventListener('click', () => {
-  feedback('');
+refresh.addEventListener('click', async () => {
+  if (working) return;
+  working = true;
+  refresh.disabled = true;
+  const lifetime = generation;
+  feedback('Syncing…');
+  const response = await send<unknown>({ type: 'sync' });
+  refresh.disabled = false;
+  if (disposed || lifetime !== generation) return;
+  working = false;
+  if (!response.ok) {
+    feedback(response.error, true);
+    void refreshStatus();
+    return;
+  }
   iconCache.clear();
-  void loadItems();
+  await loadItems();
+  feedback('Vault synced');
 });
 results.addEventListener('keydown', (event) => {
   if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
@@ -541,12 +948,18 @@ search.addEventListener('keydown', (event) => {
   }
 });
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && selected) {
+  if (event.key === 'Escape' && view.kind !== 'list') {
     event.preventDefault();
-    showList(selected.id);
+    if (view.kind === 'editor') leaveEditor();
+    else if (!working) showList(view.id);
   }
+  if (working) return;
   if ((event.metaKey || event.ctrlKey) && event.key === 'f' && state === 'unlocked') {
     event.preventDefault();
+    if (view.kind === 'editor') {
+      leaveEditor();
+      if (view.kind === 'editor') return;
+    }
     showList();
     search.select();
   }
@@ -583,7 +996,7 @@ window.addEventListener('pagehide', () => {
   suggestions = undefined;
   iconCache.clear();
   resetIcons();
-  selected = undefined;
+  clearView();
   results.replaceChildren();
   detail.replaceChildren();
 });
