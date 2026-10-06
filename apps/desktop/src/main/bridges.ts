@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   browserRequestSchema,
+  browserSaveResultSchema,
   launcherRequestSchema,
   UserError,
   type BrowserRequest,
@@ -77,7 +78,7 @@ export async function startBridges({
       }
       if (request.type === 'save') {
         if (request.draft.id) vault.requireBrowserItem(request.draft.id);
-        return handleRequest(request);
+        return browserSaveResultSchema.parse(await handleRequest(request));
       }
       if (
         request.type === 'delete' ||

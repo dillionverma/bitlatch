@@ -177,6 +177,10 @@ export interface BrowserUnlockState {
   canUseBiometrics: boolean;
 }
 
+export interface BrowserSaveResult {
+  id: string;
+}
+
 export interface BrowserVaultPage {
   state: VaultStatus;
   revision: number;

@@ -34,6 +34,7 @@ const challengeAnswer = z.union([
   z.object({ cancel: z.literal(true) }).strict(),
 ]);
 const id = z.string().uuid();
+export const browserSaveResultSchema = z.object({ id });
 const draftBase = {
   id: id.optional(),
   revisionDate: z.string().nullable().optional(),

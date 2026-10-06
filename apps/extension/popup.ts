@@ -8,6 +8,7 @@ import { defaultPasswordOptions } from '@latch/shared/types';
 import type { BrowserVaultQuery } from '@latch/shared/protocol';
 import type {
   BrowserSuggestions,
+  BrowserSaveResult,
   BrowserUnlockState,
   BrowserVaultPage,
   ItemSummary,
@@ -365,7 +366,7 @@ async function operation<T>(request: object, onDone: (value: T) => void, pending
     void refreshStatus();
   }
 }
-async function showDetail(summary: ItemSummary) {
+async function showDetail(summary: Pick<ItemSummary, 'id'>, saved = false) {
   clearView();
   resetIcons();
   view = { kind: 'detail', id: summary.id, item: null };
@@ -373,7 +374,7 @@ async function showDetail(summary: ItemSummary) {
   detail.hidden = false;
   detail.append(
     button('All results', () => showList(summary.id)),
-    element('p', '', 'Loading item…'),
+    element('p', '', saved ? 'Saved to Bitwarden. Loading item…' : 'Loading item…'),
   );
   feedback('');
   const version = viewVersion;
@@ -381,10 +382,16 @@ async function showDetail(summary: ItemSummary) {
   const response = await send<ItemDetail>({ type: 'detail', id: summary.id });
   if (!current(version, lifetime)) return;
   if (!response.ok) {
-    feedback(response.error, true);
+    feedback(saved ? `Saved to Bitwarden. ${response.error}` : response.error, true);
+    if (saved) {
+      detail.querySelector('p')!.textContent =
+        'Saved to Bitwarden. Open the desktop app to view this item.';
+      detail.append(button('Open desktop app', () => void openDesktop()));
+    }
     void refreshStatus();
     return;
   }
+  if (saved) feedback('Saved to Bitwarden');
   view = { kind: 'detail', id: summary.id, item: response.value };
   renderDetail(response.value);
 }
@@ -729,12 +736,10 @@ function renderEditor() {
   form.append(save);
   form.addEventListener('submit', (event) => {
     event.preventDefault();
-    void operation<ItemDetail>({ type: 'save', draft }, (saved) => {
+    void operation<BrowserSaveResult>({ type: 'save', draft }, (saved) => {
       clearView();
-      view = { kind: 'detail', id: saved.id, item: saved };
-      renderDetail(saved);
+      void showDetail(saved, true);
       void loadItems();
-      feedback('Saved to Bitwarden');
     });
   });
   detail.append(form);
