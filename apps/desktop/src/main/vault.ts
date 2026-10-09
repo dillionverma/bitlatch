@@ -841,7 +841,6 @@ export class Vault extends EventEmitter {
     credentialId: string;
     rpId: string;
     clientDataHash: string;
-    userVerified: boolean;
   }) {
     const cipher = this.item(input.id);
     const generation = this.generation;
@@ -860,7 +859,7 @@ export class Vault extends EventEmitter {
     const authData = authenticatorData({
       rpId: input.rpId,
       counter: next,
-      userVerified: input.userVerified,
+      userVerified: true,
     });
     return {
       credentialId: input.credentialId,
@@ -897,7 +896,6 @@ export class Vault extends EventEmitter {
     clientDataHash: string;
     algorithms: number[];
     excluded: string[];
-    userVerified: boolean;
   }) {
     this.requireUnlocked();
     const generation = this.generation;
@@ -961,7 +959,7 @@ export class Vault extends EventEmitter {
     const authData = authenticatorData({
       rpId: input.rpId,
       counter: 0,
-      userVerified: input.userVerified,
+      userVerified: true,
       attested: { credentialId: raw, publicKeyDer: key.publicKeyDer },
     });
     return {

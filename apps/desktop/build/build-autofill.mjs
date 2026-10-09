@@ -8,6 +8,62 @@ export async function buildAutoFill(root) {
   const require = createRequire(import.meta.url);
   const include = require('node-api-headers').include_dir;
   const output = resolve(root, 'dist/native');
+  const verifiedServer = resolve(output, 'verified-server.o');
+  await mkdir(output, { recursive: true });
+  execFileSync(
+    'xcrun',
+    [
+      'clang',
+      '-c',
+      '-mmacosx-version-min=14.0',
+      '-Wall',
+      '-Wextra',
+      '-Werror',
+      resolve(root, 'native/VerifyServer.c'),
+      '-o',
+      verifiedServer,
+    ],
+    { stdio: 'inherit' },
+  );
+  const bridgeHost = resolve(output, 'LatchBridgeHost.app/Contents');
+  await mkdir(resolve(bridgeHost, 'MacOS'), { recursive: true });
+  const extension = JSON.parse(
+    await readFile(resolve(root, '../../packages/shared/extension.json'), 'utf8'),
+  );
+  const source = await readFile(resolve(root, 'native/bridge-host/main.swift'), 'utf8');
+  if (!source.includes(`chrome-extension://${extension.extensionId}/`))
+    throw new Error('The browser host must use the published extension ID.');
+  execFileSync(
+    'xcrun',
+    [
+      'swiftc',
+      '-swift-version',
+      '6',
+      '-target',
+      `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx14.0`,
+      '-warnings-as-errors',
+      '-O',
+      resolve(root, 'native/bridge-host/main.swift'),
+      verifiedServer,
+      '-framework',
+      'Security',
+      '-o',
+      resolve(bridgeHost, 'MacOS/LatchBridgeHost'),
+    ],
+    { stdio: 'inherit' },
+  );
+  await writeFile(
+    resolve(bridgeHost, 'Info.plist'),
+    `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>app.latch.vault.bridgehost</string>
+<key>CFBundleExecutable</key><string>LatchBridgeHost</string>
+<key>CFBundleName</key><string>Bitlatch Bridge Host</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>LSMinimumSystemVersion</key><string>14.0</string>
+</dict></plist>`,
+  );
   const contents = resolve(output, 'LatchAutoFill.appex/Contents');
   await mkdir(resolve(contents, 'MacOS'), { recursive: true });
   await mkdir(resolve(contents, 'Resources'), { recursive: true });
@@ -59,6 +115,7 @@ export async function buildAutoFill(root) {
     '-O',
   ];
   const bridge = resolve(output, 'bridge.o');
+  const verifiedSocket = resolve(output, 'verified-socket.o');
   run([
     'clang',
     '-c',
@@ -74,6 +131,20 @@ export async function buildAutoFill(root) {
     bridge,
   ]);
   run([
+    'clang',
+    '-c',
+    '-mmacosx-version-min=14.0',
+    '-Wall',
+    '-Wextra',
+    '-Werror',
+    '-O2',
+    '-I',
+    include,
+    resolve(native, 'VerifiedSocket.c'),
+    '-o',
+    verifiedSocket,
+  ]);
+  run([
     'swiftc',
     ...common,
     '-emit-library',
@@ -82,6 +153,7 @@ export async function buildAutoFill(root) {
     resolve(native, 'AutoFill.swift'),
     resolve(native, 'Encoding.swift'),
     bridge,
+    verifiedSocket,
     '-Xlinker',
     '-undefined',
     '-Xlinker',
@@ -94,6 +166,7 @@ export async function buildAutoFill(root) {
     resolve(output, 'latch-autofill.node'),
   ]);
   await rm(bridge);
+  await rm(verifiedSocket);
   run([
     'swiftc',
     ...common,
@@ -102,9 +175,13 @@ export async function buildAutoFill(root) {
     resolve(native, 'VaultClient.swift'),
     resolve(native, 'Encoding.swift'),
     resolve(native, 'main.swift'),
+    verifiedServer,
+    '-framework',
+    'Security',
     '-o',
     resolve(contents, 'MacOS/LatchAutoFill'),
   ]);
+  await rm(verifiedServer);
   const group = process.env.LATCH_APP_GROUP ?? 'UNCONFIGURED.app.latch.vault';
   if (!/^[A-Z0-9]+\.app\.latch\.vault$/.test(group)) throw new Error('Invalid LATCH_APP_GROUP');
   const { version } = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));

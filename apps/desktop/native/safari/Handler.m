@@ -2,6 +2,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+extern bool latch_verify_server(int fd);
 
 static NSDictionary *Request(NSDictionary *request) {
   NSString *group = [NSBundle.mainBundle objectForInfoDictionaryKey:@"LatchAppGroup"];
@@ -17,7 +18,7 @@ static NSDictionary *Request(NSDictionary *request) {
   int fd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (fd < 0) return nil;
   // Bound native messaging independently of Safari background lifetime.
-  BOOL unlocking = [request[@"type"] isEqual:@"unlock"] || [request[@"type"] isEqual:@"biometricUnlock"];
+  BOOL unlocking = [request[@"type"] isEqual:@"biometricUnlock"];
   BOOL writing = [@[@"save", @"delete", @"restore", @"setFavorite", @"sync", @"commitCapture"] containsObject:request[@"type"]];
   BOOL readingTrash = [request[@"type"] isEqual:@"browse"] && [request[@"query"] isKindOfClass:NSDictionary.class] && [request[@"query"][@"scope"] isEqual:@"trash"];
   struct timeval timeout = {unlocking || writing || readingTrash ? 120 : 8, 0};
@@ -26,6 +27,7 @@ static NSDictionary *Request(NSDictionary *request) {
   int noSignal = 1;
   setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, sizeof(noSignal));
   if (connect(fd, (struct sockaddr *)&address, sizeof(address)) != 0) { close(fd); return nil; }
+  if (!latch_verify_server(fd)) { close(fd); return nil; }
   NSMutableData *payload = [[NSJSONSerialization dataWithJSONObject:@{@"token": config[@"token"], @"request": request} options:0 error:nil] mutableCopy];
   if (!payload || payload.length >= 900000) { close(fd); return nil; }
   [payload appendBytes:"\n" length:1];

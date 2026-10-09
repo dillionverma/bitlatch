@@ -1,7 +1,7 @@
 import { app } from 'electron';
 import { createRequire } from 'node:module';
-import { createServer, type Server, type Socket } from 'node:net';
-import { chmod, mkdir, rm, writeFile, rename } from 'node:fs/promises';
+import { Socket } from 'node:net';
+import { mkdir, rm, writeFile, rename } from 'node:fs/promises';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -13,7 +13,11 @@ const base64url = z
   .string()
   .max(2048)
   .regex(/^[\w-]*$/);
-const rpId = z.string().min(1).max(253);
+const rpId = z
+  .string()
+  .min(1)
+  .max(253)
+  .regex(/^[a-z0-9.-]+$/i);
 const requestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('matches'), urls: z.array(z.string().max(4096)).max(16) }).strict(),
   z.object({ type: z.literal('fill'), url: z.string().max(4096), id: z.string().uuid() }).strict(),
@@ -25,7 +29,6 @@ const requestSchema = z.discriminatedUnion('type', [
       rpId,
       credentialId: base64url,
       clientDataHash: base64url,
-      userVerified: z.boolean(),
     })
     .strict(),
   z
@@ -37,17 +40,24 @@ const requestSchema = z.discriminatedUnion('type', [
       clientDataHash: base64url,
       algorithms: z.array(z.number().int()).max(32),
       excluded: z.array(base64url).max(64),
-      userVerified: z.boolean(),
     })
     .strict(),
 ]);
 type Request = z.infer<typeof requestSchema>;
 type NativeReply = { ok: boolean; available?: boolean; enabled?: boolean; container?: string };
-type Native = { invoke(operation: string, input: string, callback: (json: string) => void): void };
+type Native = {
+  invoke(operation: string, input: string, callback: (json: string) => void): void;
+  startVerifiedSocket(
+    path: string,
+    identifier: string,
+    accept: (fd: number, pid: number, auditToken: string) => boolean,
+  ): object;
+  stopVerifiedSocket(handle: object): void;
+};
 
 export class MacAutoFill {
   private native?: Native;
-  private server?: Server;
+  private listener?: object;
   private starting?: Promise<void>;
   private sockets = new Set<Socket>();
   private container?: string;
@@ -59,9 +69,11 @@ export class MacAutoFill {
   private syncQueue = Promise.resolve();
   private syncRevision = 0;
 
-  constructor(private readonly vault: Vault) {
-    // Isolated/manual fixtures must never register identities from the real app.
-    if (process.platform !== 'darwin' || !app.isPackaged || process.env.LATCH_DATA_DIR) return;
+  constructor(
+    private readonly vault: Vault,
+    private readonly epoch: () => number,
+  ) {
+    if (process.platform !== 'darwin' || !app.isPackaged) return;
     try {
       this.native = createRequire(__filename)(
         join(process.resourcesPath, 'app.asar.unpacked/dist/native/latch-autofill.node'),
@@ -84,10 +96,25 @@ export class MacAutoFill {
     });
   }
 
+  async requirePresence(reason: string) {
+    if (!this.native) throw new UserError('User verification is unavailable.');
+    try {
+      await this.call('presence', { reason });
+    } catch {
+      throw new UserError('User verification was canceled or unavailable.');
+    }
+  }
+
   async status(): Promise<MacAutoFillState> {
+    if (process.env.LATCH_DATA_DIR)
+      return {
+        available: false,
+        enabled: false,
+        reason: 'macOS AutoFill is disabled in isolated data.',
+      };
     const state = await this.call('status');
     if (state.available && state.container && !this.stopped) {
-      if (!this.server && !this.starting) {
+      if (!this.listener && !this.starting) {
         this.starting = this.start(state.container).finally(() => {
           this.starting = undefined;
         });
@@ -98,7 +125,7 @@ export class MacAutoFill {
     this.enabled = !!state.enabled;
     if (changed) this.update();
     return {
-      available: !!state.available && !!this.server && !this.stopped,
+      available: !!state.available && !!this.listener && !this.stopped,
       enabled: this.enabled,
       ...(!state.available
         ? { reason: 'macOS AutoFill requires a signed Bitlatch app with its AutoFill extension.' }
@@ -133,6 +160,7 @@ export class MacAutoFill {
   }
 
   async safariStatus() {
+    if (process.env.LATCH_DATA_DIR) return { available: false, enabled: false };
     const state = await this.call('safariStatus');
     return { available: !!state.available, enabled: !!state.enabled };
   }
@@ -170,20 +198,26 @@ export class MacAutoFill {
     this.container = container;
     await mkdir(container, { recursive: true, mode: 0o700 });
     await rm(socketPath, { force: true });
-    const server = createServer((socket) => this.accept(socket));
-    this.server = server;
+    if (!this.native) throw new UserError('macOS AutoFill is unavailable.');
     try {
-      await new Promise<void>((resolve, reject) => {
-        server.once('error', reject);
-        server.listen(socketPath, resolve);
-      });
-      await chmod(socketPath, 0o600);
+      this.listener = this.native.startVerifiedSocket(
+        socketPath,
+        'app.latch.vault.autofill',
+        (fd) => {
+          try {
+            this.accept(new Socket({ fd, readable: true, writable: true }));
+            return true;
+          } catch {
+            return false;
+          }
+        },
+      );
       const config = join(container, 'autofill.json');
       await writeFile(`${config}.tmp`, JSON.stringify({ token: this.token }), { mode: 0o600 });
       await rename(`${config}.tmp`, config);
     } catch {
-      server.close();
-      this.server = undefined;
+      if (this.listener) this.native.stopVerifiedSocket(this.listener);
+      this.listener = undefined;
       throw new UserError('Could not connect the macOS AutoFill extension.');
     }
   }
@@ -230,9 +264,9 @@ export class MacAutoFill {
    * them once its generation changes, and the lock closes this socket.
    */
   private async answer(socket: Socket, request: Request) {
+    const startedAt = this.epoch();
     try {
-      // Passkey writes wait on the Bitwarden CLI; the extension waits 20 seconds.
-      if (request.type === 'assert' || request.type === 'register') socket.setTimeout(20_000);
+      if (request.type === 'assert' || request.type === 'register') socket.setTimeout(120_000);
       let value: unknown;
       if (request.type === 'fill') value = this.vault.fill(request.id, request.url);
       else if (request.type === 'matches')
@@ -249,14 +283,25 @@ export class MacAutoFill {
           request.rpId,
           request.allowed.map((id) => Buffer.from(id, 'base64url')),
         );
-      else if (request.type === 'assert') value = await this.vault.assertPasskey(request);
-      else
-        value = await this.vault.registerPasskey({
-          ...request,
-          rpName: request.rpId,
-          userDisplayName: request.userName,
-        });
-      if (this.stopped || this.vault.snapshot().status !== 'unlocked') throw new Error();
+      else if (request.type === 'assert' || request.type === 'register') {
+        await this.requirePresence(`Use a Bitlatch passkey for ${request.rpId}`);
+        if (this.epoch() !== startedAt || socket.destroyed || this.stopped)
+          throw new UserError('Vault locked. Try again after unlocking.');
+        if (request.type === 'assert') value = await this.vault.assertPasskey(request);
+        else
+          value = await this.vault.registerPasskey({
+            ...request,
+            rpName: request.rpId,
+            userDisplayName: request.userName,
+          });
+      }
+      if (
+        this.stopped ||
+        socket.destroyed ||
+        this.epoch() !== startedAt ||
+        this.vault.snapshot().status !== 'unlocked'
+      )
+        throw new Error();
       socket.end(JSON.stringify({ ok: true, value }) + '\n');
     } catch (error) {
       socket.end(
@@ -270,9 +315,8 @@ export class MacAutoFill {
     this.stopped = true;
     await this.starting?.catch(() => undefined);
     for (const socket of this.sockets) socket.destroy();
-    await new Promise<void>((resolve) =>
-      this.server ? this.server.close(() => resolve()) : resolve(),
-    );
+    if (this.listener) this.native?.stopVerifiedSocket(this.listener);
+    this.listener = undefined;
     if (this.container) {
       await rm(join(this.container, 'autofill.json'), { force: true });
       await rm(join(this.container, 'autofill.sock'), { force: true });

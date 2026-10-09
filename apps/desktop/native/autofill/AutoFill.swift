@@ -1,5 +1,6 @@
 import AuthenticationServices
 import Foundation
+import LocalAuthentication
 import SafariServices
 
 // Runs inside Electron: Apple checks the containing app's bundle/entitlements.
@@ -12,6 +13,20 @@ func invoke(
   let input = Data(String(cString: input).utf8)
   let finish = Completion(context: context, reply: reply)
   DispatchQueue.main.async {
+    if operation == "presence" {
+      guard let request = try? JSONSerialization.jsonObject(with: input) as? [String: String],
+        let reason = request["reason"], !reason.isEmpty, reason.count <= 300
+      else { finish(["ok": false]); return }
+      let context = LAContext()
+      context.touchIDAuthenticationAllowableReuseDuration = 0
+      context.evaluatePolicy(
+        .deviceOwnerAuthentication,
+        localizedReason: reason
+      ) { verified, _ in
+        finish(["ok": verified])
+      }
+      return
+    }
     if operation == "settings" {
       ASSettingsHelper.openCredentialProviderAppSettings { finish(["ok": $0 == nil]) }
       return

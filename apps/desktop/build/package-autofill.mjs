@@ -138,7 +138,7 @@ await copyFile(resolve(extensionProfile), join(appex, 'Contents/embedded.provisi
 const development = !identity.startsWith('Developer ID Application:');
 // electron-builder does not sign our hand-built appex. Sign it first, then
 // exclude it from Electron's signing pass so its entitlements stay intact.
-function signExtension(path, entitlements) {
+function signNested(path, entitlements) {
   execFileSync(
     'codesign',
     [
@@ -148,14 +148,15 @@ function signExtension(path, entitlements) {
       '--options',
       'runtime',
       ...(development ? ['--timestamp=none'] : ['--timestamp']),
-      '--entitlements',
-      entitlements,
+      ...(entitlements ? ['--entitlements', entitlements] : []),
       path,
     ],
     { stdio: 'inherit' },
   );
 }
-signExtension(appex, extensionEntitlements);
+signNested(appex, extensionEntitlements);
+const bridgeHost = join(app, 'Contents/Helpers/LatchBridgeHost.app');
+signNested(bridgeHost);
 const safariApp = join(app, 'Contents/PlugIns/LatchSafari.appex');
 if (safari && safariProfile) {
   const safariEntitlements = join(signing, 'safari.plist');
@@ -170,7 +171,7 @@ if (safari && safariProfile) {
     }),
   );
   await copyFile(resolve(safariProfile), join(safariApp, 'Contents/embedded.provisionprofile'));
-  signExtension(safariApp, safariEntitlements);
+  signNested(safariApp, safariEntitlements);
 }
 await sign({
   app,
@@ -180,7 +181,7 @@ await sign({
   preAutoEntitlements: false,
   preEmbedProvisioningProfile: false,
   ignore: (path) =>
-    [appex, ...(safari ? [safariApp] : [])].some(
+    [appex, bridgeHost, ...(safari ? [safariApp] : [])].some(
       (extension) => path === extension || path.startsWith(`${extension}/`),
     ),
   optionsForFile: (path) => ({

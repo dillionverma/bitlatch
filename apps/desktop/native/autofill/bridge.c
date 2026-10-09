@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "Bridge.h"
+#include "VerifiedSocket.h"
 
 // Only Node-API ownership/threading lives here. All Apple APIs live in Swift.
 static void deliver(napi_env env, napi_value callback, void *context, void *data) {
@@ -53,5 +54,6 @@ NAPI_MODULE_INIT() {
   napi_value function;
   napi_create_function(env, "invoke", NAPI_AUTO_LENGTH, invoke, NULL, &function);
   napi_set_named_property(env, exports, "invoke", function);
+  if (latch_register_verified_socket(env, exports) != napi_ok) return NULL;
   return exports;
 }

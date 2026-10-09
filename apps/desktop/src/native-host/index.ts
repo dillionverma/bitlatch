@@ -57,7 +57,7 @@ async function forward(request: unknown): Promise<Result<unknown>> {
       request !== null &&
       typeof request === 'object' &&
       'type' in request &&
-      (request.type === 'unlock' || request.type === 'biometricUnlock');
+      request.type === 'biometricUnlock';
     const writing =
       request !== null &&
       typeof request === 'object' &&

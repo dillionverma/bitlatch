@@ -1,13 +1,11 @@
 import AppKit
 import AuthenticationServices
-import LocalAuthentication
 
 @objc(LatchCredentialProvider)
 @MainActor
 final class CredentialProvider: ASCredentialProviderViewController {
   private let stack = NSStackView()
   private var task: Task<Void, Never>?
-  private var authentication: LAContext?
   private var retryAction: (() -> Void)?
   private var choices: [() -> Void] = []
 
@@ -34,8 +32,6 @@ final class CredentialProvider: ASCredentialProviderViewController {
   private func stop() {
     task?.cancel()
     task = nil
-    authentication?.invalidate()
-    authentication = nil
     choices = []
   }
 
@@ -100,26 +96,6 @@ final class CredentialProvider: ASCredentialProviderViewController {
           self.show("Could not complete AutoFill. Unlock Bitlatch and try again.", retry: true)
         }
       }
-    }
-  }
-
-  private func verify(
-    _ preference: ASAuthorizationPublicKeyCredentialUserVerificationPreference, rp: String
-  ) async throws -> Bool {
-    guard preference != .discouraged else { return false }
-    let context = LAContext()
-    authentication = context
-    defer { if authentication === context { authentication = nil } }
-    do {
-      let verified = try await context.evaluatePolicy(
-        .deviceOwnerAuthentication,
-        localizedReason: "use a Bitlatch passkey for \(rp)")
-      try Task.checkCancellation()
-      guard verified else { throw CancellationError() }
-      return true
-    } catch {
-      if !Task.isCancelled { cancel(.userCanceled) }
-      throw CancellationError()
     }
   }
 
@@ -223,7 +199,7 @@ final class CredentialProvider: ASCredentialProviderViewController {
             { [weak self] in
               self?.assert(
                 record: key.id, credential: key.credentialId, rp: parameters.relyingPartyIdentifier,
-                hash: parameters.clientDataHash, preference: parameters.userVerificationPreference)
+                hash: parameters.clientDataHash)
             }
           )
         })
@@ -231,8 +207,7 @@ final class CredentialProvider: ASCredentialProviderViewController {
   }
 
   private func assert(
-    record: String?, credential: String, rp: String, hash: Data,
-    preference: ASAuthorizationPublicKeyCredentialUserVerificationPreference
+    record: String?, credential: String, rp: String, hash: Data
   ) {
     guard let record, !record.isEmpty, hash.count == 32 else {
       cancel(.credentialIdentityNotFound)
@@ -240,15 +215,13 @@ final class CredentialProvider: ASCredentialProviderViewController {
     }
     retryAction = { [weak self] in
       self?.assert(
-        record: record, credential: credential, rp: rp, hash: hash, preference: preference)
+        record: record, credential: credential, rp: rp, hash: hash)
     }
     run { [self] in
       self.show("Signing in to \(rp)…", title: "Passkey from Bitlatch")
-      let verified = try await self.verify(preference, rp: rp)
-      try Task.checkCancellation()
       let result: Assertion = try await VaultClient().request([
         "type": "assert", "id": record, "credentialId": credential,
-        "rpId": rp, "clientDataHash": hash.base64URL, "userVerified": verified,
+        "rpId": rp, "clientDataHash": hash.base64URL,
       ])
       try Task.checkCancellation()
       let assertion = try ASPasskeyAssertionCredential(
@@ -290,12 +263,10 @@ final class CredentialProvider: ASCredentialProviderViewController {
         throw VaultClient.Failure("This passkey request is not supported.")
       }
       self.show("Creating a passkey for \(rp)…", title: "Save a passkey in Bitlatch")
-      let verified = try await self.verify(request.userVerificationPreference, rp: rp)
-      try Task.checkCancellation()
       let result: Registration = try await VaultClient().request([
         "type": "register", "rpId": rp,
         "userName": identity.userName, "userHandle": identity.userHandle.base64URL,
-        "clientDataHash": request.clientDataHash.base64URL, "userVerified": verified,
+        "clientDataHash": request.clientDataHash.base64URL,
         "algorithms": request.supportedAlgorithms.map(\.rawValue), "excluded": excluded,
       ])
       try Task.checkCancellation()
@@ -324,7 +295,7 @@ final class CredentialProvider: ASCredentialProviderViewController {
       assert(
         record: identity.recordIdentifier, credential: identity.credentialID.base64URL,
         rp: identity.relyingPartyIdentifier,
-        hash: key.clientDataHash, preference: key.userVerificationPreference)
+        hash: key.clientDataHash)
     } else if let identity = request.credentialIdentity as? ASPasswordCredentialIdentity {
       fill(identity)
     } else {

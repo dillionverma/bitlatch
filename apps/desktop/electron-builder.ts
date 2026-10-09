@@ -24,13 +24,20 @@ export default {
   files: [
     'dist/**/*',
     // afterPack embeds the macOS extensions from dist/native; app.asar needs only the addon.
-    '!dist/native/{*.appex,Icons.xcassets}{,/**}',
+    '!dist/native/{*.appex,*.app,Icons.xcassets}{,/**}',
     '!dist/native/icon-info.plist',
     'package.json',
   ],
   // Bitlatch is English-only; other Chromium locales are about 45 MB per app.
   electronLanguages: ['en', 'en-US'],
   asar: true,
+  electronFuses: {
+    runAsNode: process.platform !== 'darwin',
+    enableNodeOptionsEnvironmentVariable: false,
+    enableNodeCliInspectArguments: false,
+    enableEmbeddedAsarIntegrityValidation: true,
+    onlyLoadAppFromAsar: true,
+  },
   asarUnpack: [
     'dist/native/*.node',
     'dist/extension/**/*',

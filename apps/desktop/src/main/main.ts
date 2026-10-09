@@ -99,7 +99,7 @@ lifecycle.startup = app
       websiteIcons.clear();
       nativeInteractions?.cancelConfirmation();
     });
-    macAutoFill = lifecycle.track(new MacAutoFill(vault));
+    macAutoFill = lifecycle.track(new MacAutoFill(vault, () => lifecycle.epoch));
     vault.on('state', () => macAutoFill.update());
     // AutoFill setup failures must not prevent opening or locking the vault.
     void macAutoFill
@@ -124,6 +124,13 @@ lifecycle.startup = app
         dataDir: app.getPath('userData'),
         browserRoot: process.env.LATCH_BROWSER_ROOT,
         hostScript,
+        nativeHost:
+          process.platform === 'darwin' && app.isPackaged
+            ? join(
+                process.resourcesPath,
+                '../Helpers/LatchBridgeHost.app/Contents/MacOS/LatchBridgeHost',
+              )
+            : undefined,
         vault,
         websiteIcons,
         macAutoFill,

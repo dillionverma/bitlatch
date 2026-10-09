@@ -1,4 +1,6 @@
-import { createServer, type Server, type Socket } from 'node:net';
+import { createServer, Socket, type Server } from 'node:net';
+import { createRequire } from 'node:module';
+import { app } from 'electron';
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -14,12 +16,29 @@ export interface LocalTransportOptions<Request> {
   schema: ZodType<Request>;
   dataDir: string;
   requestTimeout?: (request: Request) => number;
-  handle: (request: Request) => unknown;
+  handle: (request: Request, peer?: VerifiedPeer) => unknown;
   responseGuard?: (request: Request) => () => void;
+  authorize?: (request: Request, peer?: VerifiedPeer) => Promise<void>;
+  hostPath?: string;
+}
+
+export interface VerifiedPeer {
+  pid: number;
+  auditToken: string;
+}
+
+interface VerifiedListener {
+  startVerifiedSocket(
+    path: string,
+    identifier: string,
+    accept: (fd: number, pid: number, auditToken: string) => boolean,
+  ): object;
+  stopVerifiedSocket(handle: object): void;
 }
 
 export class LocalTransport<Request> {
   private server?: Server;
+  private verified?: { native: VerifiedListener; handle: object };
   private sockets = new Set<Socket>();
   private readonly token = randomBytes(32).toString('hex');
   readonly socketPath: string;
@@ -40,24 +59,47 @@ export class LocalTransport<Request> {
   async start() {
     await mkdir(this.options.dataDir, { recursive: true, mode: 0o700 });
     if (process.platform !== 'win32') await rm(this.socketPath, { force: true });
-    this.server = createServer((socket) => this.accept(socket));
-    await new Promise<void>((resolve, reject) => {
-      this.server!.once('error', reject);
-      this.server!.listen(this.socketPath, resolve);
-    });
+    if (process.platform === 'darwin' && app.isPackaged) {
+      const native = createRequire(__filename)(
+        join(process.resourcesPath, 'app.asar.unpacked/dist/native/latch-autofill.node'),
+      ) as VerifiedListener;
+      const identifier =
+        this.options.channel === 'safari' ? 'app.latch.vault.safari' : 'app.latch.vault.bridgehost';
+      const accept = (fd: number, pid: number, auditToken: string) => {
+        try {
+          this.accept(new Socket({ fd, readable: true, writable: true }), { pid, auditToken });
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      const handle = native.startVerifiedSocket(this.socketPath, identifier, accept);
+      this.verified = { native, handle };
+    } else {
+      this.server = createServer((socket) => this.accept(socket));
+      await new Promise<void>((resolve, reject) => {
+        this.server!.once('error', reject);
+        this.server!.listen(this.socketPath, resolve);
+      });
+    }
     if (process.platform !== 'win32') await chmod(this.socketPath, 0o600);
     await writeFile(
       join(
         this.options.dataDir,
         this.options.channel ? `${this.options.channel}-bridge.json` : 'bridge.json',
       ),
-      JSON.stringify({ socketPath: this.socketPath, token: this.token }),
+      JSON.stringify({
+        socketPath: this.socketPath,
+        token: this.token,
+        hostPath: this.options.hostPath,
+      }),
       { mode: 0o600 },
     );
   }
 
   async stop() {
     for (const socket of this.sockets) socket.destroy();
+    if (this.verified) this.verified.native.stopVerifiedSocket(this.verified.handle);
     await new Promise<void>((resolve) =>
       this.server ? this.server.close(() => resolve()) : resolve(),
     );
@@ -71,7 +113,7 @@ export class LocalTransport<Request> {
     );
   }
 
-  private accept(socket: Socket) {
+  private accept(socket: Socket, peer?: VerifiedPeer) {
     this.sockets.add(socket);
     socket.on('close', () => this.sockets.delete(socket));
     socket.on('error', () => undefined);
@@ -109,7 +151,10 @@ export class LocalTransport<Request> {
         if (this.options.requestTimeout)
           socket.setTimeout(this.options.requestTimeout(parsed.data));
         guard = this.options.responseGuard?.(parsed.data);
-        return this.options.handle(parsed.data);
+        await this.options.authorize?.(parsed.data, peer);
+        guard?.();
+        if (socket.destroyed) throw new UserError('The local client disconnected.');
+        return this.options.handle(parsed.data, peer);
       }).then((response) => {
         try {
           guard?.();

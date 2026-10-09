@@ -330,18 +330,7 @@ h1 {
   margin-bottom: 16px;
   color: var(--foreground);
 }
-#unlock-form label {
-  text-align: left;
-  font-size: 12px;
-}
-#master-password {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--card);
-}
-#password-unlock {
+#desktop-unlock {
   background: var(--primary);
   color: var(--primary-foreground);
   border-color: transparent;

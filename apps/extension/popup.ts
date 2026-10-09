@@ -35,9 +35,8 @@ const refresh = document.querySelector<HTMLButtonElement>('#refresh')!;
 const checkbox = document.querySelector<HTMLInputElement>('#autofill')!;
 const domain = document.querySelector<HTMLElement>('#domain')!;
 const message = document.querySelector<HTMLElement>('#message')!;
-const unlockForm = document.querySelector<HTMLFormElement>('#unlock-form')!;
-const masterPassword = document.querySelector<HTMLInputElement>('#master-password')!;
-const passwordUnlock = document.querySelector<HTMLButtonElement>('#password-unlock')!;
+const unlockForm = document.querySelector<HTMLElement>('#unlock-form')!;
+const desktopUnlock = document.querySelector<HTMLButtonElement>('#desktop-unlock')!;
 const biometricUnlock = document.querySelector<HTMLButtonElement>('#biometric-unlock')!;
 
 const paths = {
@@ -148,7 +147,6 @@ function setState(next: typeof state, error = '') {
   if (changed) {
     generation++;
     requestVersion++;
-    masterPassword.value = '';
     feedback('');
   }
   if (state === 'unlocked') return changed;
@@ -193,36 +191,24 @@ async function openDesktop() {
 }
 open.addEventListener('click', () => void openDesktop());
 connect.addEventListener('click', () => void openDesktop());
-async function unlockVault(biometric: boolean) {
+desktopUnlock.addEventListener('click', () => void openDesktop());
+async function unlockVault() {
   if (unlocking || state !== 'locked') return;
-  const request = biometric
-    ? { type: 'biometricUnlock' as const }
-    : { type: 'unlock' as const, password: masterPassword.value };
-  masterPassword.value = '';
   unlocking = true;
-  passwordUnlock.disabled = biometricUnlock.disabled = masterPassword.disabled = true;
-  passwordUnlock.textContent = biometric ? 'Waiting for Touch ID…' : 'Unlocking…';
+  biometricUnlock.disabled = true;
+  biometricUnlock.textContent = 'Waiting for Touch ID…';
   feedback('');
   const lifetime = generation;
-  const pendingUnlock = send<VaultStatus>(request);
-  if (request.type === 'unlock') request.password = '';
-  const response = await pendingUnlock;
+  const response = await send<VaultStatus>({ type: 'biometricUnlock' });
   unlocking = false;
-  passwordUnlock.disabled = biometricUnlock.disabled = masterPassword.disabled = false;
-  passwordUnlock.textContent = 'Unlock vault';
+  biometricUnlock.disabled = false;
+  biometricUnlock.textContent = 'Unlock with Touch ID';
   if (disposed || lifetime !== generation) return;
-  if (!response.ok) {
-    feedback(response.error, true);
-    masterPassword.focus();
-  }
+  if (!response.ok) feedback(response.error, true);
   void refreshStatus();
 }
-unlockForm.addEventListener('submit', (event) => {
-  event.preventDefault();
-  if (event.isTrusted) void unlockVault(false);
-});
 biometricUnlock.addEventListener('click', (event) => {
-  if (event.isTrusted) void unlockVault(true);
+  if (event.isTrusted) void unlockVault();
 });
 lock.addEventListener('click', async () => {
   setState('locked');
@@ -980,7 +966,8 @@ async function refreshStatus() {
       response.ok ? '' : response.error,
     );
     biometricUnlock.hidden = !response.ok || !response.value.canUseBiometrics;
-    if (changed && state === 'locked') masterPassword.focus();
+    if (changed && state === 'locked')
+      (biometricUnlock.hidden ? desktopUnlock : biometricUnlock).focus();
     if (changed && state === 'unlocked') {
       void loadItems();
       search.focus();
@@ -992,7 +979,6 @@ window.addEventListener('pagehide', () => {
   disposed = true;
   generation++;
   search.value = '';
-  masterPassword.value = '';
   query.query = '';
   clearTimeout(statusTimer);
   clearTimeout(searchTimer);

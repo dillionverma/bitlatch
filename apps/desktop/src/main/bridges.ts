@@ -10,6 +10,8 @@ import {
   type DesktopRequest,
 } from '@latch/shared/protocol';
 import { LocalTransport } from './local-transport';
+import type { VerifiedPeer } from './local-transport';
+import { ExternalAccess } from './external-access';
 import { installBrowser } from './browser-registration';
 import type { BrowserConnection, BrowserUnlockState } from '@latch/shared/types';
 import { iconHostname, type WebsiteIcons } from './website-icons';
@@ -20,6 +22,7 @@ interface BridgeDependencies {
   dataDir: string;
   browserRoot?: string;
   hostScript: string;
+  nativeHost?: string;
   vault: Vault;
   websiteIcons: WebsiteIcons;
   macAutoFill: MacAutoFill;
@@ -33,6 +36,7 @@ export async function startBridges({
   dataDir,
   browserRoot,
   hostScript,
+  nativeHost,
   vault,
   websiteIcons,
   macAutoFill,
@@ -42,6 +46,7 @@ export async function startBridges({
   assertRunning,
 }: BridgeDependencies) {
   const transports: { stop(): Promise<void> }[] = [];
+  const externalAccess = new ExternalAccess(macAutoFill, epoch);
   const stop = async () => {
     await Promise.allSettled(transports.map((transport) => transport.stop()));
   };
@@ -51,7 +56,7 @@ export async function startBridges({
     const manifest = JSON.parse(await readFile(join(__dirname, 'extension.json'), 'utf8')) as {
       extensionId: string;
     };
-    const handleBrowserRequest = async (request: BrowserRequest) => {
+    const handleBrowserRequest = async (request: BrowserRequest, peer?: VerifiedPeer) => {
       assertRunning();
       // This handler runs only after the local transport authenticates the request.
       lastBrowserContact = Date.now();
@@ -67,8 +72,9 @@ export async function startBridges({
           canUseBiometrics: biometricsOn && biometrics === 'ready',
         } satisfies BrowserUnlockState;
       }
-      if (request.type === 'unlock' || request.type === 'biometricUnlock') {
+      if (request.type === 'biometricUnlock') {
         await handleRequest(request);
+        externalAccess.grant('browser', peer);
         return vault.snapshot().status;
       }
       if (request.type === 'browse') return vault.browserItems(request.query, request.url);
@@ -132,38 +138,64 @@ export async function startBridges({
       };
     };
     const browserRequestTimeout = (request: BrowserRequest) =>
-      request.type === 'unlock' ||
-      request.type === 'biometricUnlock' ||
-      (request.type === 'browse' && request.query.scope === 'trash')
-        ? 120_000
-        : ['save', 'delete', 'restore', 'setFavorite', 'sync', 'commitCapture'].includes(
-              request.type,
-            )
-          ? 120_000
-          : 10_000;
+      ['open', 'status', 'unlockState', 'lock'].includes(request.type) ? 10_000 : 120_000;
     const bridge = new LocalTransport({
       schema: browserRequestSchema,
       dataDir,
       handle: handleBrowserRequest,
+      authorize: async (request, peer) => {
+        if (
+          !['open', 'status', 'unlockState', 'lock', 'biometricUnlock'].includes(request.type) &&
+          vault.snapshot().status === 'unlocked'
+        )
+          await externalAccess.require('browser', peer);
+      },
       responseGuard,
       requestTimeout: browserRequestTimeout,
     });
     transports.push(bridge);
-    await bridge.start();
+    await bridge.start().catch(() => {
+      console.warn('Bitlatch browser connection unavailable. Check the app signature.');
+    });
     const launcherBridge = new LocalTransport({
       channel: 'raycast',
+      hostPath: nativeHost,
       schema: launcherRequestSchema,
       dataDir,
       requestTimeout: (request) =>
-        request.type === 'unlock' || request.type === 'biometricUnlock' ? 120_000 : 10_000,
-      async handle(request) {
+        request.type === 'biometricUnlock' ||
+        request.type === 'copy' ||
+        request.type === 'detail' ||
+        request.type === 'search'
+          ? 120_000
+          : 10_000,
+      responseGuard: (request) => {
+        const startedAt = epoch();
+        return () => {
+          if (!['open', 'lock', 'biometricUnlock'].includes(request.type) && startedAt !== epoch())
+            throw new UserError('Vault locked. Try again after unlocking.');
+        };
+      },
+      authorize: async (request, peer) => {
+        if (vault.snapshot().status !== 'unlocked') return;
+        if (request.type === 'search') await externalAccess.require('raycast', peer);
+        if (request.type === 'detail' || request.type === 'copy')
+          await externalAccess.requireFresh(
+            request.type === 'copy'
+              ? 'Copy a Bitlatch credential in Raycast'
+              : 'View a Bitlatch item in Raycast',
+            peer,
+          );
+      },
+      async handle(request, peer) {
         assertRunning();
         if (request.type === 'open') {
           showWindow();
           return null;
         }
-        if (request.type === 'unlock' || request.type === 'biometricUnlock') {
+        if (request.type === 'biometricUnlock') {
           await handleRequest(request);
+          externalAccess.grant('raycast', peer);
           return null;
         }
         if (request.type === 'detail') {
@@ -205,7 +237,9 @@ export async function startBridges({
       },
     });
     transports.push(launcherBridge);
-    await launcherBridge.start();
+    await launcherBridge.start().catch(() => {
+      console.warn('Bitlatch Raycast connection unavailable. Check the app signature.');
+    });
     if (existsSync(join(process.resourcesPath, '../PlugIns/LatchSafari.appex'))) {
       try {
         const container = await macAutoFill.sharedContainer();
@@ -231,7 +265,13 @@ export async function startBridges({
     // Registration is setup, not proof that an extension is connected. A failure
     // here must never prevent opening the vault or using Raycast.
     const registered = await installBrowser(
-      { dataDir, extensionId: manifest.extensionId, executable: process.execPath, hostScript },
+      {
+        dataDir,
+        extensionId: manifest.extensionId,
+        executable: process.execPath,
+        hostScript,
+        nativeHost,
+      },
       browserRoot,
     ).then(
       () => true,

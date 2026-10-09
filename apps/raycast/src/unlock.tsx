@@ -1,24 +1,18 @@
-import { Action, ActionPanel, Form, Icon, open } from '@raycast/api';
+import { Action, ActionPanel, Detail, Icon, open } from '@raycast/api';
 import { useRef, useState } from 'react';
 import { request, SearchResult } from './bridge';
 
 export function Unlock({ state, onUnlock }: { state: SearchResult; onUnlock: () => void }) {
-  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const pending = useRef(false);
-  async function unlock(biometric = false) {
+  async function unlock() {
     if (pending.current) return;
-    if (!biometric && !password) {
-      setError('Enter your master password.');
-      return;
-    }
     pending.current = true;
     setBusy(true);
     setError(undefined);
     try {
-      await request(biometric ? { type: 'biometricUnlock' } : { type: 'unlock', password });
-      setPassword('');
+      await request({ type: 'biometricUnlock' });
       onUnlock();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Could not unlock. Try again.');
@@ -27,41 +21,26 @@ export function Unlock({ state, onUnlock }: { state: SearchResult; onUnlock: () 
       setBusy(false);
     }
   }
+  async function openDesktop() {
+    try {
+      await request({ type: 'open' });
+    } catch {
+      await open('/Applications/Bitlatch.app');
+    }
+  }
   return (
-    <Form
+    <Detail
       navigationTitle="Unlock Bitlatch"
       isLoading={busy}
-      enableDrafts={false}
+      markdown={error ?? `Open Bitlatch to unlock ${state.email || 'your vault'}.`}
       actions={
         <ActionPanel>
-          <Action.SubmitForm title="Unlock Vault" onSubmit={() => unlock()} />
           {state.canUseBiometrics && (
-            <Action
-              title="Unlock with Touch ID"
-              icon={Icon.Fingerprint}
-              onAction={() => unlock(true)}
-            />
+            <Action title="Unlock with Touch ID" icon={Icon.Fingerprint} onAction={unlock} />
           )}
-          <Action
-            title="Open Bitlatch"
-            icon={Icon.AppWindow}
-            onAction={() => open('/Applications/Bitlatch.app')}
-          />
+          <Action title="Open Bitlatch" icon={Icon.AppWindow} onAction={openDesktop} />
         </ActionPanel>
       }
-    >
-      <Form.Description title="Account" text={state.email || 'Your Bitlatch vault'} />
-      <Form.PasswordField
-        id="password"
-        title="Master Password"
-        autoFocus
-        value={password}
-        error={error}
-        onChange={(value) => {
-          setPassword(value);
-          setError(undefined);
-        }}
-      />
-    </Form>
+    />
   );
 }

@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { chmod, mkdir, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { homedir } from 'node:os';
 import { promisify } from 'node:util';
@@ -11,6 +11,7 @@ interface BrowserRegistration {
   extensionId: string;
   executable: string;
   hostScript: string;
+  nativeHost?: string;
 }
 
 export async function installBrowser(options: BrowserRegistration, root?: string) {
@@ -20,21 +21,24 @@ export async function installBrowser(options: BrowserRegistration, root?: string
   if (windows && root !== undefined)
     throw new Error('Windows browser registration cannot use an isolated browser root.');
   const launcher = join(options.dataDir, windows ? 'latch-native-host.cmd' : 'latch-native-host');
-  const configPath = join(options.dataDir, 'bridge.json');
-  const args = [options.executable, options.hostScript, configPath, options.extensionId];
-  // The browser launches the batch file through cmd.exe before its first line
-  // can disable expansion. Decline paths that cmd would expand at that stage.
-  if (windows && /[%!]/.test(launcher)) throw new Error('Unsupported native host launcher path.');
-  const script = windows
-    ? `@echo off\r\nsetlocal DisableDelayedExpansion\r\nchcp 65001 >nul\r\nset "ELECTRON_RUN_AS_NODE=1"\r\n${args.map(windowsQuote).join(' ')} %*\r\n`
-    : `#!/bin/sh\nexport ELECTRON_RUN_AS_NODE=1\nexec ${args.map(shellQuote).join(' ')} "$@"\n`;
-  await mkdir(options.dataDir, { recursive: true, mode: 0o700 });
-  await writeFile(launcher, script, { mode: 0o700 });
-  if (!windows) await chmod(launcher, 0o700);
+  if (options.nativeHost) await rm(launcher, { force: true });
+  else {
+    const configPath = join(options.dataDir, 'bridge.json');
+    const args = [options.executable, options.hostScript, configPath, options.extensionId];
+    // The browser launches the batch file through cmd.exe before its first line
+    // can disable expansion. Decline paths that cmd would expand at that stage.
+    if (windows && /[%!]/.test(launcher)) throw new Error('Unsupported native host launcher path.');
+    const script = windows
+      ? `@echo off\r\nsetlocal DisableDelayedExpansion\r\nchcp 65001 >nul\r\nset "ELECTRON_RUN_AS_NODE=1"\r\n${args.map(windowsQuote).join(' ')} %*\r\n`
+      : `#!/bin/sh\nexport ELECTRON_RUN_AS_NODE=1\nexec ${args.map(shellQuote).join(' ')} "$@"\n`;
+    await mkdir(options.dataDir, { recursive: true, mode: 0o700 });
+    await writeFile(launcher, script, { mode: 0o700 });
+    if (!windows) await chmod(launcher, 0o700);
+  }
   const common = {
     name: NATIVE_HOST,
     description: 'Bitlatch vault bridge',
-    path: launcher,
+    path: options.nativeHost ?? launcher,
     type: 'stdio',
   };
   const manifest = JSON.stringify(

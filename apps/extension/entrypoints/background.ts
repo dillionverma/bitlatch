@@ -19,11 +19,13 @@ import type {
 
 export default defineBackground(() => {
   const HOST = 'app.latch.vault';
-  let port: Browser.runtime.Port | undefined;
-  let pending: {
+  type Pending = {
     resolve: (value: Result<unknown>) => void;
     timer: ReturnType<typeof setTimeout>;
-  }[] = [];
+  };
+  type Lane = { port?: Browser.runtime.Port; pending: Pending[] };
+  const control: Lane = { pending: [] };
+  const vault: Lane = { pending: [] };
 
   function native<T>(request: BrowserRequest): Promise<Result<T>> {
     if (
@@ -34,12 +36,8 @@ export default defineBackground(() => {
         ok: false,
         error: 'This item is too large for the browser. Open it in the desktop app.',
       });
-    const unlocking = request.type === 'unlock' || request.type === 'biometricUnlock';
-    const writing = ['save', 'delete', 'restore', 'setFavorite', 'sync', 'commitCapture'].includes(
-      request.type,
-    );
-    const readingTrash = request.type === 'browse' && request.query.scope === 'trash';
-    const timeout = unlocking || writing || readingTrash ? 125_000 : 10_000;
+    const fast = ['open', 'status', 'unlockState', 'lock'].includes(request.type);
+    const timeout = fast ? 10_000 : 125_000;
     if (import.meta.env.BROWSER === 'safari') {
       return new Promise((resolve) => {
         const timer = setTimeout(
@@ -58,44 +56,17 @@ export default defineBackground(() => {
         );
       });
     }
-    // Authentication and icon downloads must not block status, lock, or fill.
-    if (
-      unlocking ||
-      writing ||
-      readingTrash ||
-      request.type === 'lock' ||
-      request.type === 'websiteIcon'
-    ) {
-      return new Promise((resolve) => {
-        const unlockPort = browser.runtime.connectNative(HOST);
-        const timer = setTimeout(() => {
-          resolve({ ok: false, error: 'Bitlatch is not responding. Try again.' });
-          unlockPort.disconnect();
-        }, timeout);
-        unlockPort.onMessage.addListener((result: Result<T>) => {
-          clearTimeout(timer);
-          resolve(result);
-          unlockPort.disconnect();
-        });
-        unlockPort.onDisconnect.addListener(() => {
-          void browser.runtime.lastError;
-          clearTimeout(timer);
-          resolve({ ok: false, error: 'Open Bitlatch on your computer to reconnect.' });
-        });
-        try {
-          unlockPort.postMessage(request);
-        } catch {
-          clearTimeout(timer);
-          unlockPort.disconnect();
-          resolve({ ok: false, error: 'Open Bitlatch on your computer to reconnect.' });
-        }
-      });
-    }
+    return sendNative(fast ? control : vault, request, timeout);
+  }
+
+  function sendNative<T>(lane: Lane, request: BrowserRequest, timeout: number): Promise<Result<T>> {
     return new Promise((resolve) => {
-      if (!port) {
-        port = browser.runtime.connectNative(HOST);
+      if (!lane.port) {
+        const port = browser.runtime.connectNative(HOST);
+        lane.port = port;
         port.onMessage.addListener((message: Result<unknown>) => {
-          const next = pending.shift();
+          if (lane.port !== port) return;
+          const next = lane.pending.shift();
           if (next) {
             clearTimeout(next.timer);
             next.resolve(message);
@@ -103,41 +74,36 @@ export default defineBackground(() => {
         });
         port.onDisconnect.addListener(() => {
           void browser.runtime.lastError;
-          port = undefined;
-          for (const entry of pending) {
-            clearTimeout(entry.timer);
-            entry.resolve({
-              ok: false,
-              error: 'Open Bitlatch on your computer to connect your vault.',
-            });
-          }
-          pending = [];
+          if (lane.port !== port) return;
+          lane.port = undefined;
+          rejectPending(lane);
         });
       }
       const timer = setTimeout(() => {
-        port?.disconnect();
-        port = undefined;
-        rejectPending();
-      }, 10_000);
-      pending.push({ resolve: resolve as (result: Result<unknown>) => void, timer });
+        lane.port?.disconnect();
+        lane.port = undefined;
+        rejectPending(lane);
+      }, timeout);
+      lane.pending.push({ resolve: resolve as (result: Result<unknown>) => void, timer });
       try {
-        port.postMessage(request);
+        lane.port.postMessage(request);
       } catch {
-        rejectPending();
-        port = undefined;
+        lane.port.disconnect();
+        lane.port = undefined;
+        rejectPending(lane);
       }
     });
   }
 
-  function rejectPending() {
-    for (const entry of pending) {
+  function rejectPending(lane: Lane) {
+    for (const entry of lane.pending) {
       clearTimeout(entry.timer);
       entry.resolve({
         ok: false,
         error: 'Bitlatch is not responding. Open the desktop app and try again.',
       });
     }
-    pending = [];
+    lane.pending = [];
   }
 
   function senderUrl(sender: Browser.runtime.MessageSender): string | null {
@@ -307,10 +273,7 @@ export default defineBackground(() => {
       }
       if (type === 'unlockState' && (isPopup || senderUrl(sender)))
         return native<BrowserUnlockState>({ type: 'unlockState' });
-      if (
-        (isPopup && type === 'unlock') ||
-        (type === 'biometricUnlock' && (isPopup || senderUrl(sender)))
-      ) {
+      if (type === 'biometricUnlock' && (isPopup || senderUrl(sender))) {
         const request = browserRequestSchema.safeParse(message);
         if (!request.success) return { ok: false, error: 'Invalid unlock request.' };
         const result = await native<VaultStatus>(request.data);

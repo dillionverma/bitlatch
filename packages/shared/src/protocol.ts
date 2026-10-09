@@ -161,7 +161,6 @@ export const browserRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('sync') }).strict(),
   z.object({ type: z.literal('status') }).strict(),
   z.object({ type: z.literal('unlockState') }).strict(),
-  z.object({ type: z.literal('unlock'), password: z.string().min(1).max(1_024) }).strict(),
   z.object({ type: z.literal('biometricUnlock') }).strict(),
   z
     .object({
@@ -214,7 +213,6 @@ export async function safely<T>(operation: () => T | Promise<T>) {
 
 // A separate socket/token keeps launcher commands out of the browser protocol.
 export const launcherRequestSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('unlock'), password: z.string().min(1).max(1_024) }).strict(),
   z.object({ type: z.literal('biometricUnlock') }).strict(),
   z.object({ type: z.literal('detail'), id }).strict(),
   z.object({ type: z.literal('search'), query: z.string().max(500) }).strict(),
