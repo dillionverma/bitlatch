@@ -88,7 +88,7 @@ function requestThroughHost<T>(
     }
     const header = Buffer.alloc(4);
     header.writeUInt32LE(body.length);
-    let timer: ReturnType<typeof setTimeout>;
+    const timer = setTimeout(() => closeHost(new Error('Bitlatch did not respond.')), 120_000);
     const entry: Pending = {
       done: false,
       finish(error, value) {
@@ -102,7 +102,6 @@ function requestThroughHost<T>(
     };
     const abort = () => entry.finish(new Error('Request cancelled.'));
     signal?.addEventListener('abort', abort, { once: true });
-    timer = setTimeout(() => closeHost(new Error('Bitlatch did not respond.')), 120_000);
     pending.push(entry);
     host!.stdin.write(Buffer.concat([header, body]));
   });
