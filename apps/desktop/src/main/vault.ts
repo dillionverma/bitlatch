@@ -1182,7 +1182,7 @@ function isRemovable(cipher: Cipher) {
 }
 function isEditable(cipher: Cipher) {
   return (
-    (cipher.type === 1 || cipher.type === 2) &&
+    (cipher.type === 1 || cipher.type === 2 || cipher.type === 3) &&
     !isRestricted(cipher) &&
     !cipher.login?.fido2Credentials?.length
   );

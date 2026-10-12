@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Check,
   Copy,
@@ -11,7 +11,7 @@ import {
   WarningCircle as CircleAlert,
 } from '@phosphor-icons/react';
 import { uriMatchOptions } from '@latch/shared/item-drafts';
-import type { ItemDetail } from '@latch/shared/types';
+import type { CardFields, ItemDetail, LatchApi } from '@latch/shared/types';
 import { ItemIcon, displayWebsite, typeName } from './items';
 import type { Notifier } from './Toasts';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,15 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import './tasks.css';
+
+type CopyField = Parameters<LatchApi['copy']>[1];
+type SecretField = Exclude<CopyField, 'username'>;
+const fieldLabels: Record<CopyField, string> = {
+  username: 'Username',
+  password: 'Password',
+  cardNumber: 'Card number',
+  cardCode: 'Security code',
+};
 
 export function Detail({
   item,
@@ -32,9 +41,9 @@ export function Detail({
   onGone: () => void;
   notify: Notifier;
 }) {
-  const [revealed, setRevealed] = useState(false);
-  const [copied, setCopied] = useState('');
-  const [copying, setCopying] = useState('');
+  const [revealed, setRevealed] = useState<Partial<Record<SecretField, boolean>>>({});
+  const [copied, setCopied] = useState<CopyField | ''>('');
+  const [copying, setCopying] = useState<CopyField | ''>('');
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [active, setActive] = useState(true);
@@ -104,7 +113,7 @@ export function Detail({
       }
     }
   }
-  async function copy(field: 'username' | 'password') {
+  async function copy(field: CopyField) {
     if (copyWorking.current || !alive.current) return;
     copyWorking.current = true;
     setCopying(field);
@@ -124,6 +133,37 @@ export function Detail({
       }
     }
   }
+  const revealButton = (field: SecretField, value: string) => (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      aria-label={`${revealed[field] ? 'Hide' : 'Reveal'} ${fieldLabels[field].toLowerCase()}`}
+      aria-pressed={!!revealed[field]}
+      disabled={!value || deleting}
+      onClick={() => setRevealed((current) => ({ ...current, [field]: !current[field] }))}
+    >
+      {revealed[field] ? <EyeOff /> : <Eye />}
+    </Button>
+  );
+  const copyButton = (field: CopyField, value: string) => (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      aria-label={`Copy ${fieldLabels[field].toLowerCase()}`}
+      disabled={!!copying || deleting || !value}
+      aria-busy={copying === field}
+      onClick={() => void copy(field)}
+    >
+      {copying === field ? <Spinner /> : copied === field ? <Check /> : <Copy />}
+    </Button>
+  );
+  const subtitle = item.card
+    ? [item.card.brand, item.card.number && `•••• ${item.card.number.slice(-4)}`]
+        .filter(Boolean)
+        .join(' ')
+    : displayWebsite(item.website);
   if (!active) return null;
   return (
     <article className="task-detail bg-background text-foreground">
@@ -179,9 +219,7 @@ export function Detail({
           <ItemIcon item={item} large />
           <div>
             <h2 className="font-heading text-[20px] leading-[26px] font-semibold">{item.name}</h2>
-            <p className="text-xs text-muted-foreground">
-              {displayWebsite(item.website) || typeName(item.type)}
-            </p>
+            <p className="text-xs text-muted-foreground">{subtitle || typeName(item.type)}</p>
           </div>
         </header>
         {(!item.editable || item.restorable) && (
@@ -208,23 +246,7 @@ export function Detail({
                       {item.username || '—'}
                     </span>
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Copy username"
-                    disabled={!!copying || deleting || !item.username}
-                    aria-busy={copying === 'username'}
-                    onClick={() => void copy('username')}
-                  >
-                    {copying === 'username' ? (
-                      <Spinner />
-                    ) : copied === 'username' ? (
-                      <Check />
-                    ) : (
-                      <Copy />
-                    )}
-                  </Button>
+                  {copyButton('username', item.username)}
                 </div>
                 <Separator />
                 <div className="task-credential" data-credential="password">
@@ -236,38 +258,12 @@ export function Detail({
                       className="field-value text-sm font-mono"
                       aria-labelledby="detail-password-label"
                     >
-                      {item.password ? (revealed ? item.password : '••••••••••••••') : '—'}
+                      {item.password ? (revealed.password ? item.password : '••••••••••••••') : '—'}
                     </span>
                   </div>
                   <div className="task-actions">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={revealed ? 'Hide password' : 'Reveal password'}
-                      aria-pressed={revealed}
-                      disabled={!item.password || deleting}
-                      onClick={() => setRevealed(!revealed)}
-                    >
-                      {revealed ? <EyeOff /> : <Eye />}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Copy password"
-                      disabled={!!copying || deleting || !item.password}
-                      aria-busy={copying === 'password'}
-                      onClick={() => void copy('password')}
-                    >
-                      {copying === 'password' ? (
-                        <Spinner />
-                      ) : copied === 'password' ? (
-                        <Check />
-                      ) : (
-                        <Copy />
-                      )}
-                    </Button>
+                    {revealButton('password', item.password)}
+                    {copyButton('password', item.password)}
                   </div>
                 </div>
               </>
@@ -290,8 +286,43 @@ export function Detail({
             ))}
           </section>
         )}
+        {item.card && (
+          <section
+            aria-label="Card details"
+            className="task-credentials rounded-lg border border-border bg-card"
+          >
+            {cardRows(item.card).map((row, index) => (
+              <Fragment key={row.name}>
+                {index > 0 && <Separator />}
+                <div className="task-credential" data-credential={row.name}>
+                  <div>
+                    <p id={`detail-${row.name}-label`} className="text-xs text-muted-foreground">
+                      {row.label}
+                    </p>
+                    <span
+                      className={`field-value text-sm ${row.secret ? 'font-mono' : ''}`}
+                      aria-labelledby={`detail-${row.name}-label`}
+                    >
+                      {!row.value
+                        ? '—'
+                        : row.secret && !revealed[row.secret.field]
+                          ? row.secret.masked
+                          : row.value}
+                    </span>
+                  </div>
+                  {row.secret && (
+                    <div className="task-actions">
+                      {revealButton(row.secret.field, row.value)}
+                      {copyButton(row.secret.field, row.value)}
+                    </div>
+                  )}
+                </div>
+              </Fragment>
+            ))}
+          </section>
+        )}
         <span role="status" className="sr-only">
-          {copied ? `${copied === 'password' ? 'Password' : 'Username'} copied` : ''}
+          {copied ? `${fieldLabels[copied]} copied` : ''}
         </span>
         {item.hasPasskey && (
           <Alert>
@@ -309,7 +340,7 @@ export function Detail({
             <p className="text-sm text-foreground leading-relaxed">{item.notes}</p>
           </section>
         )}
-        {item.type !== 1 && item.type !== 2 && (
+        {item.type !== 1 && item.type !== 2 && item.type !== 3 && (
           <Alert>
             <AlertTitle>Read-only in Bitlatch</AlertTitle>
             <AlertDescription>
@@ -346,6 +377,37 @@ export function Detail({
       </div>
     </article>
   );
+}
+
+/** Empty rows are hidden, except the number, which every card is expected to have. */
+function cardRows(card: CardFields) {
+  const expiration =
+    card.expMonth || card.expYear
+      ? `${card.expMonth ? card.expMonth.padStart(2, '0') : '—'} / ${card.expYear || '—'}`
+      : '';
+  const rows: {
+    name: string;
+    label: string;
+    value: string;
+    secret?: { field: 'cardNumber' | 'cardCode'; masked: string };
+  }[] = [
+    { name: 'cardholder', label: 'Cardholder name', value: card.cardholderName },
+    { name: 'brand', label: 'Brand', value: card.brand },
+    {
+      name: 'number',
+      label: 'Number',
+      value: card.number,
+      secret: { field: 'cardNumber', masked: `•••• ${card.number.slice(-4)}` },
+    },
+    { name: 'expiration', label: 'Expiration', value: expiration },
+    {
+      name: 'code',
+      label: 'Security code',
+      value: card.code,
+      secret: { field: 'cardCode', masked: '•••' },
+    },
+  ];
+  return rows.filter((row) => row.value || row.name === 'number');
 }
 
 /** A date the way a person reads it, with the time only where it matters. */
