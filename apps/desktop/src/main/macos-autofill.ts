@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { UserError } from '@latch/shared/protocol';
 import type { MacAutoFillState } from '@latch/shared/types';
+import type { VerifiedListener } from './local-transport';
 import type { Vault } from './vault';
 
 const base64url = z
@@ -45,14 +46,8 @@ const requestSchema = z.discriminatedUnion('type', [
 ]);
 type Request = z.infer<typeof requestSchema>;
 type NativeReply = { ok: boolean; available?: boolean; enabled?: boolean; container?: string };
-type Native = {
+type Native = VerifiedListener & {
   invoke(operation: string, input: string, callback: (json: string) => void): void;
-  startVerifiedSocket(
-    path: string,
-    identifier: string,
-    accept: (fd: number, pid: number, auditToken: string) => boolean,
-  ): object;
-  stopVerifiedSocket(handle: object): void;
 };
 
 export class MacAutoFill {
@@ -203,6 +198,7 @@ export class MacAutoFill {
       this.listener = this.native.startVerifiedSocket(
         socketPath,
         'app.latch.vault.autofill',
+        null,
         (fd) => {
           try {
             this.accept(new Socket({ fd, readable: true, writable: true }));
@@ -284,7 +280,7 @@ export class MacAutoFill {
           request.allowed.map((id) => Buffer.from(id, 'base64url')),
         );
       else if (request.type === 'assert' || request.type === 'register') {
-        await this.requirePresence(`Use a Bitlatch passkey for ${request.rpId}`);
+        await this.requirePresence(`use your passkey for ${request.rpId}`);
         if (this.epoch() !== startedAt || socket.destroyed || this.stopped)
           throw new UserError('Vault locked. Try again after unlocking.');
         if (request.type === 'assert') value = await this.vault.assertPasskey(request);

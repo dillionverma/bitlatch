@@ -116,6 +116,7 @@ export async function buildAutoFill(root) {
   ];
   const bridge = resolve(output, 'bridge.o');
   const verifiedSocket = resolve(output, 'verified-socket.o');
+  const launcher = resolve(output, 'launcher.o');
   run([
     'clang',
     '-c',
@@ -130,20 +131,24 @@ export async function buildAutoFill(root) {
     '-o',
     bridge,
   ]);
-  run([
-    'clang',
-    '-c',
-    '-mmacosx-version-min=14.0',
-    '-Wall',
-    '-Wextra',
-    '-Werror',
-    '-O2',
-    '-I',
-    include,
-    resolve(native, 'VerifiedSocket.c'),
-    '-o',
-    verifiedSocket,
-  ]);
+  for (const [source, object] of [
+    ['VerifiedSocket.c', verifiedSocket],
+    ['Launcher.c', launcher],
+  ])
+    run([
+      'clang',
+      '-c',
+      '-mmacosx-version-min=14.0',
+      '-Wall',
+      '-Wextra',
+      '-Werror',
+      '-O2',
+      '-I',
+      include,
+      resolve(native, source),
+      '-o',
+      object,
+    ]);
   run([
     'swiftc',
     ...common,
@@ -154,6 +159,7 @@ export async function buildAutoFill(root) {
     resolve(native, 'Encoding.swift'),
     bridge,
     verifiedSocket,
+    launcher,
     '-Xlinker',
     '-undefined',
     '-Xlinker',
@@ -167,6 +173,7 @@ export async function buildAutoFill(root) {
   ]);
   await rm(bridge);
   await rm(verifiedSocket);
+  await rm(launcher);
   run([
     'swiftc',
     ...common,

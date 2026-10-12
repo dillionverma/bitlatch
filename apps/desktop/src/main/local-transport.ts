@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { safely, UserError } from '@latch/shared/protocol';
 import type { ZodType } from 'zod';
 
+import { launcherName, namedLauncherRequirement } from './launchers';
 import { MAX_MESSAGE_BYTES } from './native-config';
 
 export interface LocalTransportOptions<Request> {
@@ -25,13 +26,21 @@ export interface LocalTransportOptions<Request> {
 export interface VerifiedPeer {
   pid: number;
   auditToken: string;
+  launcher?: { key: string; name: string };
 }
 
-interface VerifiedListener {
+export interface VerifiedListener {
   startVerifiedSocket(
     path: string,
     identifier: string,
-    accept: (fd: number, pid: number, auditToken: string) => boolean,
+    launcherRequirement: string | null,
+    accept: (
+      fd: number,
+      pid: number,
+      auditToken: string,
+      launcherKey: string | null,
+      launcherIdentifier: string | null,
+    ) => boolean,
   ): object;
   stopVerifiedSocket(handle: object): void;
 }
@@ -65,15 +74,26 @@ export class LocalTransport<Request> {
       ) as VerifiedListener;
       const identifier =
         this.options.channel === 'safari' ? 'app.latch.vault.safari' : 'app.latch.vault.bridgehost';
-      const accept = (fd: number, pid: number, auditToken: string) => {
-        try {
-          this.accept(new Socket({ fd, readable: true, writable: true }), { pid, auditToken });
-          return true;
-        } catch {
-          return false;
-        }
-      };
-      const handle = native.startVerifiedSocket(this.socketPath, identifier, accept);
+      const handle = native.startVerifiedSocket(
+        this.socketPath,
+        identifier,
+        namedLauncherRequirement,
+        (fd, pid, auditToken, launcherKey, launcherIdentifier) => {
+          try {
+            this.accept(new Socket({ fd, readable: true, writable: true }), {
+              pid,
+              auditToken,
+              launcher:
+                launcherKey === null
+                  ? undefined
+                  : { key: launcherKey, name: launcherName(launcherIdentifier) },
+            });
+            return true;
+          } catch {
+            return false;
+          }
+        },
+      );
       this.verified = { native, handle };
     } else {
       this.server = createServer((socket) => this.accept(socket));
