@@ -84,7 +84,10 @@ export function QuickOpen({
                   <span className="flex min-w-0 flex-1 flex-col">
                     <strong className="truncate font-medium">{item.name || 'Untitled item'}</strong>
                     <small className="truncate text-muted-foreground">
-                      {item.username || displayWebsite(item.website) || typeName(item.type)}
+                      {item.username ||
+                        item.cardLabel ||
+                        displayWebsite(item.website) ||
+                        typeName(item.type)}
                     </small>
                   </span>
                 </CommandItem>

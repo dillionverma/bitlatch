@@ -243,7 +243,10 @@ export function ItemList({
                     <span className="item-text">
                       <strong>{item.name || 'Untitled item'}</strong>
                       <small>
-                        {item.username || displayWebsite(item.website) || typeName(item.type)}
+                        {item.username ||
+                          item.cardLabel ||
+                          displayWebsite(item.website) ||
+                          typeName(item.type)}
                       </small>
                     </span>
                     {item.hasPasskey && (
@@ -257,7 +260,7 @@ export function ItemList({
                     {onFavorite &&
                     !item.restricted &&
                     !item.hasPasskey &&
-                    (item.type === 1 || item.type === 2) ? (
+                    (item.type === 1 || item.type === 2 || item.type === 3) ? (
                       <Button
                         type="button"
                         variant="ghost"

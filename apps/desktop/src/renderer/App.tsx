@@ -9,19 +9,27 @@ import {
   LockKey as LockKeyhole,
   Plus,
   ArrowsClockwise as RefreshCw,
+  CreditCard,
   MagnifyingGlass as Search,
   SlidersHorizontal as Settings2,
   Star,
   Trash as Trash2,
   X,
 } from '@phosphor-icons/react';
-import type { ItemDetail, ItemSummary, MenuPosition, VaultState } from '@latch/shared/types';
+import type {
+  ItemDetail,
+  ItemMenuAction,
+  ItemSummary,
+  MenuPosition,
+  VaultState,
+} from '@latch/shared/types';
 import { Auth } from './Auth';
 import { Editor } from './Editor';
 import { Settings } from './Settings';
 import { Mark } from './Mark';
 import { Detail } from './Detail';
 import { ItemList } from './ItemList';
+import { fieldLabels, type CopyField } from './items';
 import { QuickOpen } from './QuickOpen';
 import { WebsiteIconsProvider } from './WebsiteIcons';
 import { Toasts, useToasts, type Notifier } from './Toasts';
@@ -60,7 +68,7 @@ const initialState: VaultState = {
   biometrics: 'unsupported',
   biometricsOn: false,
 };
-type Filter = 'all' | 'favorites' | 'logins' | 'notes' | 'passkeys' | 'trash';
+type Filter = 'all' | 'favorites' | 'logins' | 'notes' | 'cards' | 'passkeys' | 'trash';
 type Selection =
   | { status: 'unselected' }
   | { status: 'loading' | 'restricted' | 'error'; id: string }
@@ -80,7 +88,7 @@ const filters = [
     label: 'Logins',
     icon: KeyRound,
     empty: 'No logins',
-    description: 'Use New login to add one.',
+    description: 'Use New item to add one.',
   },
   {
     id: 'notes',
@@ -88,6 +96,13 @@ const filters = [
     icon: FileText,
     empty: 'No secure notes',
     description: 'Secure notes from Bitwarden appear here.',
+  },
+  {
+    id: 'cards',
+    label: 'Cards',
+    icon: CreditCard,
+    empty: 'No cards',
+    description: 'Use New item to add one.',
   },
   {
     id: 'passkeys',
@@ -104,11 +119,17 @@ const filters = [
     description: 'Items moved to Trash can be restored.',
   },
 ] as const;
+const copyFields: Record<Exclude<ItemMenuAction, 'edit' | 'trash' | 'restore'>, CopyField> = {
+  copyUsername: 'username',
+  copyPassword: 'password',
+  copyCardNumber: 'cardNumber',
+  copyCardCode: 'cardCode',
+};
 
 function indexItems(items: ItemSummary[]) {
   return items.map((item) => ({
     item,
-    haystack: `${item.name} ${item.username} ${item.website}`.toLowerCase(),
+    haystack: `${item.name} ${item.username} ${item.website} ${item.cardLabel}`.toLowerCase(),
   }));
 }
 
@@ -371,6 +392,7 @@ function VaultWorkspace({
         if (filter === 'favorites' && !item.favorite) return false;
         if (filter === 'logins' && item.type !== 1) return false;
         if (filter === 'notes' && item.type !== 2) return false;
+        if (filter === 'cards' && item.type !== 3) return false;
         if (filter === 'passkeys' && !item.hasPasskey) return false;
         return terms.every((term) => haystack.includes(term));
       })
@@ -454,13 +476,13 @@ function VaultWorkspace({
         if (detail.editable && !hasModal()) setModal('edit');
         return;
       }
-      if (action === 'copyUsername' || action === 'copyPassword') {
-        const field = action === 'copyUsername' ? 'username' : 'password';
+      if (action !== 'trash' && action !== 'restore') {
+        const field = copyFields[action];
         const copied = await window.latch.copy(item.id, field);
         if (current())
           notify.show(
             copied.ok ? 'done' : 'error',
-            copied.ok ? `${field === 'username' ? 'Username' : 'Password'} copied` : copied.error,
+            copied.ok ? `${fieldLabels[field]} copied` : copied.error,
           );
         return;
       }
@@ -696,7 +718,7 @@ function VaultWorkspace({
                 onClick={() => runCommand('new')}
               >
                 <Plus size={16} />
-                New login<Kbd>⌘N</Kbd>
+                New item<Kbd>⌘N</Kbd>
               </Button>
             </footer>
           </section>
@@ -825,10 +847,20 @@ function VaultWorkspace({
               setModal(null);
               // Keep summaries secret-free, including the newly created item while
               // its broadcast list refresh is still in flight.
-              const { id, name, username, website, type, favorite, hasPasskey, restricted } = item;
+              const {
+                id,
+                name,
+                username,
+                website,
+                cardLabel,
+                type,
+                favorite,
+                hasPasskey,
+                restricted,
+              } = item;
               setItems((current) => [
                 ...current.filter((entry) => entry.id !== id),
-                { id, name, username, website, type, favorite, hasPasskey, restricted },
+                { id, name, username, website, cardLabel, type, favorite, hasPasskey, restricted },
               ]);
               setQuery('');
               setFilter('all');

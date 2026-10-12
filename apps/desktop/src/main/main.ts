@@ -398,9 +398,7 @@ function installMenu() {
     },
     {
       label: 'File',
-      submenu: [
-        { label: 'New Login', accelerator: 'CmdOrCtrl+N', click: () => sendCommand('new') },
-      ],
+      submenu: [{ label: 'New Item', accelerator: 'CmdOrCtrl+N', click: () => sendCommand('new') }],
     },
     { role: 'editMenu' },
     {
