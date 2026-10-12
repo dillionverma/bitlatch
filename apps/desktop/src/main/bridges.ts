@@ -182,8 +182,8 @@ export async function startBridges({
         if (request.type === 'detail' || request.type === 'copy')
           await externalAccess.requireFresh(
             request.type === 'copy'
-              ? 'Copy a Bitlatch credential in Raycast'
-              : 'View a Bitlatch item in Raycast',
+              ? 'copy a credential for Raycast'
+              : 'show a vault item in Raycast',
             peer,
           );
       },

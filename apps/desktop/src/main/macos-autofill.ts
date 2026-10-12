@@ -280,7 +280,7 @@ export class MacAutoFill {
           request.allowed.map((id) => Buffer.from(id, 'base64url')),
         );
       else if (request.type === 'assert' || request.type === 'register') {
-        await this.requirePresence(`Use a Bitlatch passkey for ${request.rpId}`);
+        await this.requirePresence(`use your passkey for ${request.rpId}`);
         if (this.epoch() !== startedAt || socket.destroyed || this.stopped)
           throw new UserError('Vault locked. Try again after unlocking.');
         if (request.type === 'assert') value = await this.vault.assertPasskey(request);
