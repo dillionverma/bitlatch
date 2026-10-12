@@ -16,13 +16,20 @@ import {
   Trash as Trash2,
   X,
 } from '@phosphor-icons/react';
-import type { ItemDetail, ItemSummary, MenuPosition, VaultState } from '@latch/shared/types';
+import type {
+  ItemDetail,
+  ItemMenuAction,
+  ItemSummary,
+  MenuPosition,
+  VaultState,
+} from '@latch/shared/types';
 import { Auth } from './Auth';
 import { Editor } from './Editor';
 import { Settings } from './Settings';
 import { Mark } from './Mark';
 import { Detail } from './Detail';
 import { ItemList } from './ItemList';
+import { fieldLabels, type CopyField } from './items';
 import { QuickOpen } from './QuickOpen';
 import { WebsiteIconsProvider } from './WebsiteIcons';
 import { Toasts, useToasts, type Notifier } from './Toasts';
@@ -112,6 +119,12 @@ const filters = [
     description: 'Items moved to Trash can be restored.',
   },
 ] as const;
+const copyFields: Record<Exclude<ItemMenuAction, 'edit' | 'trash' | 'restore'>, CopyField> = {
+  copyUsername: 'username',
+  copyPassword: 'password',
+  copyCardNumber: 'cardNumber',
+  copyCardCode: 'cardCode',
+};
 
 function indexItems(items: ItemSummary[]) {
   return items.map((item) => ({
@@ -463,13 +476,13 @@ function VaultWorkspace({
         if (detail.editable && !hasModal()) setModal('edit');
         return;
       }
-      if (action === 'copyUsername' || action === 'copyPassword') {
-        const field = action === 'copyUsername' ? 'username' : 'password';
+      if (action !== 'trash' && action !== 'restore') {
+        const field = copyFields[action];
         const copied = await window.latch.copy(item.id, field);
         if (current())
           notify.show(
             copied.ok ? 'done' : 'error',
-            copied.ok ? `${field === 'username' ? 'Username' : 'Password'} copied` : copied.error,
+            copied.ok ? `${fieldLabels[field]} copied` : copied.error,
           );
         return;
       }

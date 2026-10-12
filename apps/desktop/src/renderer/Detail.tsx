@@ -11,8 +11,8 @@ import {
   WarningCircle as CircleAlert,
 } from '@phosphor-icons/react';
 import { uriMatchOptions } from '@latch/shared/item-drafts';
-import type { CardFields, ItemDetail, LatchApi } from '@latch/shared/types';
-import { ItemIcon, displayWebsite, typeName } from './items';
+import type { CardFields, ItemDetail } from '@latch/shared/types';
+import { ItemIcon, displayWebsite, fieldLabels, typeName, type CopyField } from './items';
 import type { Notifier } from './Toasts';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,14 +21,7 @@ import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import './tasks.css';
 
-type CopyField = Parameters<LatchApi['copy']>[1];
 type SecretField = Exclude<CopyField, 'username'>;
-const fieldLabels: Record<CopyField, string> = {
-  username: 'Username',
-  password: 'Password',
-  cardNumber: 'Card number',
-  cardCode: 'Security code',
-};
 
 export function Detail({
   item,

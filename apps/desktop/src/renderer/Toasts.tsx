@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Toaster } from '@/components/ui/sonner';
+import { fieldLabels } from './items';
 
 type ToastKind = 'pending' | 'done' | 'error';
 export interface Notifier {
@@ -26,6 +27,7 @@ const messages = new Set([
   'Syncing with Bitwarden…',
   'Vault up to date',
   'Could not sync. Check your connection and try again.',
+  ...Object.values(fieldLabels).map((label) => `${label} copied`),
 ]);
 const fallback = {
   pending: 'Working…',

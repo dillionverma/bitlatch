@@ -1,7 +1,15 @@
 import { CreditCard, FileText, User as UserRound } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
-import type { ItemSummary } from '@latch/shared/types';
+import type { ItemSummary, LatchApi } from '@latch/shared/types';
 import { useWebsiteIcons } from './WebsiteIcons';
+
+export type CopyField = Parameters<LatchApi['copy']>[1];
+export const fieldLabels: Record<CopyField, string> = {
+  username: 'Username',
+  password: 'Password',
+  cardNumber: 'Card number',
+  cardCode: 'Security code',
+};
 
 export function ItemIcon({ item, large = false }: { item: ItemSummary; large?: boolean }) {
   const { enabled } = useWebsiteIcons();

@@ -3,7 +3,14 @@ export const MAX_BROWSER_MESSAGE_BYTES = 900_000;
 export type WindowMaterial = 'glass' | 'vibrancy' | 'solid';
 export type WindowCommand = 'search' | 'new' | 'settings';
 export type NativeConfirmation = 'discard' | 'trash';
-export type ItemMenuAction = 'copyUsername' | 'copyPassword' | 'edit' | 'trash' | 'restore';
+export type ItemMenuAction =
+  | 'copyUsername'
+  | 'copyPassword'
+  | 'copyCardNumber'
+  | 'copyCardCode'
+  | 'edit'
+  | 'trash'
+  | 'restore';
 export type MenuPosition = { x: number; y: number };
 export const windowColorTokens = [
   'background',

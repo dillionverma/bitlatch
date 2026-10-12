@@ -72,6 +72,11 @@ export function installNativeInteractions(window: BrowserWindow) {
           template.push(entry('Copy Password', 'copyPassword', !!item.password));
           template.push({ type: 'separator' });
         }
+        if (item.type === 3) {
+          template.push(entry('Copy Number', 'copyCardNumber', !!item.card?.number));
+          template.push(entry('Copy Security Code', 'copyCardCode', !!item.card?.code));
+          template.push({ type: 'separator' });
+        }
         template.push(entry('Edit', 'edit', item.editable));
         if (item.restorable) template.push(entry('Restore to Vault', 'restore'));
         else template.push(entry('Move to Trash…', 'trash', item.deletable));
