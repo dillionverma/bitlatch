@@ -80,7 +80,7 @@ const filters = [
     label: 'Logins',
     icon: KeyRound,
     empty: 'No logins',
-    description: 'Use New login to add one.',
+    description: 'Use New item to add one.',
   },
   {
     id: 'notes',
@@ -696,7 +696,7 @@ function VaultWorkspace({
                 onClick={() => runCommand('new')}
               >
                 <Plus size={16} />
-                New login<Kbd>⌘N</Kbd>
+                New item<Kbd>⌘N</Kbd>
               </Button>
             </footer>
           </section>
