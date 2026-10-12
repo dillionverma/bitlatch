@@ -4,10 +4,9 @@ import type { VerifiedPeer } from './local-transport';
 import type { MacAutoFill } from './macos-autofill';
 
 type Client = 'browser' | 'raycast';
-const GRANT_MS = 10 * 60_000;
 
 export class ExternalAccess {
-  private readonly grants = new Map<string, { epoch: number; until: number }>();
+  private readonly grantEpochs = new Map<string, number>();
   private readonly pending = new Map<string, Promise<void>>();
   private sessionPrompts: number[] = [];
   private secretPrompts: number[] = [];
@@ -20,7 +19,7 @@ export class ExternalAccess {
 
   private key(client: Client, peer?: VerifiedPeer) {
     if (!peer) throw new UserError('Could not verify the local client.');
-    return `${client}:${peer.auditToken}`;
+    return `${client}:${peer.launcher?.key ?? peer.auditToken}`;
   }
 
   private limit(prompts: number[], maximum: number) {
@@ -36,17 +35,14 @@ export class ExternalAccess {
     if (!this.enforced) return;
     const key = this.key(client, peer);
     const currentEpoch = this.epoch();
-    const grant = this.grants.get(key);
-    if (grant?.epoch === currentEpoch && grant.until > Date.now()) return;
+    if (this.grantEpochs.get(key) === currentEpoch) return;
     let pending = this.pending.get(key);
     if (!pending) {
       this.sessionPrompts = this.limit(this.sessionPrompts, 6);
+      const name =
+        client === 'raycast' ? 'Raycast' : (peer?.launcher?.name ?? 'an unrecognized app');
       pending = (async () => {
-        await this.presence.requirePresence(
-          client === 'browser'
-            ? 'A local process requested browser access to Bitlatch. Approve only if you just used the extension.'
-            : 'A local process requested Raycast access to Bitlatch. Approve only if you just used Raycast.',
-        );
+        await this.presence.requirePresence(`give ${name} access to your vault`);
         if (this.epoch() !== currentEpoch)
           throw new UserError('Vault locked. Try again after unlocking.');
         this.grant(client, peer);
@@ -59,11 +55,11 @@ export class ExternalAccess {
   grant(client: Client, peer?: VerifiedPeer) {
     if (!this.enforced) return;
     const key = this.key(client, peer);
-    for (const [entry, grant] of this.grants) {
-      if (grant.epoch !== this.epoch() || grant.until <= Date.now()) this.grants.delete(entry);
-    }
-    this.grants.set(key, { epoch: this.epoch(), until: Date.now() + GRANT_MS });
-    if (this.grants.size > 100) this.grants.delete(this.grants.keys().next().value!);
+    const epoch = this.epoch();
+    for (const [entry, granted] of this.grantEpochs)
+      if (granted !== epoch) this.grantEpochs.delete(entry);
+    this.grantEpochs.set(key, epoch);
+    if (this.grantEpochs.size > 100) this.grantEpochs.delete(this.grantEpochs.keys().next().value!);
   }
 
   async requireFresh(reason: string, peer?: VerifiedPeer) {
