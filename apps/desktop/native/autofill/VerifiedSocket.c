@@ -1,4 +1,5 @@
 #include "VerifiedSocket.h"
+#include "Launcher.h"
 
 #include <Security/Security.h>
 #include <bsm/libbsm.h>
@@ -21,6 +22,8 @@ typedef struct {
   int fd;
   pid_t pid;
   audit_token_t audit;
+  bool attached;
+  LatchLauncher launcher;
 } AcceptedPeer;
 
 typedef struct {
@@ -29,6 +32,7 @@ typedef struct {
   dev_t path_device;
   ino_t path_inode;
   SecRequirementRef requirement;
+  SecRequirementRef launcher_requirement;
   pthread_t thread;
   atomic_bool stopped;
   atomic_int references;
@@ -38,8 +42,14 @@ typedef struct {
 static void release_listener(VerifiedListener *listener) {
   if (atomic_fetch_sub(&listener->references, 1) != 1) return;
   if (listener->requirement) CFRelease(listener->requirement);
+  if (listener->launcher_requirement) CFRelease(listener->launcher_requirement);
   free(listener->path);
   free(listener);
+}
+
+static napi_status create_nullable_string(napi_env env, const char *value, napi_value *result) {
+  return value ? napi_create_string_utf8(env, value, NAPI_AUTO_LENGTH, result)
+               : napi_get_null(env, result);
 }
 
 static void deliver_peer(napi_env env, napi_value callback, void *context, void *data) {
@@ -47,7 +57,8 @@ static void deliver_peer(napi_env env, napi_value callback, void *context, void 
   AcceptedPeer *peer = data;
   bool adopted = false;
   if (env && !atomic_load(&listener->stopped)) {
-    napi_value args[3], receiver, result;
+    napi_value args[5], receiver, result;
+    const LatchLauncher *launcher = peer->attached ? &peer->launcher : NULL;
     char audit_hex[sizeof(audit_token_t) * 2 + 1];
     const uint8_t *bytes = (const uint8_t *)&peer->audit;
     for (size_t i = 0; i < sizeof(audit_token_t); i++)
@@ -55,8 +66,11 @@ static void deliver_peer(napi_env env, napi_value callback, void *context, void 
     if (napi_create_int32(env, peer->fd, &args[0]) == napi_ok &&
         napi_create_int32(env, peer->pid, &args[1]) == napi_ok &&
         napi_create_string_utf8(env, audit_hex, NAPI_AUTO_LENGTH, &args[2]) == napi_ok &&
+        create_nullable_string(env, launcher ? launcher->key : NULL, &args[3]) == napi_ok &&
+        create_nullable_string(env, launcher && launcher->named ? launcher->identifier : NULL,
+                               &args[4]) == napi_ok &&
         napi_get_undefined(env, &receiver) == napi_ok &&
-        napi_call_function(env, receiver, callback, 3, args, &result) == napi_ok)
+        napi_call_function(env, receiver, callback, 5, args, &result) == napi_ok)
       napi_get_value_bool(env, result, &adopted);
   }
   if (!adopted) close(peer->fd);
@@ -69,13 +83,8 @@ static void callback_finished(napi_env env, void *data, void *hint) {
   release_listener(data);
 }
 
-static bool verify_peer(int fd, SecRequirementRef requirement, AcceptedPeer *peer) {
-  socklen_t length = sizeof(peer->audit);
-  if (getsockopt(fd, SOL_LOCAL, LOCAL_PEERTOKEN, &peer->audit, &length) != 0 ||
-      length != sizeof(peer->audit)) return false;
-
-  CFDataRef token = CFDataCreate(kCFAllocatorDefault, (const UInt8 *)&peer->audit,
-                                 sizeof(peer->audit));
+static bool peer_satisfies(const audit_token_t *audit, SecRequirementRef requirement) {
+  CFDataRef token = CFDataCreate(kCFAllocatorDefault, (const UInt8 *)audit, sizeof(*audit));
   if (!token) return false;
   const void *keys[] = {kSecGuestAttributeAudit};
   const void *values[] = {token};
@@ -89,8 +98,21 @@ static bool verify_peer(int fd, SecRequirementRef requirement, AcceptedPeer *pee
   if (code) CFRelease(code);
   if (attributes) CFRelease(attributes);
   CFRelease(token);
-  if (valid) peer->pid = audit_token_to_pid(peer->audit);
   return valid;
+}
+
+static bool verify_peer(int fd, const VerifiedListener *listener, AcceptedPeer *peer) {
+  socklen_t length = sizeof(peer->audit);
+  if (getsockopt(fd, SOL_LOCAL, LOCAL_PEERTOKEN, &peer->audit, &length) != 0 ||
+      length != sizeof(peer->audit) || !peer_satisfies(&peer->audit, listener->requirement))
+    return false;
+  peer->pid = audit_token_to_pid(peer->audit);
+  // The audit token carries the pid version, so this second check fails if the relay
+  // exited and its pid now names another process.
+  peer->attached =
+      latch_find_launcher(peer->pid, listener->launcher_requirement, &peer->launcher) &&
+      peer_satisfies(&peer->audit, listener->requirement);
+  return true;
 }
 
 static void *accept_peers(void *argument) {
@@ -116,7 +138,7 @@ static void *accept_peers(void *argument) {
         continue;
       }
       peer->fd = fd;
-      if (!verify_peer(fd, listener->requirement, peer) ||
+      if (!verify_peer(fd, listener, peer) ||
           napi_call_threadsafe_function(listener->callback, peer, napi_tsfn_nonblocking) != napi_ok) {
         close(fd);
         free(peer);
@@ -193,30 +215,52 @@ static SecRequirementRef signing_requirement(const char *allowed_identifier) {
   return requirement;
 }
 
+static bool create_launcher_requirement(napi_env env, napi_value value,
+                                        SecRequirementRef *requirement) {
+  napi_valuetype type;
+  if (napi_typeof(env, value, &type) != napi_ok) return false;
+  if (type == napi_null) return true;
+  char *text = copy_string(env, value, 8192);
+  if (!text) return false;
+  CFStringRef string = CFStringCreateWithCString(kCFAllocatorDefault, text, kCFStringEncodingUTF8);
+  free(text);
+  if (!string) return false;
+  bool valid =
+      SecRequirementCreateWithString(string, kSecCSDefaultFlags, requirement) == errSecSuccess;
+  CFRelease(string);
+  return valid;
+}
+
 static napi_value start_verified_socket(napi_env env, napi_callback_info info) {
-  size_t count = 3;
-  napi_value args[3];
+  size_t count = 4;
+  napi_value args[4];
   napi_get_cb_info(env, info, &count, args, NULL, NULL);
   napi_valuetype callback_type;
-  if (count != 3 || napi_typeof(env, args[2], &callback_type) != napi_ok ||
+  if (count != 4 || napi_typeof(env, args[3], &callback_type) != napi_ok ||
       callback_type != napi_function) {
-    napi_throw_type_error(env, NULL, "Expected socket path, client identifier, and callback");
+    napi_throw_type_error(env, NULL,
+                          "Expected socket path, client identifier, launcher requirement, and callback");
     return NULL;
   }
   char *path = copy_string(env, args[0], sizeof(((struct sockaddr_un *)0)->sun_path) - 1);
   char *identifier = copy_string(env, args[1], 255);
   SecRequirementRef requirement = identifier ? signing_requirement(identifier) : NULL;
   free(identifier);
-  if (!path || !requirement) {
+  SecRequirementRef launcher_requirement = NULL;
+  if (!path || !requirement || !create_launcher_requirement(env, args[2], &launcher_requirement)) {
     free(path);
     if (requirement) CFRelease(requirement);
-    napi_throw_error(env, NULL, "A signed Bitlatch app and exact client identifier are required");
+    if (launcher_requirement) CFRelease(launcher_requirement);
+    napi_throw_error(env, NULL,
+                     "A signed Bitlatch app, exact client identifier, and valid launcher "
+                     "requirement are required");
     return NULL;
   }
   VerifiedListener *listener = calloc(1, sizeof(*listener));
   if (!listener) goto failure;
   listener->path = path;
   listener->requirement = requirement;
+  listener->launcher_requirement = launcher_requirement;
   listener->listen_fd = -1;
   atomic_init(&listener->references, 1);
   atomic_init(&listener->stopped, false);
@@ -234,7 +278,7 @@ static napi_value start_verified_socket(napi_env env, napi_callback_info info) {
   if (chmod(path, 0600) != 0 || listen(listener->listen_fd, 16) != 0) goto listener_failure;
   napi_value name;
   if (napi_create_string_utf8(env, "Bitlatch verified socket", NAPI_AUTO_LENGTH, &name) != napi_ok ||
-      napi_create_threadsafe_function(env, args[2], NULL, name, 64, 1, listener,
+      napi_create_threadsafe_function(env, args[3], NULL, name, 64, 1, listener,
                                       callback_finished, listener, deliver_peer,
                                       &listener->callback) != napi_ok) goto listener_failure;
   atomic_fetch_add(&listener->references, 1);
@@ -263,6 +307,7 @@ listener_failure:
 failure:
   free(path);
   CFRelease(requirement);
+  if (launcher_requirement) CFRelease(launcher_requirement);
   napi_throw_error(env, NULL, "Could not allocate verified socket");
   return NULL;
 }
