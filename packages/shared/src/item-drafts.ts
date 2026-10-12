@@ -31,6 +31,9 @@ export const emptyCard: CardFields = {
   expYear: '',
   code: '',
 };
+export function cardLabel(brand: string, number: string) {
+  return [brand, number && `•••• ${number.slice(-4)}`].filter(Boolean).join(' ');
+}
 export function editableUri(row: ItemDetail['uris'][number]) {
   return (
     row.uri !== null &&

@@ -159,11 +159,6 @@ export function Detail({
       {copying === field ? <Spinner /> : copied === field ? <Check /> : <Copy />}
     </Button>
   );
-  const subtitle = item.card
-    ? [item.card.brand, item.card.number && `•••• ${item.card.number.slice(-4)}`]
-        .filter(Boolean)
-        .join(' ')
-    : displayWebsite(item.website);
   if (!active) return null;
   return (
     <article className="task-detail bg-background text-foreground">
@@ -219,7 +214,9 @@ export function Detail({
           <ItemIcon item={item} large />
           <div>
             <h2 className="font-heading text-[20px] leading-[26px] font-semibold">{item.name}</h2>
-            <p className="text-xs text-muted-foreground">{subtitle || typeName(item.type)}</p>
+            <p className="text-xs text-muted-foreground">
+              {item.cardLabel || displayWebsite(item.website) || typeName(item.type)}
+            </p>
           </div>
         </header>
         {(!item.editable || item.restorable) && (

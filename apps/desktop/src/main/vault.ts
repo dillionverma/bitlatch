@@ -3,6 +3,7 @@ import { randomInt } from 'node:crypto';
 import { CodeRejectedError, type CliPort, type CliPrompt } from './cli';
 import { fillableUrl, matchesUri, normalizeServer, webUrl, type CipherUri } from './matching';
 import { UserError, type BrowserVaultQuery } from '@latch/shared/protocol';
+import { cardLabel } from '@latch/shared/item-drafts';
 import {
   ES256,
   attestationObject,
@@ -1205,6 +1206,9 @@ function summarize(cipher: Cipher): ItemSummary {
     name: cipher.name || 'Untitled',
     username: isRestricted(cipher) ? '' : (cipher.login?.username ?? ''),
     website: cipher.login?.uris?.[0]?.uri ?? '',
+    cardLabel: isRestricted(cipher)
+      ? ''
+      : cardLabel(cipher.card?.brand ?? '', cipher.card?.number ?? ''),
     type: cipher.type,
     favorite: Boolean(cipher.favorite),
     hasPasskey: Boolean(cipher.login?.fido2Credentials?.length),

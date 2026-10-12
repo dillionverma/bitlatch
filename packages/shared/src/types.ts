@@ -113,6 +113,7 @@ export interface ItemSummary {
   name: string;
   username: string;
   website: string;
+  cardLabel: string;
   type: number;
   favorite: boolean;
   hasPasskey: boolean;

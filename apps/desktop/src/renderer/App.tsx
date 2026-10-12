@@ -9,6 +9,7 @@ import {
   LockKey as LockKeyhole,
   Plus,
   ArrowsClockwise as RefreshCw,
+  CreditCard,
   MagnifyingGlass as Search,
   SlidersHorizontal as Settings2,
   Star,
@@ -60,7 +61,7 @@ const initialState: VaultState = {
   biometrics: 'unsupported',
   biometricsOn: false,
 };
-type Filter = 'all' | 'favorites' | 'logins' | 'notes' | 'passkeys' | 'trash';
+type Filter = 'all' | 'favorites' | 'logins' | 'notes' | 'cards' | 'passkeys' | 'trash';
 type Selection =
   | { status: 'unselected' }
   | { status: 'loading' | 'restricted' | 'error'; id: string }
@@ -90,6 +91,13 @@ const filters = [
     description: 'Secure notes from Bitwarden appear here.',
   },
   {
+    id: 'cards',
+    label: 'Cards',
+    icon: CreditCard,
+    empty: 'No cards',
+    description: 'Use New item to add one.',
+  },
+  {
     id: 'passkeys',
     label: 'Passkeys',
     icon: Fingerprint,
@@ -108,7 +116,7 @@ const filters = [
 function indexItems(items: ItemSummary[]) {
   return items.map((item) => ({
     item,
-    haystack: `${item.name} ${item.username} ${item.website}`.toLowerCase(),
+    haystack: `${item.name} ${item.username} ${item.website} ${item.cardLabel}`.toLowerCase(),
   }));
 }
 
@@ -371,6 +379,7 @@ function VaultWorkspace({
         if (filter === 'favorites' && !item.favorite) return false;
         if (filter === 'logins' && item.type !== 1) return false;
         if (filter === 'notes' && item.type !== 2) return false;
+        if (filter === 'cards' && item.type !== 3) return false;
         if (filter === 'passkeys' && !item.hasPasskey) return false;
         return terms.every((term) => haystack.includes(term));
       })
@@ -825,10 +834,20 @@ function VaultWorkspace({
               setModal(null);
               // Keep summaries secret-free, including the newly created item while
               // its broadcast list refresh is still in flight.
-              const { id, name, username, website, type, favorite, hasPasskey, restricted } = item;
+              const {
+                id,
+                name,
+                username,
+                website,
+                cardLabel,
+                type,
+                favorite,
+                hasPasskey,
+                restricted,
+              } = item;
               setItems((current) => [
                 ...current.filter((entry) => entry.id !== id),
-                { id, name, username, website, type, favorite, hasPasskey, restricted },
+                { id, name, username, website, cardLabel, type, favorite, hasPasskey, restricted },
               ]);
               setQuery('');
               setFilter('all');

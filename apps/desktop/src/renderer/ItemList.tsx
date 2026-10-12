@@ -243,7 +243,10 @@ export function ItemList({
                     <span className="item-text">
                       <strong>{item.name || 'Untitled item'}</strong>
                       <small>
-                        {item.username || displayWebsite(item.website) || typeName(item.type)}
+                        {item.username ||
+                          item.cardLabel ||
+                          displayWebsite(item.website) ||
+                          typeName(item.type)}
                       </small>
                     </span>
                     {item.hasPasskey && (
