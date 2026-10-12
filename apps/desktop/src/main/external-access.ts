@@ -19,7 +19,8 @@ export class ExternalAccess {
 
   private key(client: Client, peer?: VerifiedPeer) {
     if (!peer) throw new UserError('Could not verify the local client.');
-    return `${client}:${peer.launcher?.key ?? peer.auditToken}`;
+    // Raycast's own relays never have a launcher, so one that does is not Raycast.
+    return `${client}:${(client === 'browser' && peer.launcher?.key) || peer.auditToken}`;
   }
 
   private limit(prompts: number[], maximum: number) {
