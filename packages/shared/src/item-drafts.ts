@@ -1,4 +1,4 @@
-import type { ItemDetail, ItemDraft, UriDraft } from './types';
+import type { CardFields, ItemDetail, ItemDraft, UriDraft } from './types';
 import { uriMatchSchema } from './protocol';
 import { webUrl } from './urls';
 
@@ -10,6 +10,27 @@ export const uriMatchOptions = [
   { value: '3', label: 'Exact' },
   { value: '5', label: 'Never' },
 ];
+/** Bitwarden's card brand values. */
+export const cardBrands = [
+  'Visa',
+  'Mastercard',
+  'Amex',
+  'Discover',
+  'Diners Club',
+  'JCB',
+  'Maestro',
+  'UnionPay',
+  'RuPay',
+  'Other',
+];
+export const emptyCard: CardFields = {
+  cardholderName: '',
+  brand: '',
+  number: '',
+  expMonth: '',
+  expYear: '',
+  code: '',
+};
 export function editableUri(row: ItemDetail['uris'][number]) {
   return (
     row.uri !== null &&
@@ -26,6 +47,7 @@ export function itemDraft(item: ItemDetail): ItemDraft {
     favorite: item.favorite,
   };
   if (item.type === 2) return { ...base, type: 2 };
+  if (item.type === 3) return { ...base, type: 3, card: item.card ?? emptyCard };
   return {
     ...base,
     type: 1,

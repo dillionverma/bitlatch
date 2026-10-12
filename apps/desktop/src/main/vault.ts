@@ -52,6 +52,15 @@ export interface Cipher {
     fido2Credentials?: Fido2Credential[];
     [key: string]: unknown;
   };
+  card?: {
+    cardholderName?: string | null;
+    brand?: string | null;
+    number?: string | null;
+    expMonth?: string | null;
+    expYear?: string | null;
+    code?: string | null;
+    [key: string]: unknown;
+  } | null;
   [key: string]: unknown;
 }
 
@@ -530,6 +539,17 @@ export class Vault extends EventEmitter {
     return {
       ...summarize(cipher),
       password: cipher.login?.password ?? '',
+      card:
+        cipher.type === 3
+          ? {
+              cardholderName: cipher.card?.cardholderName ?? '',
+              brand: cipher.card?.brand ?? '',
+              number: cipher.card?.number ?? '',
+              expMonth: cipher.card?.expMonth ?? '',
+              expYear: cipher.card?.expYear ?? '',
+              code: cipher.card?.code ?? '',
+            }
+          : null,
       uris: (cipher.login?.uris ?? []).map((row, sourceIndex) => ({
         sourceIndex,
         uri: row.uri,
@@ -1028,6 +1048,12 @@ export class Vault extends EventEmitter {
     if (draft.type === 2) {
       delete cipher.login;
       cipher.secureNote ??= { type: 0 };
+    } else if (draft.type === 3) {
+      delete cipher.login;
+      const fields = Object.entries(draft.card).map(
+        ([key, value]) => [key, value || null] as const,
+      );
+      cipher.card = { ...cipher.card, ...Object.fromEntries(fields) };
     } else {
       const previous = cipher.login?.uris ?? [];
       const seen = new Set<number>();
@@ -1132,6 +1158,7 @@ function cacheFields(cipher: Cipher): Cipher {
     creationDate: cipher.creationDate,
     deletedDate: cipher.deletedDate,
     notes: isRestricted(cipher) ? null : cipher.notes,
+    card: isRestricted(cipher) ? null : cipher.card,
     login: {
       username: isRestricted(cipher) ? null : cipher.login?.username,
       password: isRestricted(cipher) ? null : cipher.login?.password,

@@ -1,12 +1,20 @@
 import { app, clipboard, globalShortcut, powerMonitor } from 'electron';
 import { readFile, writeFile } from 'node:fs/promises';
 import { UserError, lockTimeoutSchema, type DesktopRequest } from '@latch/shared/protocol';
-import type { LockTimeoutMinutes } from '@latch/shared/types';
+import type { ItemDetail, LockTimeoutMinutes } from '@latch/shared/types';
 import type { Vault } from './vault';
 import type { CliPort } from './cli';
 import type { createUpdates } from './updates';
 
 type CopyField = Extract<DesktopRequest, { type: 'copy' }>['field'];
+const copyValues: Record<CopyField, (item: ItemDetail) => string> = {
+  username: (item) => item.username,
+  password: (item) => item.password,
+  notes: (item) => item.notes,
+  website: (item) => item.website,
+  cardNumber: (item) => item.card?.number ?? '',
+  cardCode: (item) => item.card?.code ?? '',
+};
 
 /** Owns desktop invalidation and shutdown; vault session state stays in Vault. */
 export class DesktopLifecycle {
@@ -129,7 +137,7 @@ export class DesktopLifecycle {
         this.assertRunning();
         if (!this.vault || epoch !== this.epoch)
           throw new UserError('Vault locked. Try again after unlocking.');
-        this.copiedValue = this.vault.detail(id)[field];
+        this.copiedValue = copyValues[field](this.vault.detail(id));
         await clipboard.writeText(this.copiedValue);
         if (this.clipboardTimer) clearTimeout(this.clipboardTimer);
         this.clipboardTimer = setTimeout(

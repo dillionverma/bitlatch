@@ -44,32 +44,53 @@ const draftBase = {
 };
 const sourceIndex = z.number().int().min(0).max(100_000);
 export const uriMatchSchema = z.union([z.null(), z.literal([0, 1, 2, 3, 5])]);
+const loginDraftSchema = z
+  .object({
+    ...draftBase,
+    type: z.literal(1),
+    username: boundedText,
+    password: boundedText,
+    uris: z
+      .array(
+        z.discriminatedUnion('action', [
+          z.object({ action: z.literal('keep'), sourceIndex }).strict(),
+          z
+            .object({
+              action: z.literal('write'),
+              sourceIndex: sourceIndex.optional(),
+              uri: z.string().min(1).max(2_048),
+              match: uriMatchSchema,
+            })
+            .strict(),
+        ]),
+      )
+      .max(1_000),
+  })
+  .strict();
+const noteDraftSchema = z.object({ ...draftBase, type: z.literal(2) }).strict();
+const cardDraftSchema = z
+  .object({
+    ...draftBase,
+    type: z.literal(3),
+    card: z
+      .object({
+        cardholderName: boundedText,
+        brand: boundedText,
+        number: boundedText,
+        expMonth: boundedText,
+        expYear: boundedText,
+        code: boundedText,
+      })
+      .strict(),
+  })
+  .strict();
 export const itemDraftSchema = z.discriminatedUnion('type', [
-  z
-    .object({
-      ...draftBase,
-      type: z.literal(1),
-      username: boundedText,
-      password: boundedText,
-      uris: z
-        .array(
-          z.discriminatedUnion('action', [
-            z.object({ action: z.literal('keep'), sourceIndex }).strict(),
-            z
-              .object({
-                action: z.literal('write'),
-                sourceIndex: sourceIndex.optional(),
-                uri: z.string().min(1).max(2_048),
-                match: uriMatchSchema,
-              })
-              .strict(),
-          ]),
-        )
-        .max(1_000),
-    })
-    .strict(),
-  z.object({ ...draftBase, type: z.literal(2) }).strict(),
+  loginDraftSchema,
+  noteDraftSchema,
+  cardDraftSchema,
 ]);
+// Cards stay desktop-only, so the extension cannot send one.
+const browserDraftSchema = z.discriminatedUnion('type', [loginDraftSchema, noteDraftSchema]);
 export { MAX_BROWSER_MESSAGE_BYTES } from './types';
 
 export const desktopRequestSchema = z.discriminatedUnion('type', [
@@ -129,7 +150,7 @@ export const desktopRequestSchema = z.discriminatedUnion('type', [
     .object({
       type: z.literal('copy'),
       id,
-      field: z.enum(['username', 'password', 'notes', 'website']),
+      field: z.enum(['username', 'password', 'notes', 'website', 'cardNumber', 'cardCode']),
     })
     .strict(),
   z.object({ type: z.literal('generate'), options: passwordOptionsSchema }).strict(),
@@ -153,7 +174,7 @@ export type BrowserVaultQuery = z.infer<typeof browserVaultQuerySchema>;
 
 export const browserRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('detail'), id }).strict(),
-  z.object({ type: z.literal('save'), draft: itemDraftSchema }).strict(),
+  z.object({ type: z.literal('save'), draft: browserDraftSchema }).strict(),
   z.object({ type: z.literal('delete'), id }).strict(),
   z.object({ type: z.literal('restore'), id }).strict(),
   z.object({ type: z.literal('setFavorite'), id, favorite: z.boolean() }).strict(),

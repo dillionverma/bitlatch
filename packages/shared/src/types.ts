@@ -119,8 +119,19 @@ export interface ItemSummary {
   restricted: boolean;
 }
 
+/** Bitwarden's card fields, with the CLI's nulls read as empty strings. */
+export interface CardFields {
+  cardholderName: string;
+  brand: string;
+  number: string;
+  expMonth: string;
+  expYear: string;
+  code: string;
+}
+
 export interface ItemDetail extends ItemSummary {
   password: string;
+  card: CardFields | null;
   uris: { sourceIndex: number; uri: string | null; match: number | null }[];
   notes: string;
   revisionDate: string | null;
@@ -148,7 +159,11 @@ export type ItemDraft = {
   name: string;
   notes: string;
   favorite: boolean;
-} & ({ type: 1; username: string; password: string; uris: UriDraft[] } | { type: 2 });
+} & (
+  | { type: 1; username: string; password: string; uris: UriDraft[] }
+  | { type: 2 }
+  | { type: 3; card: CardFields }
+);
 
 export interface FillCredential {
   username: string;
@@ -228,7 +243,10 @@ export interface LatchApi {
   setFavorite(id: string, favorite: boolean): Promise<Result<ItemSummary>>;
   remove(id: string): Promise<Result<VaultState>>;
   restore(id: string): Promise<Result<VaultState>>;
-  copy(id: string, field: 'username' | 'password'): Promise<Result<void>>;
+  copy(
+    id: string,
+    field: 'username' | 'password' | 'cardNumber' | 'cardCode',
+  ): Promise<Result<void>>;
   generate(options: PasswordOptions): Promise<Result<string>>;
   browserSetup(): Promise<Result<BrowserSetup>>;
   connectBrowser(browser: Browser): Promise<Result<void>>;
