@@ -145,6 +145,7 @@ export class Vault extends EventEmitter {
   private trashLoading?: Promise<void>;
   private pending?: PendingLogin;
   private captured?: Captured;
+  private counterWrites: Promise<unknown> = Promise.resolve();
   private state: Omit<
     VaultState,
     'biometrics' | 'biometricsOn' | 'revision' | 'itemsRevision' | 'trashLoaded'
@@ -884,9 +885,9 @@ export class Vault extends EventEmitter {
     const clientDataHash = fromBase64Url(input.clientDataHash);
     if (clientDataHash.length !== 32) throw new UserError('The sign-in request is malformed.');
     const counter = Number(credential.counter) || 0;
-    const next = counter > 0 ? counter + 1 : 0;
+    let next = counter > 0 ? counter + 1 : 0;
     if (next > 0) {
-      await this.writeCounter(cipher.id, credential.credentialId, next);
+      next = await this.writeCounter(cipher.id, credential.credentialId, next, generation);
       this.assertGeneration(generation);
     }
     const authData = authenticatorData({
@@ -902,21 +903,38 @@ export class Vault extends EventEmitter {
     };
   }
 
-  private async writeCounter(id: string, credentialId: string, counter: number) {
-    const latest = JSON.parse(
-      await this.cli.run(['get', 'item', id], { session: this.session }),
-    ) as Cipher;
-    const credential = latest.login?.fido2Credentials?.find(
-      (entry) => entry.credentialId === credentialId,
-    );
-    if (!credential) throw new UserError('This passkey is no longer in your vault. Sync Bitlatch.');
-    credential.counter = String(Math.max(counter, (Number(credential.counter) || 0) + 1));
-    const payload = Buffer.from(JSON.stringify(latest)).toString('base64');
-    const saved = JSON.parse(
-      await this.cli.run(['edit', 'item', id], { session: this.session, input: payload }),
-    ) as Cipher;
-    this.ciphers.set(saved.id, cacheFields(saved));
-    this.publish();
+  /**
+   * Saves the next signature counter and returns the value saved, which is past
+   * `counter` when another client signed since the last sync. Writes run one at
+   * a time, so two sign-ins never save or sign the same value.
+   */
+  private writeCounter(id: string, credentialId: string, counter: number, generation: number) {
+    const write = this.counterWrites
+      .catch(() => undefined)
+      .then(async () => {
+        this.assertGeneration(generation);
+        const latest = JSON.parse(
+          await this.cli.run(['get', 'item', id], { session: this.session }),
+        ) as Cipher;
+        this.assertGeneration(generation);
+        const credential = latest.login?.fido2Credentials?.find(
+          (entry) => entry.credentialId === credentialId,
+        );
+        if (!credential)
+          throw new UserError('This passkey is no longer in your vault. Sync Bitlatch.');
+        const saved = Math.max(counter, (Number(credential.counter) || 0) + 1);
+        credential.counter = String(saved);
+        const payload = Buffer.from(JSON.stringify(latest)).toString('base64');
+        const stored = JSON.parse(
+          await this.cli.run(['edit', 'item', id], { session: this.session, input: payload }),
+        ) as Cipher;
+        this.assertGeneration(generation);
+        this.ciphers.set(stored.id, cacheFields(stored));
+        this.publish();
+        return saved;
+      });
+    this.counterWrites = write;
+    return write;
   }
 
   /** Creates a passkey for a relying party as a new login item, as Bitwarden's clients do. */
