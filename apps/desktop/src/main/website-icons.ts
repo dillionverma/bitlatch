@@ -1,4 +1,4 @@
-import { nativeImage } from 'electron';
+import { nativeImage, net } from 'electron';
 import { readFile, writeFile } from 'node:fs/promises';
 import { parse } from 'tldts';
 import { webUrl } from './matching';
@@ -118,8 +118,10 @@ export class WebsiteIcons {
     this.controllers.add(controller);
     const timeout = setTimeout(() => controller.abort(), 5_000);
     try {
-      // Node fetch has no browser cookies or referrer. Redirects cannot escape this origin.
-      const response = await fetch(iconUrl(this.server(), host), {
+      // Chromium's network stack trusts the same certificates as the system, which
+      // a self-hosted server with a private CA needs. No cookies are sent, and
+      // redirects cannot escape this origin.
+      const response = await net.fetch(iconUrl(this.server(), host), {
         signal: controller.signal,
         redirect: 'error',
         credentials: 'omit',
