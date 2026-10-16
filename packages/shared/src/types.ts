@@ -181,13 +181,10 @@ export interface CustomField {
   kind: 'text' | 'hidden' | 'boolean' | 'linked';
 }
 
-/**
- * A copy target beyond the fixed fields: an identity row, or a custom field by
- * position in the item revision the caller showed.
- */
-export type CopyTarget =
-  | { identity: IdentityRowKey }
-  | { custom: number; revisionDate: string | null };
+/** A custom field by position in the item revision the caller showed. */
+export type CustomFieldCopy = { custom: number; revisionDate: string | null };
+/** A copy target beyond the fixed fields. */
+export type CopyTarget = { identity: IdentityRowKey } | CustomFieldCopy;
 
 export interface ItemDetail extends ItemSummary {
   password: string;
