@@ -182,9 +182,26 @@ function sectionOf(field: Field) {
   return /(?:^|\s)(section-\S+)/.exec(field.autocomplete.toLowerCase())?.[1] ?? '';
 }
 
-/** What keeps one form apart from another: its autocomplete section, then its form element. */
-function groupOf(field: Field): string | Element | null {
-  return sectionOf(field) || field.form || null;
+const formIds = new WeakMap<HTMLFormElement, number>();
+let nextFormId = 1;
+/** What keeps one form apart from another: its form element and its autocomplete section. */
+function groupOf(field: Field): string | null {
+  const form = field.form;
+  if (form && !formIds.has(form)) formIds.set(form, nextFormId++);
+  const section = sectionOf(field);
+  return form || section ? `${form ? formIds.get(form) : 0}|${section}` : null;
+}
+
+/** Whether `node` is inside `container`, also across open shadow roots. */
+function within(container: Element, node: Element) {
+  for (let current: Element | null = node; current; current = parentOf(current))
+    if (current === container) return true;
+  return false;
+}
+
+const HEADINGS = 'h1, h2, h3, h4, h5, h6, legend, [role="heading"]';
+function headings(element: Element) {
+  return Array.from(element.querySelectorAll(HEADINGS));
 }
 
 /**
@@ -203,12 +220,18 @@ function scopeOf(entries: { field: Field; slot: Slot }[], kind: FormKind) {
   for (const anchor of anchors) {
     let scope: Element = anchor.field;
     for (let parent = parentOf(scope); parent; parent = parentOf(parent)) {
-      const inside = entries.filter(({ field }) => parent!.contains(field));
+      const inside = entries.filter(({ field }) => within(parent!, field));
       if (new Set(inside.map((entry) => entry.slot)).size < inside.length) break;
+      // Once the scope is a real block, a new heading marks another section.
+      const current = new Set(
+        entries.filter(({ field }) => within(scope, field)).map((entry) => entry.slot),
+      );
+      const known = new Set(headings(scope));
+      if (current.size >= 2 && headings(parent).some((heading) => !known.has(heading))) break;
       scope = parent;
     }
     const distinct = new Set(
-      entries.filter(({ field }) => scope.contains(field)).map((entry) => entry.slot),
+      entries.filter(({ field }) => within(scope, field)).map((entry) => entry.slot),
     ).size;
     if (!best || distinct > best.distinct) best = { scope, distinct };
   }
@@ -239,19 +262,19 @@ function fields(kind: FormKind) {
       (entry): entry is { field: Field; slot: Slot } =>
         !!entry.slot && cardSlots.has(entry.slot) === (kind === 'card'),
     );
-  const groups = new Map<string | Element | null, typeof matched>();
+  const groups = new Map<string | null, typeof matched>();
   for (const entry of matched) {
     const group = groupOf(entry.field);
     groups.set(group, [...(groups.get(group) ?? []), entry]);
   }
   // Count distinct slots, so repeated fields cannot make an unrelated form win.
   const distinct = (entries: typeof matched) => new Set(entries.map(({ slot }) => slot)).size;
-  const [group, best = []] =
+  const [group = null, best = []] =
     [...groups.entries()].sort(([, a], [, b]) => distinct(b) - distinct(a))[0] ?? [];
   if (group !== null) return best.map((entry) => ({ ...entry, group, scope: null }));
   const scope = scopeOf(best, kind);
   return best
-    .filter(({ field }) => scope?.contains(field))
+    .filter(({ field }) => scope && within(scope, field))
     .map((entry) => ({ ...entry, group, scope }));
 }
 
@@ -325,7 +348,7 @@ export function fillForm(kind: FormKind, values: FormValues) {
       !fillable(field) ||
       classify(field) !== slot ||
       groupOf(field) !== group ||
-      (scope && !scope.contains(field))
+      (scope && !within(scope, field))
     )
       continue;
     if (field instanceof HTMLSelectElement) {
