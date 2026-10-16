@@ -10,6 +10,7 @@ import {
   type DesktopRequest,
 } from '@latch/shared/protocol';
 import { LocalTransport } from './local-transport';
+import { launcherRows } from './launcher-rows';
 import type { VerifiedPeer } from './local-transport';
 import { ExternalAccess } from './external-access';
 import { installBrowser } from './browser-registration';
@@ -202,10 +203,18 @@ export async function startBridges({
           vault.requireLauncherItem(request.id);
         if (request.type === 'detail') {
           const item = vault.detail(request.id);
-          if (item.type !== 1 && item.type !== 2)
-            throw new UserError('This item type is not supported yet.');
-          const { id, name, username, website, type, notes } = item;
-          return { id, name, username, website, type, notes, hasPassword: Boolean(item.password) };
+          const { id, name, username, website, subtitle, type, notes } = item;
+          return {
+            id,
+            name,
+            username,
+            website,
+            subtitle,
+            type,
+            notes,
+            hasPassword: Boolean(item.password),
+            rows: launcherRows(item),
+          };
         }
         if (request.type !== 'search') return handleRequest(request);
         const { status, email, biometrics, biometricsOn } = vault.snapshot();
@@ -214,21 +223,24 @@ export async function startBridges({
         const terms = request.query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
         const items = vault
           .items()
-          .filter((item) => (item.type === 1 || item.type === 2) && !item.restricted)
+          .filter((item) => !item.restricted)
           .filter((item) =>
             terms.every((term) =>
-              `${item.name} ${item.username} ${item.website}`.toLocaleLowerCase().includes(term),
+              `${item.name} ${item.username} ${item.website} ${item.subtitle}`
+                .toLocaleLowerCase()
+                .includes(term),
             ),
           )
           .sort((a, b) => Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name))
           .slice(0, 80)
-          .map(({ id, name, username, website, type }) => {
+          .map(({ id, name, username, website, subtitle, type }) => {
             const host = websiteIcons.enabled ? iconHostname(website) : null;
             return {
               id,
               name,
               username,
               website,
+              subtitle,
               type,
               ...(host ? { iconUrl: iconUrl(vault.snapshot().server, host) } : {}),
             };

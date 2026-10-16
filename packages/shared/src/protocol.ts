@@ -332,7 +332,10 @@ export const launcherRequestSchema = z.discriminatedUnion('type', [
     .object({
       type: z.literal('copy'),
       id,
-      field: z.enum(['username', 'password', 'notes', 'website']),
+      field: z.union([
+        z.enum(['username', 'password', 'notes', 'website', 'cardNumber', 'cardCode']),
+        copyTarget,
+      ]),
     })
     .strict(),
   z.object({ type: z.literal('lock') }).strict(),
