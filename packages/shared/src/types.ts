@@ -123,6 +123,9 @@ export interface ItemSummary {
   /** A short description such as a card's brand and last four or an identity's name. Empty for logins, notes, and restricted items. */
   subtitle: string;
   folderId: string | null;
+  /** Null for the personal vault. */
+  organizationId: string | null;
+  collectionIds: string[];
   type: number;
   favorite: boolean;
   hasPasskey: boolean;
@@ -162,6 +165,15 @@ export interface Folder {
   id: string;
   name: string;
 }
+export interface Organization {
+  id: string;
+  name: string;
+}
+export interface Collection {
+  id: string;
+  organizationId: string;
+  name: string;
+}
 
 export interface PasskeySummary {
   rpId: string;
@@ -171,6 +183,8 @@ export interface PasskeySummary {
 
 export interface ItemDetail extends ItemSummary {
   password: string;
+  /** The organization hides this item's password, history, and hidden fields from this account. */
+  passwordsHidden: boolean;
   card: CardFields | null;
   /** Fields of identities, SSH keys, bank accounts, driver's licenses, and passports. */
   details: Record<string, string> | null;
@@ -325,6 +339,7 @@ export interface LatchApi {
   items(): Promise<Result<ItemSummary[]>>;
   trash(): Promise<Result<ItemSummary[]>>;
   folders(): Promise<Result<Folder[]>>;
+  sharing(): Promise<Result<{ organizations: Organization[]; collections: Collection[] }>>;
   /** Creates a folder when `id` is null, otherwise renames it. */
   saveFolder(id: string | null, name: string): Promise<Result<Folder>>;
   deleteFolder(id: string): Promise<Result<void>>;

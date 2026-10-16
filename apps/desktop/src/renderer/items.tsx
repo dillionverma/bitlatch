@@ -92,8 +92,8 @@ export { typeName } from '@latch/shared/item-fields';
 
 /** The secret-free summary fields of an item, without its detail. */
 export function summaryOf(item: ItemSummary): ItemSummary {
-  const { id, name, username, website, subtitle, folderId, type } = item;
-  const { favorite, hasPasskey, restricted, reprompt } = item;
+  const { id, name, username, website, subtitle, folderId, organizationId, type } = item;
+  const { collectionIds, favorite, hasPasskey, restricted, reprompt } = item;
   // An item opened with the master password keeps its details out of the list.
   return {
     id,
@@ -102,6 +102,8 @@ export function summaryOf(item: ItemSummary): ItemSummary {
     website,
     subtitle: restricted ? '' : subtitle,
     folderId,
+    organizationId,
+    collectionIds,
     type,
     favorite,
     hasPasskey,

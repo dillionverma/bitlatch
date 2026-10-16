@@ -30,14 +30,21 @@ const fieldCopy = (field: CopyField): Copyable => ({
   target: field,
 });
 
+const HIDDEN = 'Hidden by your organization';
+
 export function Detail({
   item,
+  vault = 'Personal vault',
+  collections = [],
   folder,
   onEdit,
   onGone,
   notify,
 }: {
   item: ItemDetail;
+  /** The organization's name for a shared item. */
+  vault?: string;
+  collections?: string[];
   folder?: string;
   onEdit: () => void;
   onGone: () => void;
@@ -202,7 +209,7 @@ export function Detail({
     <article className="task-detail bg-background text-foreground">
       <div className="task-detail-toolbar scroll-header">
         <span className="task-location">
-          <span className="text-muted-foreground">Personal vault</span>
+          <span className="text-muted-foreground">{vault}</span>
           <span aria-hidden="true">/</span>
           {typeName(item.type)}
         </span>
@@ -290,16 +297,24 @@ export function Detail({
                       Password
                     </p>
                     <span
-                      className="field-value text-sm font-mono"
+                      className={`field-value text-sm ${item.passwordsHidden ? '' : 'font-mono'}`}
                       aria-labelledby="detail-password-label"
                     >
-                      {item.password ? (revealed.password ? item.password : '••••••••••••••') : '—'}
+                      {item.passwordsHidden
+                        ? HIDDEN
+                        : item.password
+                          ? revealed.password
+                            ? item.password
+                            : '••••••••••••••'
+                          : '—'}
                     </span>
                   </div>
-                  <div className="task-actions">
-                    {revealButton(fieldCopy('password'), item.password)}
-                    {copyButton(fieldCopy('password'), item.password)}
-                  </div>
+                  {!item.passwordsHidden && (
+                    <div className="task-actions">
+                      {revealButton(fieldCopy('password'), item.password)}
+                      {copyButton(fieldCopy('password'), item.password)}
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -363,8 +378,14 @@ export function Detail({
           <dl>
             <div>
               <dt>Vault</dt>
-              <dd>Personal vault</dd>
+              <dd>{vault}</dd>
             </div>
+            {collections.length > 0 && (
+              <div>
+                <dt>{collections.length > 1 ? 'Collections' : 'Collection'}</dt>
+                <dd>{collections.join(', ')}</dd>
+              </div>
+            )}
             {folder && (
               <div>
                 <dt>Folder</dt>
@@ -454,7 +475,7 @@ function passwordHistoryRows({ passwordHistory, revisionDate }: ItemDetail): Det
   });
 }
 
-function customFieldRows({ fields, revisionDate }: ItemDetail): DetailRow[] {
+function customFieldRows({ fields, revisionDate, passwordsHidden }: ItemDetail): DetailRow[] {
   return fields.map((field, index): DetailRow => {
     const name = `custom-${index}`;
     const label = field.name || 'Custom field';
@@ -463,6 +484,8 @@ function customFieldRows({ fields, revisionDate }: ItemDetail): DetailRow[] {
       return { name, label, value: field.value === 'true' ? 'Yes' : 'No' };
     if (field.kind === 'linked')
       return { name, label, value: field.value ? `Linked to ${field.value}` : 'Linked field' };
+    if ((field.kind === 'hidden' || field.kind === 'unknown') && passwordsHidden && !field.value)
+      return { name, label, value: HIDDEN };
     if (field.kind === 'hidden' || field.kind === 'unknown')
       return { name, label, value: field.value, masked: '••••••••', copy };
     return { name, label, value: field.value, copy };

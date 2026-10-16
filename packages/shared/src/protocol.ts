@@ -187,6 +187,7 @@ export const desktopRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('items') }).strict(),
   z.object({ type: z.literal('trash') }).strict(),
   z.object({ type: z.literal('folders') }).strict(),
+  z.object({ type: z.literal('sharing') }).strict(),
   z
     .object({
       type: z.literal('saveFolder'),

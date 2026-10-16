@@ -510,6 +510,10 @@ export function routeFor(args: string[], options: RunOptions = {}): Route | unde
   if (args.length === 1 && command === 'sync') return { ...SYNC };
   if (args.length === 2 && command === 'list' && object === 'items') return { ...ITEMS };
   if (args.length === 2 && command === 'list' && object === 'folders') return { ...FOLDERS };
+  if (args.length === 2 && command === 'list' && object === 'organizations')
+    return { method: 'GET', path: '/list/object/organizations', pick: listed };
+  if (args.length === 2 && command === 'list' && object === 'collections')
+    return { method: 'GET', path: '/list/object/collections', pick: listed };
   if (args.length === 3 && command === 'list' && object === 'items' && args[2] === '--trash')
     return { ...TRASH };
   if (args.length === 3 && command === 'get' && object === 'item' && id)

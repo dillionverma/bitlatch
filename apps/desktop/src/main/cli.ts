@@ -62,6 +62,38 @@ export function spawnCli(
 }
 
 /** Whether this CLI runs the bootstrap; a standalone binary may ignore NODE_OPTIONS. */
+/** The CLI's version, such as "2026.9.1", or an empty string. */
+export function cliVersion(options: CliOptions) {
+  return new Promise<string>((settle) => {
+    const child = spawnCli(options, ['--version'], cliEnvironment(options.dataDir), {}, [
+      'ignore',
+      'pipe',
+      'ignore',
+    ]);
+    let output = '';
+    const timer = setTimeout(() => child.kill('SIGKILL'), 10_000);
+    child.stdout!.setEncoding('utf8');
+    child.stdout!.on('data', (chunk: string) => (output = (output + chunk).slice(0, 64)));
+    child.on('error', () => settle(''));
+    // Only a clean run that prints a released version counts; prereleases do not.
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      const version = output.trim();
+      settle(code === 0 && /^\d+\.\d+\.\d+$/.test(version) ? version : '');
+    });
+  });
+}
+
+/** Whether `version` is at least `minimum`, comparing dotted numbers. */
+export function versionAtLeast(version: string, minimum: string) {
+  const a = version.split('.').map(Number);
+  const b = minimum.split('.').map(Number);
+  for (let i = 0; i < b.length; i++) {
+    if ((a[i] ?? 0) !== b[i]) return (a[i] ?? 0) > b[i]!;
+  }
+  return true;
+}
+
 export function bootstrapRuns(options: CliOptions) {
   return new Promise<boolean>((settle) => {
     const child = spawnCli(
@@ -418,6 +450,8 @@ export function cliError(rawOutput: string, overflow: boolean) {
   if (/invalid master password|invalid password|username or password is incorrect/i.test(output)) {
     return new UserError('That password did not unlock the vault. Please try again.');
   }
+  if (/you do not have permission to (edit|delete|restore|update|modify)/i.test(output))
+    return new UserError('Your organization does not let you change this item.');
   // Bitwarden refuses a write whose revision is older than the stored item.
   if (/last known revision|revision date|has been modified|out of date|conflict/i.test(output))
     return new UserError('This item changed elsewhere. Sync, reopen it, and try again.');

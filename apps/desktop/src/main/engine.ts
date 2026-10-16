@@ -5,6 +5,8 @@ import { delimiter, dirname, extname, join, isAbsolute, resolve, sep } from 'nod
 import {
   BitwardenCli,
   bootstrapRuns,
+  cliVersion,
+  versionAtLeast,
   removeVerifyCopies,
   type CliOptions,
   type CliPort,
@@ -39,7 +41,7 @@ function engineCli(options: CliOptions): CliPort {
 export async function localEngine(options: {
   dataDir: string;
   bootstrap: string;
-}): Promise<{ cli: CliPort; setupError?: string }> {
+}): Promise<{ cli: CliPort; setupError?: string; sharedItems?: boolean }> {
   const windows = process.platform === 'win32';
   const names = windows ? ['bw.exe', 'bw.cmd'] : ['bw'];
   const directories = windows
@@ -88,11 +90,15 @@ export async function localEngine(options: {
         if (!(await stat(script)).isFile()) continue;
         cliOptions = { ...options, executable: process.execPath, script };
       } else if (windows && extname(executable).toLowerCase() !== '.exe') continue;
-      if (!(await bootstrapRuns(cliOptions))) {
+      const [runs, version] = await Promise.all([
+        bootstrapRuns(cliOptions),
+        cliVersion(cliOptions),
+      ]);
+      if (!runs) {
         privateChannelMissing = true;
         continue;
       }
-      return { cli: engineCli(cliOptions) };
+      return { cli: engineCli(cliOptions), sharedItems: versionAtLeast(version, '2026.8.0') };
     } catch {
       /* Try the next standard installation path. */
     }

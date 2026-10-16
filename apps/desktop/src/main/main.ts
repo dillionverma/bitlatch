@@ -101,7 +101,7 @@ lifecycle.startup = app
     const sessions = touchIdSessionStore(app.getPath('userData'));
     const hints = new AccountHints(join(app.getPath('userData'), 'account-hint.json'));
     const [, hint] = await Promise.all([sessions.load(), hints.read()]);
-    vault = new Vault(engine.cli, sessions);
+    vault = new Vault(engine.cli, sessions, engine.sharedItems);
     lifecycle.attachVault(vault, () => {
       websiteIcons.clear();
       nativeInteractions?.cancelConfirmation();
@@ -306,6 +306,8 @@ async function handleRequest(request: DesktopRequest): Promise<unknown> {
       return vault.trash();
     case 'folders':
       return vault.folders();
+    case 'sharing':
+      return vault.sharing();
     case 'saveFolder':
       return vault.saveFolder(request.id, request.name);
     case 'deleteFolder':

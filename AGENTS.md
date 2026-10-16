@@ -7,5 +7,5 @@
 - Never log passwords, vault contents, session keys, API keys, native pairing tokens, or raw CLI output. Test fixtures must remain synthetic and isolated.
 - A locked vault must reject reads and fills immediately, including pending operations. Preserve this behavior during UI and lifecycle changes.
 - Derive browser origins from Chrome's trusted sender metadata. Re-check matching when releasing the selected credential.
-- Keep unknown item fields intact. Restrict edits and autofill to the supported personal-vault subset.
+- Keep unknown item fields intact. Restrict edits and autofill to supported item types. Organization permissions are enforced by the Bitwarden server; never write back an item whose passwords the organization hides, because the CLI omits them.
 - Agents may manage Bitlatch changes end to end without asking: push branches, open and update pull requests, resolve review feedback, and squash-merge once `pnpm run check`, `pnpm run build`, and CI pass. Ask before cutting a release.
