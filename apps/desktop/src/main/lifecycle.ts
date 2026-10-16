@@ -1,7 +1,7 @@
 import { app, clipboard, globalShortcut, powerMonitor } from 'electron';
 import { readFile, writeFile } from 'node:fs/promises';
 import { UserError, lockTimeoutSchema, type DesktopRequest } from '@latch/shared/protocol';
-import { identityRowValue } from '@latch/shared/item-fields';
+import { detailRowValue } from '@latch/shared/item-fields';
 import type { ItemDetail, LockTimeoutMinutes } from '@latch/shared/types';
 import type { Vault } from './vault';
 import type { CliPort } from './cli';
@@ -18,11 +18,12 @@ const copyValues: Record<Extract<CopyField, string>, (item: ItemDetail) => strin
 };
 function copyValue(item: ItemDetail, field: CopyField) {
   if (typeof field === 'string') return copyValues[field](item);
-  if ('identity' in field)
-    return item.identity ? identityRowValue(item.identity, field.identity) : '';
-  // Positions shift when fields are reordered elsewhere, so a stale view must not pick one.
+  if ('detail' in field)
+    return item.details ? detailRowValue(item.type, item.details, field.detail) : '';
+  // Positions shift when the item changes elsewhere, so a stale view must not pick one.
   if (field.revisionDate !== item.revisionDate)
     throw new UserError('This item changed. Reopen it and try again.');
+  if ('history' in field) return item.passwordHistory[field.history]?.password ?? '';
   const custom = item.fields[field.custom];
   return custom?.kind === 'text' || custom?.kind === 'hidden' ? custom.value : '';
 }
@@ -148,7 +149,9 @@ export class DesktopLifecycle {
         this.assertRunning();
         if (!this.vault || epoch !== this.epoch)
           throw new UserError('Vault locked. Try again after unlocking.');
-        this.copiedValue = copyValue(this.vault.detail(id), field);
+        const value = copyValue(this.vault.detail(id), field);
+        if (!value) throw new UserError('There is nothing to copy.');
+        this.copiedValue = value;
         await clipboard.writeText(this.copiedValue);
         if (this.clipboardTimer) clearTimeout(this.clipboardTimer);
         this.clipboardTimer = setTimeout(
