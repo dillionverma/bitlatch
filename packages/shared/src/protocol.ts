@@ -127,7 +127,21 @@ export const itemDraftSchema = z.discriminatedUnion('type', [
       identity: z.object(identityShape).strict(),
     })
     .strict(),
-  z.object({ ...draftBase, ...desktopDraftFields, type: z.literal(5) }).strict(),
+  z
+    .object({
+      ...draftBase,
+      ...desktopDraftFields,
+      type: z.literal(5),
+      sshKey: z
+        .object({
+          privateKey: z.string().min(1).max(32_768),
+          publicKey: z.string().max(16_384),
+          keyFingerprint: z.string().max(256),
+        })
+        .strict()
+        .optional(),
+    })
+    .strict(),
 ]);
 // Cards stay desktop-only, so the extension cannot send one.
 const browserDraftSchema = z.discriminatedUnion('type', [
@@ -188,6 +202,8 @@ export const desktopRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('trash') }).strict(),
   z.object({ type: z.literal('folders') }).strict(),
   z.object({ type: z.literal('sharing') }).strict(),
+  z.object({ type: z.literal('generateSshKey') }).strict(),
+  z.object({ type: z.literal('importSshKey'), privateKey: z.string().min(1).max(32_768) }).strict(),
   z
     .object({
       type: z.literal('saveFolder'),

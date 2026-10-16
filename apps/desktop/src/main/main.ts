@@ -18,6 +18,7 @@ import { installNativeInteractions } from './native-interactions';
 import { WebsiteIcons } from './website-icons';
 import type { WindowCommand } from '@latch/shared/types';
 import { localEngine } from './engine';
+import { generateSshKey, importSshKey } from './ssh-keys';
 import { Vault, generatePassword } from './vault';
 import { touchIdSessionStore } from './biometrics';
 import { AccountHints } from './account-hint';
@@ -308,6 +309,14 @@ async function handleRequest(request: DesktopRequest): Promise<unknown> {
       return vault.folders();
     case 'sharing':
       return vault.sharing();
+    case 'generateSshKey':
+      if (vault.snapshot().status !== 'unlocked')
+        throw new UserError('Unlock Bitlatch to continue.');
+      return generateSshKey(app.getPath('userData'));
+    case 'importSshKey':
+      if (vault.snapshot().status !== 'unlocked')
+        throw new UserError('Unlock Bitlatch to continue.');
+      return importSshKey(app.getPath('userData'), request.privateKey);
     case 'saveFolder':
       return vault.saveFolder(request.id, request.name);
     case 'deleteFolder':
@@ -379,8 +388,13 @@ async function mutateVault(
         return await vault.sync();
       case 'commitCapture':
         return await vault.commitCapture(request.url);
-      case 'save':
-        return await vault.save(request.draft);
+      case 'save': {
+        const { draft } = request;
+        // A new SSH key's public key and fingerprint always come from its private key.
+        if (draft.type === 5 && !draft.id && draft.sshKey)
+          draft.sshKey = await importSshKey(app.getPath('userData'), draft.sshKey.privateKey);
+        return await vault.save(draft);
+      }
       case 'setFavorite':
         return await vault.setFavorite(request.id, request.favorite);
       case 'delete':

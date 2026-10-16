@@ -6,6 +6,7 @@ import type {
   Folder,
   IdentityFields,
   ItemDetail,
+  SshKeyFields as SshKey,
   ItemDraft,
   UriDraft,
 } from '@latch/shared/types';
@@ -66,13 +67,8 @@ const draftTypes: Record<
     save: 'Save identity',
     empty: (base) => ({ ...base, type: 4, identity: emptyIdentity }),
   },
-  // SSH keys come from Bitwarden with their key pair; here only their shared fields change.
-  5: {
-    label: 'SSH key',
-    save: 'Save SSH key',
-    empty: (base) => ({ ...base, type: 5 }),
-    creatable: false,
-  },
+  // A new SSH key needs a generated or imported key pair; an edit keeps the stored one.
+  5: { label: 'SSH key', save: 'Save SSH key', empty: (base) => ({ ...base, type: 5 }) },
 };
 const identityLabels: Record<keyof IdentityFields, string> = {
   title: 'Title',
@@ -386,6 +382,16 @@ export function Editor({
                   ))}
                 </select>
               </Field>
+              {draft.type === 5 && (
+                <SshKeyFields
+                  sshKey={item ? (item.details as SshKey | null) : (draft.sshKey ?? null)}
+                  editable={!item}
+                  disabled={busy}
+                  onKey={(sshKey) =>
+                    setDraft((current) => (current.type === 5 ? { ...current, sshKey } : current))
+                  }
+                />
+              )}
               {draft.type === 4 &&
                 (Object.keys(identityLabels) as (keyof IdentityFields)[]).map((key) => (
                   <Field key={key}>
@@ -746,7 +752,11 @@ export function Editor({
             <Button type="button" variant="outline" onClick={close} disabled={busy}>
               Cancel
             </Button>
-            <Button type="submit" disabled={busy} aria-busy={busy}>
+            <Button
+              type="submit"
+              disabled={busy || (draft.type === 5 && !item && !draft.sshKey)}
+              aria-busy={busy}
+            >
               {busy ? <Spinner /> : <Check data-icon="inline-start" />}
               {busy ? 'Saving…' : draftTypes[draft.type].save}
             </Button>
@@ -769,4 +779,89 @@ function choices(options: { value: string; label: string }[], current: string) {
       {option.label}
     </option>
   ));
+}
+
+/** A new key is generated or imported here; a saved key pair is only shown. */
+function SshKeyFields({
+  sshKey,
+  editable,
+  disabled,
+  onKey,
+}: {
+  sshKey: SshKey | null;
+  editable: boolean;
+  disabled: boolean;
+  onKey: (sshKey: SshKey) => void;
+}) {
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState('');
+  const [pasted, setPasted] = useState('');
+  async function use(
+    request: () => Promise<{ ok: true; value: SshKey } | { ok: false; error: string }>,
+  ) {
+    setWorking(true);
+    setError('');
+    try {
+      const result = await request();
+      if (result.ok) {
+        onKey(result.value);
+        setPasted('');
+      } else setError(result.error);
+    } catch {
+      setError('Could not create the key. Try again.');
+    }
+    setWorking(false);
+  }
+  return (
+    <Field data-invalid={!!error}>
+      <FieldLabel>Key pair</FieldLabel>
+      {sshKey ? (
+        <div className="task-ssh-key">
+          <p className="text-xs text-muted-foreground">Public key</p>
+          <p className="field-value text-sm">{sshKey.publicKey}</p>
+          <p className="text-xs text-muted-foreground">Fingerprint</p>
+          <p className="field-value text-sm">{sshKey.keyFingerprint}</p>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Generate a new key, or import a private key you have.
+        </p>
+      )}
+      {editable ? (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={disabled || working}
+            aria-busy={working}
+            onClick={() => void use(() => window.latch.generateSshKey())}
+          >
+            {working && <Spinner />}
+            {sshKey ? 'Generate a different key' : 'Generate key'}
+          </Button>
+          <Textarea
+            aria-label="Private key to import"
+            placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+            className="font-mono text-xs"
+            rows={3}
+            spellCheck={false}
+            value={pasted}
+            disabled={disabled || working}
+            onChange={(event) => setPasted(event.target.value)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            disabled={disabled || working || !pasted.trim()}
+            onClick={() => void use(() => window.latch.importSshKey(pasted))}
+          >
+            Import private key
+          </Button>
+        </>
+      ) : (
+        <p className="text-xs text-muted-foreground">The key pair stays as it is.</p>
+      )}
+      {error && <FieldError>{error}</FieldError>}
+    </Field>
+  );
 }
