@@ -8,5 +8,4 @@
 - A locked vault must reject reads and fills immediately, including pending operations. Preserve this behavior during UI and lifecycle changes.
 - Derive browser origins from Chrome's trusted sender metadata. Re-check matching when releasing the selected credential.
 - Keep unknown item fields intact. Restrict edits and autofill to the supported personal-vault subset.
-- Keep the repository private until the owner asks to publish it.
 - Agents may manage Bitlatch changes end to end without asking: push branches, open and update pull requests, resolve review feedback, and squash-merge once `pnpm run check`, `pnpm run build`, and CI pass. Ask before cutting a release.
