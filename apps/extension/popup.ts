@@ -3,7 +3,7 @@ import '@latch/shared/theme.css';
 import './popup.css';
 import { element, mark } from './content/render';
 import { itemDraft, uriMatchOptions } from '@latch/shared/item-drafts';
-import { detailRows, typeName } from '@latch/shared/item-fields';
+import { detailRows, inSentence, typeName } from '@latch/shared/item-fields';
 import { browserVaultQuerySchema, uriMatchSchema } from '@latch/shared/protocol';
 import { defaultPasswordOptions } from '@latch/shared/types';
 import type { BrowserVaultQuery } from '@latch/shared/protocol';
@@ -521,7 +521,7 @@ function addSecretField(item: ItemSummary, label: string, secret: string, field:
     value.textContent = revealed ? secret : '••••••••••••';
     reveal.textContent = revealed ? 'Hide' : 'Reveal';
   });
-  reveal.setAttribute('aria-label', `Reveal ${label.toLowerCase()}`);
+  reveal.setAttribute('aria-label', `Reveal ${inSentence(label)}`);
   row.append(reveal);
 }
 function addField(item: ItemSummary, label: string, value: string, field?: CopyField) {
@@ -537,7 +537,7 @@ function addField(item: ItemSummary, label: string, value: string, field?: CopyF
         'Copying…',
       );
     });
-    copy.setAttribute('aria-label', `Copy ${label.toLowerCase()}`);
+    copy.setAttribute('aria-label', `Copy ${inSentence(label)}`);
     row.append(copy);
   }
   detail.append(row);

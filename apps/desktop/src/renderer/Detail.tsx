@@ -11,7 +11,7 @@ import {
   WarningCircle as CircleAlert,
 } from '@phosphor-icons/react';
 import { uriMatchOptions } from '@latch/shared/item-drafts';
-import { detailRows } from '@latch/shared/item-fields';
+import { detailRows, inSentence } from '@latch/shared/item-fields';
 import type { CardFields, CopyTarget, ItemDetail } from '@latch/shared/types';
 import { ItemIcon, displayWebsite, fieldLabels, typeName, type CopyField } from './items';
 import type { Notifier } from './Toasts';
@@ -138,7 +138,7 @@ export function Detail({
       type="button"
       variant="ghost"
       size="icon-sm"
-      aria-label={`${revealed[key] ? 'Hide' : 'Reveal'} ${label.toLowerCase()}`}
+      aria-label={`${revealed[key] ? 'Hide' : 'Reveal'} ${inSentence(label)}`}
       aria-pressed={!!revealed[key]}
       disabled={!value || deleting}
       onClick={() => setRevealed((current) => ({ ...current, [key]: !current[key] }))}
@@ -151,7 +151,7 @@ export function Detail({
       type="button"
       variant="ghost"
       size="icon-sm"
-      aria-label={`Copy ${copyable.label.toLowerCase()}`}
+      aria-label={`Copy ${inSentence(copyable.label)}`}
       disabled={!!copying || deleting || !value}
       aria-busy={copying === copyable.key}
       onClick={() => void copy(copyable)}
@@ -434,15 +434,14 @@ function passkeyRows({ passkeys }: ItemDetail): DetailRow[] {
 function passwordHistoryRows({ passwordHistory, revisionDate }: ItemDetail): DetailRow[] {
   return passwordHistory.map((entry, index) => {
     const name = `history-${index}`;
-    const label = entry.lastUsedDate
-      ? `Previous password · last used ${stamp(entry.lastUsedDate)}`
-      : 'Previous password';
+    const used = entry.lastUsedDate ? `last used ${stamp(entry.lastUsedDate)}` : `${index + 1}`;
+    const label = `Previous password · ${used}`;
     return {
       name,
       label,
       value: entry.password,
       masked: '••••••••',
-      copy: { key: name, label: 'Previous password', target: { history: index, revisionDate } },
+      copy: { key: name, label, target: { history: index, revisionDate } },
     };
   });
 }

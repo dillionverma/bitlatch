@@ -197,6 +197,12 @@ export function detailRows(type: number, fields: DetailFields) {
     .filter((row) => row.value);
 }
 
+/** A field label inside a sentence such as "Copy …": "Previous password · Sep 1" → "previous password · Sep 1", "PIN" stays. */
+export function inSentence(label: string) {
+  const [first = '', ...rest] = label.split(' ');
+  return [first === first.toUpperCase() ? first : first.toLowerCase(), ...rest].join(' ');
+}
+
 export function typeName(type: number) {
   return (
     (
