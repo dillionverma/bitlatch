@@ -10,6 +10,7 @@ import {
   Plus,
   ArrowsClockwise as RefreshCw,
   CreditCard,
+  User as UserRound,
   MagnifyingGlass as Search,
   SlidersHorizontal as Settings2,
   Star,
@@ -68,7 +69,15 @@ const initialState: VaultState = {
   biometrics: 'unsupported',
   biometricsOn: false,
 };
-type Filter = 'all' | 'favorites' | 'logins' | 'notes' | 'cards' | 'passkeys' | 'trash';
+type Filter =
+  | 'all'
+  | 'favorites'
+  | 'logins'
+  | 'notes'
+  | 'cards'
+  | 'identities'
+  | 'passkeys'
+  | 'trash';
 type Selection =
   | { status: 'unselected' }
   | { status: 'loading' | 'restricted' | 'error'; id: string }
@@ -105,6 +114,13 @@ const filters = [
     description: 'Use New item to add one.',
   },
   {
+    id: 'identities',
+    label: 'Identities',
+    icon: UserRound,
+    empty: 'No identities',
+    description: 'Identities from Bitwarden appear here.',
+  },
+  {
     id: 'passkeys',
     label: 'Passkeys',
     icon: Fingerprint,
@@ -129,7 +145,7 @@ const copyFields: Record<Exclude<ItemMenuAction, 'edit' | 'trash' | 'restore'>, 
 function indexItems(items: ItemSummary[]) {
   return items.map((item) => ({
     item,
-    haystack: `${item.name} ${item.username} ${item.website} ${item.cardLabel}`.toLowerCase(),
+    haystack: `${item.name} ${item.username} ${item.website} ${item.subtitle}`.toLowerCase(),
   }));
 }
 
@@ -393,6 +409,7 @@ function VaultWorkspace({
         if (filter === 'logins' && item.type !== 1) return false;
         if (filter === 'notes' && item.type !== 2) return false;
         if (filter === 'cards' && item.type !== 3) return false;
+        if (filter === 'identities' && item.type !== 4) return false;
         if (filter === 'passkeys' && !item.hasPasskey) return false;
         return terms.every((term) => haystack.includes(term));
       })
@@ -852,7 +869,7 @@ function VaultWorkspace({
                 name,
                 username,
                 website,
-                cardLabel,
+                subtitle,
                 type,
                 favorite,
                 hasPasskey,
@@ -860,7 +877,7 @@ function VaultWorkspace({
               } = item;
               setItems((current) => [
                 ...current.filter((entry) => entry.id !== id),
-                { id, name, username, website, cardLabel, type, favorite, hasPasskey, restricted },
+                { id, name, username, website, subtitle, type, favorite, hasPasskey, restricted },
               ]);
               setQuery('');
               setFilter('all');

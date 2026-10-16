@@ -11,7 +11,8 @@ import {
   WarningCircle as CircleAlert,
 } from '@phosphor-icons/react';
 import { uriMatchOptions } from '@latch/shared/item-drafts';
-import type { CardFields, ItemDetail } from '@latch/shared/types';
+import { identityRows } from '@latch/shared/item-fields';
+import type { CardFields, CopyTarget, ItemDetail } from '@latch/shared/types';
 import { ItemIcon, displayWebsite, fieldLabels, typeName, type CopyField } from './items';
 import type { Notifier } from './Toasts';
 import { Button } from '@/components/ui/button';
@@ -21,7 +22,13 @@ import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import './tasks.css';
 
-type SecretField = Exclude<CopyField, 'username'>;
+/** A copyable value. `key` names it within this item, for the busy and copied states. */
+type Copyable = { key: string; label: string; target: CopyField | CopyTarget };
+const fieldCopy = (field: CopyField): Copyable => ({
+  key: field,
+  label: fieldLabels[field],
+  target: field,
+});
 
 export function Detail({
   item,
@@ -34,9 +41,9 @@ export function Detail({
   onGone: () => void;
   notify: Notifier;
 }) {
-  const [revealed, setRevealed] = useState<Partial<Record<SecretField, boolean>>>({});
-  const [copied, setCopied] = useState<CopyField | ''>('');
-  const [copying, setCopying] = useState<CopyField | ''>('');
+  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  const [copied, setCopied] = useState<Copyable | null>(null);
+  const [copying, setCopying] = useState('');
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [active, setActive] = useState(true);
@@ -64,7 +71,7 @@ export function Detail({
   }, [item.id]);
   useEffect(() => {
     if (!copied) return;
-    const timer = setTimeout(() => setCopied(''), 1600);
+    const timer = setTimeout(() => setCopied(null), 1600);
     return () => clearTimeout(timer);
   }, [copied]);
   async function changeTrash(restore: boolean) {
@@ -106,16 +113,16 @@ export function Detail({
       }
     }
   }
-  async function copy(field: CopyField) {
+  async function copy(copyable: Copyable) {
     if (copyWorking.current || !alive.current) return;
     copyWorking.current = true;
-    setCopying(field);
+    setCopying(copyable.key);
     setError('');
     const version = epoch.current;
     try {
-      const result = await window.latch.copy(item.id, field);
+      const result = await window.latch.copy(item.id, copyable.target);
       if (!alive.current || version !== epoch.current) return;
-      if (result.ok) setCopied(field);
+      if (result.ok) setCopied(copyable);
       else setError(result.error);
     } catch {
       if (alive.current && version === epoch.current) setError('Could not copy. Try again.');
@@ -126,32 +133,68 @@ export function Detail({
       }
     }
   }
-  const revealButton = (field: SecretField, value: string) => (
+  const revealButton = ({ key, label }: Copyable, value: string) => (
     <Button
       type="button"
       variant="ghost"
       size="icon-sm"
-      aria-label={`${revealed[field] ? 'Hide' : 'Reveal'} ${fieldLabels[field].toLowerCase()}`}
-      aria-pressed={!!revealed[field]}
+      aria-label={`${revealed[key] ? 'Hide' : 'Reveal'} ${label.toLowerCase()}`}
+      aria-pressed={!!revealed[key]}
       disabled={!value || deleting}
-      onClick={() => setRevealed((current) => ({ ...current, [field]: !current[field] }))}
+      onClick={() => setRevealed((current) => ({ ...current, [key]: !current[key] }))}
     >
-      {revealed[field] ? <EyeOff /> : <Eye />}
+      {revealed[key] ? <EyeOff /> : <Eye />}
     </Button>
   );
-  const copyButton = (field: CopyField, value: string) => (
+  const copyButton = (copyable: Copyable, value: string) => (
     <Button
       type="button"
       variant="ghost"
       size="icon-sm"
-      aria-label={`Copy ${fieldLabels[field].toLowerCase()}`}
+      aria-label={`Copy ${copyable.label.toLowerCase()}`}
       disabled={!!copying || deleting || !value}
-      aria-busy={copying === field}
-      onClick={() => void copy(field)}
+      aria-busy={copying === copyable.key}
+      onClick={() => void copy(copyable)}
     >
-      {copying === field ? <Spinner /> : copied === field ? <Check /> : <Copy />}
+      {copying === copyable.key ? <Spinner /> : copied?.key === copyable.key ? <Check /> : <Copy />}
     </Button>
   );
+  const rowsSection = (label: string, rows: DetailRow[]) =>
+    rows.length > 0 && (
+      <section
+        aria-label={label}
+        className="task-credentials rounded-lg border border-border bg-card"
+      >
+        {rows.map((row, index) => (
+          <Fragment key={row.name}>
+            {index > 0 && <Separator />}
+            <div className="task-credential" data-credential={row.name}>
+              <div>
+                <p id={`detail-${row.name}-label`} className="text-xs text-muted-foreground">
+                  {row.label}
+                </p>
+                <span
+                  className={`field-value text-sm ${row.masked !== undefined ? 'font-mono' : ''} ${row.value.includes('\n') ? 'whitespace-pre-line' : ''}`}
+                  aria-labelledby={`detail-${row.name}-label`}
+                >
+                  {!row.value
+                    ? '—'
+                    : row.masked !== undefined && !revealed[row.name]
+                      ? row.masked
+                      : row.value}
+                </span>
+              </div>
+              {row.copy && (
+                <div className="task-actions">
+                  {row.masked !== undefined && revealButton(row.copy, row.value)}
+                  {copyButton(row.copy, row.value)}
+                </div>
+              )}
+            </div>
+          </Fragment>
+        ))}
+      </section>
+    );
   if (!active) return null;
   return (
     <article className="task-detail bg-background text-foreground">
@@ -208,7 +251,7 @@ export function Detail({
           <div>
             <h2 className="font-heading text-[20px] leading-[26px] font-semibold">{item.name}</h2>
             <p className="text-xs text-muted-foreground">
-              {item.cardLabel || displayWebsite(item.website) || typeName(item.type)}
+              {item.subtitle || displayWebsite(item.website) || typeName(item.type)}
             </p>
           </div>
         </header>
@@ -236,7 +279,7 @@ export function Detail({
                       {item.username || '—'}
                     </span>
                   </div>
-                  {copyButton('username', item.username)}
+                  {copyButton(fieldCopy('username'), item.username)}
                 </div>
                 <Separator />
                 <div className="task-credential" data-credential="password">
@@ -252,8 +295,8 @@ export function Detail({
                     </span>
                   </div>
                   <div className="task-actions">
-                    {revealButton('password', item.password)}
-                    {copyButton('password', item.password)}
+                    {revealButton(fieldCopy('password'), item.password)}
+                    {copyButton(fieldCopy('password'), item.password)}
                   </div>
                 </div>
               </>
@@ -276,43 +319,11 @@ export function Detail({
             ))}
           </section>
         )}
-        {item.card && (
-          <section
-            aria-label="Card details"
-            className="task-credentials rounded-lg border border-border bg-card"
-          >
-            {cardRows(item.card).map((row, index) => (
-              <Fragment key={row.name}>
-                {index > 0 && <Separator />}
-                <div className="task-credential" data-credential={row.name}>
-                  <div>
-                    <p id={`detail-${row.name}-label`} className="text-xs text-muted-foreground">
-                      {row.label}
-                    </p>
-                    <span
-                      className={`field-value text-sm ${row.secret ? 'font-mono' : ''}`}
-                      aria-labelledby={`detail-${row.name}-label`}
-                    >
-                      {!row.value
-                        ? '—'
-                        : row.secret && !revealed[row.secret.field]
-                          ? row.secret.masked
-                          : row.value}
-                    </span>
-                  </div>
-                  {row.secret && (
-                    <div className="task-actions">
-                      {revealButton(row.secret.field, row.value)}
-                      {copyButton(row.secret.field, row.value)}
-                    </div>
-                  )}
-                </div>
-              </Fragment>
-            ))}
-          </section>
-        )}
+        {item.card && rowsSection('Card details', cardRows(item.card))}
+        {item.identity && rowsSection('Identity details', identityDetailRows(item.identity))}
+        {rowsSection('Custom fields', customFieldRows(item))}
         <span role="status" className="sr-only">
-          {copied ? `${fieldLabels[copied]} copied` : ''}
+          {copied ? `${copied.label} copied` : ''}
         </span>
         {item.hasPasskey && (
           <Alert>
@@ -330,7 +341,7 @@ export function Detail({
             <p className="text-sm text-foreground leading-relaxed">{item.notes}</p>
           </section>
         )}
-        {item.type !== 1 && item.type !== 2 && item.type !== 3 && (
+        {![1, 2, 3, 4].includes(item.type) && (
           <Alert>
             <AlertTitle>Read-only in Bitlatch</AlertTitle>
             <AlertDescription>
@@ -369,35 +380,60 @@ export function Detail({
   );
 }
 
+/** A row's `masked` text stands in for its value until it is revealed. */
+type DetailRow = { name: string; label: string; value: string; masked?: string; copy?: Copyable };
+
 /** Empty rows are hidden, except the number, which every card is expected to have. */
-function cardRows(card: CardFields) {
+function cardRows(card: CardFields): DetailRow[] {
   const expiration =
     card.expMonth || card.expYear
       ? `${card.expMonth ? card.expMonth.padStart(2, '0') : '—'} / ${card.expYear || '—'}`
       : '';
-  const rows: {
-    name: string;
-    label: string;
-    value: string;
-    secret?: { field: 'cardNumber' | 'cardCode'; masked: string };
-  }[] = [
+  const rows: DetailRow[] = [
     { name: 'cardholder', label: 'Cardholder name', value: card.cardholderName },
     { name: 'brand', label: 'Brand', value: card.brand },
     {
-      name: 'number',
+      name: 'cardNumber',
       label: 'Number',
       value: card.number,
-      secret: { field: 'cardNumber', masked: `•••• ${card.number.slice(-4)}` },
+      masked: `•••• ${card.number.slice(-4)}`,
+      copy: fieldCopy('cardNumber'),
     },
     { name: 'expiration', label: 'Expiration', value: expiration },
     {
-      name: 'code',
+      name: 'cardCode',
       label: 'Security code',
       value: card.code,
-      secret: { field: 'cardCode', masked: '•••' },
+      masked: '•••',
+      copy: fieldCopy('cardCode'),
     },
   ];
-  return rows.filter((row) => row.value || row.name === 'number');
+  return rows.filter((row) => row.value || row.name === 'cardNumber');
+}
+
+function identityDetailRows(identity: ItemDetail['identity'] & {}): DetailRow[] {
+  return identityRows(identity).map((row) => ({
+    name: `identity-${row.key}`,
+    label: row.label,
+    value: row.value,
+    masked: row.secret ? '••••••••' : undefined,
+    copy: { key: `identity-${row.key}`, label: row.label, target: { identity: row.key } },
+  }));
+}
+
+function customFieldRows({ fields, revisionDate }: ItemDetail): DetailRow[] {
+  return fields.map((field, index): DetailRow => {
+    const name = `custom-${index}`;
+    const label = field.name || 'Custom field';
+    const copy = { key: name, label, target: { custom: index, revisionDate } };
+    if (field.kind === 'boolean')
+      return { name, label, value: field.value === 'true' ? 'Yes' : 'No' };
+    if (field.kind === 'linked')
+      return { name, label, value: field.value ? `Linked to ${field.value}` : 'Linked field' };
+    if (field.kind === 'hidden')
+      return { name, label, value: field.value, masked: '••••••••', copy };
+    return { name, label, value: field.value, copy };
+  });
 }
 
 /** A date the way a person reads it, with the time only where it matters. */

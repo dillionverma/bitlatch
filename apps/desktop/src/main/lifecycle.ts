@@ -1,13 +1,14 @@
 import { app, clipboard, globalShortcut, powerMonitor } from 'electron';
 import { readFile, writeFile } from 'node:fs/promises';
 import { UserError, lockTimeoutSchema, type DesktopRequest } from '@latch/shared/protocol';
+import { identityRowValue } from '@latch/shared/item-fields';
 import type { ItemDetail, LockTimeoutMinutes } from '@latch/shared/types';
 import type { Vault } from './vault';
 import type { CliPort } from './cli';
 import type { createUpdates } from './updates';
 
 type CopyField = Extract<DesktopRequest, { type: 'copy' }>['field'];
-const copyValues: Record<CopyField, (item: ItemDetail) => string> = {
+const copyValues: Record<Extract<CopyField, string>, (item: ItemDetail) => string> = {
   username: (item) => item.username,
   password: (item) => item.password,
   notes: (item) => item.notes,
@@ -15,6 +16,16 @@ const copyValues: Record<CopyField, (item: ItemDetail) => string> = {
   cardNumber: (item) => item.card?.number ?? '',
   cardCode: (item) => item.card?.code ?? '',
 };
+function copyValue(item: ItemDetail, field: CopyField) {
+  if (typeof field === 'string') return copyValues[field](item);
+  if ('identity' in field)
+    return item.identity ? identityRowValue(item.identity, field.identity) : '';
+  // Positions shift when fields are reordered elsewhere, so a stale view must not pick one.
+  if (field.revisionDate !== item.revisionDate)
+    throw new UserError('This item changed. Reopen it and try again.');
+  const custom = item.fields[field.custom];
+  return custom?.kind === 'text' || custom?.kind === 'hidden' ? custom.value : '';
+}
 
 /** Owns desktop invalidation and shutdown; vault session state stays in Vault. */
 export class DesktopLifecycle {
@@ -137,7 +148,7 @@ export class DesktopLifecycle {
         this.assertRunning();
         if (!this.vault || epoch !== this.epoch)
           throw new UserError('Vault locked. Try again after unlocking.');
-        this.copiedValue = copyValues[field](this.vault.detail(id));
+        this.copiedValue = copyValue(this.vault.detail(id), field);
         await clipboard.writeText(this.copiedValue);
         if (this.clipboardTimer) clearTimeout(this.clipboardTimer);
         this.clipboardTimer = setTimeout(

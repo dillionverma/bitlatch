@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./item-drafts": "./src/item-drafts.ts",
+    "./item-fields": "./src/item-fields.ts",
     "./types": "./src/types.ts",
     "./protocol": "./src/protocol.ts",
     "./brand": "./src/brand.ts",

@@ -4,6 +4,8 @@ import { CodeRejectedError, type CliPort, type CliPrompt } from './cli';
 import { fillableUrl, matchesUri, normalizeServer, webUrl, type CipherUri } from './matching';
 import { UserError, type BrowserVaultQuery } from '@latch/shared/protocol';
 import { cardLabel } from '@latch/shared/item-drafts';
+import { identityLabel } from '@latch/shared/item-fields';
+import { identityKeys } from '@latch/shared/types';
 import {
   ES256,
   attestationObject,
@@ -25,6 +27,8 @@ import type {
   BrowserVaultPage,
   CaptureOffer,
   ChallengeAnswer,
+  CustomField,
+  IdentityFields,
   ItemDetail,
   ItemSummary,
   LoginChallenge,
@@ -62,6 +66,13 @@ export interface Cipher {
     code?: string | null;
     [key: string]: unknown;
   } | null;
+  identity?: Partial<Record<keyof IdentityFields, string | null>> | null;
+  fields?: {
+    name?: string | null;
+    value?: string | null;
+    type?: number;
+    linkedId?: number | null;
+  }[];
   [key: string]: unknown;
 }
 
@@ -551,6 +562,8 @@ export class Vault extends EventEmitter {
               code: cipher.card?.code ?? '',
             }
           : null,
+      identity: cipher.type === 4 ? identityOf(cipher) : null,
+      fields: (cipher.fields ?? []).map(customField),
       uris: (cipher.login?.uris ?? []).map((row, sourceIndex) => ({
         sourceIndex,
         uri: row.uri,
@@ -638,21 +651,19 @@ export class Vault extends EventEmitter {
         (cipher) =>
           Boolean(cipher.deletedDate) === (query.scope === 'trash') &&
           !isRestricted(cipher) &&
-          (cipher.type === 1 || cipher.type === 2),
+          browserTypes.has(cipher.type),
       )
       .filter((cipher) => query.scope !== 'site' || (fillableUrl(url) && canFill(cipher, url)))
       .filter((cipher) =>
         terms.every((term) =>
-          `${cipher.name} ${cipher.login?.username ?? ''} ${(cipher.login?.uris ?? []).map((row) => row.uri ?? '').join(' ')}`
+          `${cipher.name} ${cipher.login?.username ?? ''} ${subtitleOf(cipher)} ${(cipher.login?.uris ?? []).map((row) => row.uri ?? '').join(' ')}`
             .toLocaleLowerCase()
             .includes(term),
         ),
       )
       .map(summarize)
       .filter((item) => query.scope !== 'favorites' || item.favorite)
-      .filter(
-        (item) => query.itemType === 'all' || item.type === (query.itemType === 'login' ? 1 : 2),
-      )
+      .filter((item) => query.itemType === 'all' || item.type === browserItemTypes[query.itemType])
       .sort(
         (a, b) =>
           Number(b.favorite) - Number(a.favorite) ||
@@ -667,6 +678,7 @@ export class Vault extends EventEmitter {
         name: browserPreview(item.name, 200),
         username: browserPreview(item.username, 200),
         website: browserPreview(item.website, 300),
+        subtitle: browserPreview(item.subtitle, 200),
       };
       const size = Buffer.byteLength(JSON.stringify(preview));
       if (bytes + size > 48_000) break;
@@ -681,7 +693,7 @@ export class Vault extends EventEmitter {
     if (
       (!allowTrash && cipher.deletedDate) ||
       isRestricted(cipher) ||
-      (cipher.type !== 1 && cipher.type !== 2)
+      !browserTypes.has(cipher.type)
     )
       throw new UserError('Open this item in the desktop app.');
   }
@@ -1144,6 +1156,9 @@ export class Vault extends EventEmitter {
   }
 }
 
+/** Item types the browser extension may list and open. Cards stay desktop-only. */
+const browserItemTypes = { login: 1, note: 2, identity: 4 } as const;
+const browserTypes = new Set<number>(Object.values(browserItemTypes));
 function isRestricted(cipher: Cipher) {
   return Boolean(cipher.organizationId || cipher.reprompt);
 }
@@ -1160,6 +1175,8 @@ function cacheFields(cipher: Cipher): Cipher {
     deletedDate: cipher.deletedDate,
     notes: isRestricted(cipher) ? null : cipher.notes,
     card: isRestricted(cipher) ? null : cipher.card,
+    identity: isRestricted(cipher) ? null : cipher.identity,
+    fields: isRestricted(cipher) ? [] : cipher.fields,
     login: {
       username: isRestricted(cipher) ? null : cipher.login?.username,
       password: isRestricted(cipher) ? null : cipher.login?.password,
@@ -1197,6 +1214,57 @@ function canFill(cipher: Cipher, url: string) {
     (cipher.login?.uris ?? []).some((uri) => matchesUri(uri, url))
   );
 }
+function identityOf(cipher: Cipher): IdentityFields {
+  return Object.fromEntries(
+    identityKeys.map((key) => [key, cipher.identity?.[key] ?? '']),
+  ) as IdentityFields;
+}
+/** Bitwarden's LinkedId values, named for display. */
+const linkedFieldNames: Record<number, string> = {
+  100: 'Username',
+  101: 'Password',
+  300: 'Cardholder name',
+  301: 'Expiration month',
+  302: 'Expiration year',
+  303: 'Security code',
+  304: 'Brand',
+  305: 'Number',
+  400: 'Title',
+  401: 'Middle name',
+  402: 'Address 1',
+  403: 'Address 2',
+  404: 'Address 3',
+  405: 'City',
+  406: 'State',
+  407: 'Postal code',
+  408: 'Country',
+  409: 'Company',
+  410: 'Email',
+  411: 'Phone',
+  412: 'Social Security number',
+  413: 'Username',
+  414: 'Passport number',
+  415: 'License number',
+  416: 'First name',
+  417: 'Last name',
+  418: 'Full name',
+};
+const customFieldKinds: CustomField['kind'][] = ['text', 'hidden', 'boolean', 'linked'];
+function customField(field: NonNullable<Cipher['fields']>[number]): CustomField {
+  // An unknown kind could hold a secret, so it is masked like a hidden field.
+  const kind = customFieldKinds[field.type ?? 0] ?? 'hidden';
+  return {
+    name: field.name ?? '',
+    value: kind === 'linked' ? (linkedFieldNames[field.linkedId ?? -1] ?? '') : (field.value ?? ''),
+    kind,
+  };
+}
+function subtitleOf(cipher: Cipher) {
+  if (isRestricted(cipher)) return '';
+  if (cipher.type === 3) return cardLabel(cipher.card?.brand ?? '', cipher.card?.number ?? '');
+  if (cipher.type === 4) return identityLabel(identityOf(cipher));
+  return '';
+}
 function browserPreview(value: string, limit: number) {
   return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
 }
@@ -1206,9 +1274,7 @@ function summarize(cipher: Cipher): ItemSummary {
     name: cipher.name || 'Untitled',
     username: isRestricted(cipher) ? '' : (cipher.login?.username ?? ''),
     website: cipher.login?.uris?.[0]?.uri ?? '',
-    cardLabel: isRestricted(cipher)
-      ? ''
-      : cardLabel(cipher.card?.brand ?? '', cipher.card?.number ?? ''),
+    subtitle: subtitleOf(cipher),
     type: cipher.type,
     favorite: Boolean(cipher.favorite),
     hasPasskey: Boolean(cipher.login?.fido2Credentials?.length),

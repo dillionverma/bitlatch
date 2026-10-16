@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ItemSummary, LatchApi } from '@latch/shared/types';
 import { useWebsiteIcons } from './WebsiteIcons';
 
-export type CopyField = Parameters<LatchApi['copy']>[1];
+export type CopyField = Extract<Parameters<LatchApi['copy']>[1], string>;
 export const fieldLabels: Record<CopyField, string> = {
   username: 'Username',
   password: 'Password',
@@ -74,10 +74,16 @@ export function displayWebsite(website: string) {
 export function typeName(type: number) {
   return (
     (
-      { 1: 'Login', 2: 'Secure note', 3: 'Card', 4: 'Identity', 5: 'SSH key' } as Record<
-        number,
-        string
-      >
+      {
+        1: 'Login',
+        2: 'Secure note',
+        3: 'Card',
+        4: 'Identity',
+        5: 'SSH key',
+        6: 'Bank account',
+        7: "Driver's license",
+        8: 'Passport',
+      } as Record<number, string>
     )[type] ?? 'Vault item'
   );
 }
