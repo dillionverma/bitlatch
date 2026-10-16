@@ -310,13 +310,19 @@ async function handleRequest(request: DesktopRequest): Promise<unknown> {
     case 'sharing':
       return vault.sharing();
     case 'generateSshKey':
+    case 'importSshKey': {
       if (vault.snapshot().status !== 'unlocked')
         throw new UserError('Unlock Bitlatch to continue.');
-      return generateSshKey(app.getPath('userData'));
-    case 'importSshKey':
-      if (vault.snapshot().status !== 'unlocked')
-        throw new UserError('Unlock Bitlatch to continue.');
-      return importSshKey(app.getPath('userData'), request.privateKey);
+      const epoch = lifecycle.epoch;
+      const key =
+        request.type === 'generateSshKey'
+          ? await generateSshKey(app.getPath('userData'))
+          : await importSshKey(app.getPath('userData'), request.privateKey);
+      // A lock while ssh-keygen ran must not hand a private key to the window.
+      if (epoch !== lifecycle.epoch || vault.snapshot().status !== 'unlocked')
+        throw new UserError('Vault locked. Try again after unlocking.');
+      return key;
+    }
     case 'saveFolder':
       return vault.saveFolder(request.id, request.name);
     case 'deleteFolder':

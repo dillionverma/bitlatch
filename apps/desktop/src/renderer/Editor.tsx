@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { Check, Eye, EyeSlash as EyeOff, X } from '@phosphor-icons/react';
 import type {
   CardFields,
@@ -141,6 +141,7 @@ export function Editor({
   const [busy, setBusy] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [codeRevealed, setCodeRevealed] = useState(false);
+  const [keyWorking, setKeyWorking] = useState(false);
   const [revealedFields, setRevealedFields] = useState<ReadonlySet<number>>(new Set());
   const [error, setError] = useState('');
   const [discarding, setDiscarding] = useState(false);
@@ -387,6 +388,7 @@ export function Editor({
                   sshKey={item ? (item.details as SshKey | null) : (draft.sshKey ?? null)}
                   editable={!item}
                   disabled={busy}
+                  onWorking={setKeyWorking}
                   onKey={(sshKey) =>
                     setDraft((current) => (current.type === 5 ? { ...current, sshKey } : current))
                   }
@@ -754,7 +756,7 @@ export function Editor({
             </Button>
             <Button
               type="submit"
-              disabled={busy || (draft.type === 5 && !item && !draft.sshKey)}
+              disabled={busy || (draft.type === 5 && !item && (!draft.sshKey || keyWorking))}
               aria-busy={busy}
             >
               {busy ? <Spinner /> : <Check data-icon="inline-start" />}
@@ -786,31 +788,42 @@ function SshKeyFields({
   sshKey,
   editable,
   disabled,
+  onWorking,
   onKey,
 }: {
   sshKey: SshKey | null;
   editable: boolean;
   disabled: boolean;
+  onWorking: (working: boolean) => void;
   onKey: (sshKey: SshKey) => void;
 }) {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
   const [pasted, setPasted] = useState('');
+  // Only the latest request, from this mounted section, may set the key.
+  const latest = useRef(0);
+  useEffect(() => {
+    const requests = latest;
+    return () => {
+      requests.current++;
+      onWorking(false);
+    };
+  }, [onWorking]);
   async function use(
     request: () => Promise<{ ok: true; value: SshKey } | { ok: false; error: string }>,
   ) {
+    const ticket = ++latest.current;
     setWorking(true);
+    onWorking(true);
     setError('');
-    try {
-      const result = await request();
-      if (result.ok) {
-        onKey(result.value);
-        setPasted('');
-      } else setError(result.error);
-    } catch {
-      setError('Could not create the key. Try again.');
-    }
+    const result = await request().catch(() => undefined);
+    if (ticket !== latest.current) return;
+    if (result?.ok) {
+      onKey(result.value);
+      setPasted('');
+    } else setError(result?.error ?? 'Could not create the key. Try again.');
     setWorking(false);
+    onWorking(false);
   }
   return (
     <Field data-invalid={!!error}>

@@ -22,7 +22,9 @@ async function keygen(args: string[]) {
     if (/passphrase/i.test(stderr))
       throw new UserError('Remove the passphrase from this key, then import it again.');
     if (/invalid format|not a key|error in libcrypto/i.test(stderr))
-      throw new UserError('That is not a private key Bitlatch can read.');
+      throw new UserError(
+        'Bitlatch can import OpenSSH keys and RSA or ECDSA PEM keys. Convert other keys to OpenSSH format first.',
+      );
     if ((error as NodeJS.ErrnoException).code === 'ENOENT')
       throw new UserError('Bitlatch needs OpenSSH’s ssh-keygen to create SSH keys.');
     throw new UserError('Could not read the SSH key. Try again.');
