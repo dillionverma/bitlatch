@@ -122,6 +122,7 @@ export interface ItemSummary {
   website: string;
   /** A short description such as a card's brand and last four or an identity's name. Empty for logins, notes, and restricted items. */
   subtitle: string;
+  folderId: string | null;
   type: number;
   favorite: boolean;
   hasPasskey: boolean;
@@ -153,6 +154,11 @@ export type CopyTarget =
   | { detail: string }
   | { custom: number; revisionDate: string | null }
   | { history: number; revisionDate: string | null };
+
+export interface Folder {
+  id: string;
+  name: string;
+}
 
 export interface PasskeySummary {
   rpId: string;
@@ -274,6 +280,7 @@ export interface LatchApi {
   sync(): Promise<Result<VaultState>>;
   items(): Promise<Result<ItemSummary[]>>;
   trash(): Promise<Result<ItemSummary[]>>;
+  folders(): Promise<Result<Folder[]>>;
   detail(id: string): Promise<Result<ItemDetail>>;
   save(draft: ItemDraft): Promise<Result<ItemDetail>>;
   setFavorite(id: string, favorite: boolean): Promise<Result<ItemSummary>>;
