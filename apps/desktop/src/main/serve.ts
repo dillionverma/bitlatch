@@ -1,10 +1,17 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import { connect, createServer, type Socket } from 'node:net';
 import { Agent, request as httpRequest, type ClientRequest } from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cliEnvironment, cliError, type CliOptions, type CliPort, type RunOptions } from './cli';
+import {
+  cliEnvironment,
+  cliError,
+  spawnCli,
+  type CliOptions,
+  type CliPort,
+  type RunOptions,
+} from './cli';
 import { UserError } from '@latch/shared/protocol';
 import { listingVersion, syncedVersions } from './sync-metadata';
 
@@ -183,26 +190,12 @@ export class WarmBitwardenCli implements CliPort {
       theirs.destroy();
       throw new UserError('Vault locked. Try again after unlocking.');
     }
-    const child = spawn(
-      this.options.executable,
-      [
-        ...(this.options.script ? [this.options.script] : []),
-        'serve',
-        '--hostname',
-        `fd+connected://${SERVE_FD}`,
-        '--port',
-        String(SERVE_PORT),
-      ],
-      {
-        shell: false,
-        windowsHide: true,
-        stdio: ['ignore', 'ignore', 'pipe', theirs],
-        env: {
-          ...cliEnvironment(this.options.dataDir),
-          BW_NOINTERACTION: 'true',
-          BW_SESSION: session,
-        },
-      },
+    const child = spawnCli(
+      this.options,
+      ['serve', '--hostname', `fd+connected://${SERVE_FD}`, '--port', String(SERVE_PORT)],
+      { ...cliEnvironment(this.options.dataDir), BW_NOINTERACTION: 'true' },
+      { BW_SESSION: session },
+      ['ignore', 'ignore', 'pipe', theirs],
     );
     this.child = child;
     this.socket = ours;

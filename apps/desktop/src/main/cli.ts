@@ -1,13 +1,88 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import {
+  spawn,
+  type ChildProcess,
+  type ChildProcessWithoutNullStreams,
+  type StdioOptions,
+} from 'node:child_process';
+import type { Writable } from 'node:stream';
 import { homedir, tmpdir } from 'node:os';
 import { mkdir } from 'node:fs/promises';
 import { UserError } from '@latch/shared/protocol';
 import type { TwoStepMethod } from '@latch/shared/types';
+import { BOOTSTRAP_MARKER, type BootstrapPayload, type SecretName } from '../cli-bootstrap/payload';
 
 export interface CliOptions {
   dataDir: string;
   executable: string;
   script?: string;
+  /** The CLI preload that takes secrets over a pipe; see `spawnCli`. */
+  bootstrap: string;
+}
+
+type CliSecrets = Partial<Record<SecretName, string | undefined>>;
+
+/**
+ * Starts the CLI. Any process running as this user can read a child's starting
+ * environment with `ps -E`, so secrets never go there: they travel over an extra
+ * pipe to the bootstrap, which hands them to the CLI inside its process.
+ */
+export function spawnCli(
+  options: CliOptions,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+  secrets: CliSecrets,
+  stdio: Extract<StdioOptions, unknown[]>,
+  probe = false,
+): ChildProcess {
+  const values = Object.fromEntries(
+    Object.entries(secrets).filter((entry): entry is [string, string] => Boolean(entry[1])),
+  );
+  const fd = stdio.length;
+  const child = spawn(
+    options.executable,
+    options.script ? [options.bootstrap, options.script, ...args] : args,
+    {
+      shell: false,
+      windowsHide: true,
+      stdio: [...stdio, 'pipe'],
+      env: {
+        ...env,
+        LATCH_SECRET_FD: String(fd),
+        ...(options.script
+          ? {}
+          : { NODE_OPTIONS: `--require ${JSON.stringify(options.bootstrap)}` }),
+      },
+    },
+  );
+  const channel = child.stdio[fd] as Writable;
+  channel.on('error', () => undefined);
+  channel.end(
+    JSON.stringify({ env: values, ...(probe ? { probe: true } : {}) } satisfies BootstrapPayload),
+  );
+  return child;
+}
+
+/** Whether this CLI runs the bootstrap; a standalone binary may ignore NODE_OPTIONS. */
+export function bootstrapRuns(options: CliOptions) {
+  return new Promise<boolean>((settle) => {
+    const child = spawnCli(
+      options,
+      ['--version'],
+      cliEnvironment(options.dataDir),
+      {},
+      ['ignore', 'pipe', 'ignore'],
+      true,
+    );
+    let output = '';
+    const timer = setTimeout(() => child.kill('SIGKILL'), 10_000);
+    child.stdout!.setEncoding('utf8');
+    child.stdout!.on('data', (chunk: string) => (output = (output + chunk).slice(0, 256)));
+    child.on('error', () => settle(false));
+    child.on('close', () => {
+      clearTimeout(timer);
+      settle(output === BOOTSTRAP_MARKER);
+    });
+  });
 }
 
 /** Only the environment needed by the CLI, without inherited secrets or Node hooks. */
@@ -108,27 +183,21 @@ export class BitwardenCli implements CliPort {
   private execute(args: string[], options: RunOptions) {
     return new Promise<string>((resolve, reject) => {
       const interactive = Boolean(options.prompt);
-      const child = spawn(
-        this.options.executable,
-        [
-          ...(this.options.script ? [this.options.script] : []),
-          ...args,
-          ...(interactive ? [] : ['--nointeraction']),
-        ],
+      const child = spawnCli(
+        this.options,
+        [...args, ...(interactive ? [] : ['--nointeraction'])],
         {
-          shell: false,
-          windowsHide: true,
-          stdio: ['pipe', 'pipe', 'pipe'],
-          env: {
-            ...cliEnvironment(this.options.dataDir),
-            BW_NOINTERACTION: interactive ? 'false' : 'true',
-            BW_SESSION: options.session ?? '',
-            LATCH_MASTER_PASSWORD: options.password ?? '',
-            BW_CLIENTID: options.clientId ?? '',
-            BW_CLIENTSECRET: options.clientSecret ?? '',
-          },
+          ...cliEnvironment(this.options.dataDir),
+          BW_NOINTERACTION: interactive ? 'false' : 'true',
         },
-      );
+        {
+          BW_SESSION: options.session,
+          LATCH_MASTER_PASSWORD: options.password,
+          BW_CLIENTID: options.clientId,
+          BW_CLIENTSECRET: options.clientSecret,
+        },
+        ['pipe', 'pipe', 'pipe'],
+      ) as ChildProcessWithoutNullStreams;
       let stdout = '';
       let stderr = '';
       let outputBytes = 0;

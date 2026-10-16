@@ -42,6 +42,7 @@ export default {
     'dist/native/*.node',
     'dist/extension/**/*',
     'dist/desktop/native-host.cjs',
+    'dist/desktop/cli-bootstrap.cjs',
     'node_modules/electron-liquid-glass/prebuilds/**/*',
   ],
   afterPack: 'build/embed-autofill.cjs',

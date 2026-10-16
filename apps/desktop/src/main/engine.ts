@@ -2,7 +2,7 @@ import { access, readFile, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
 import { delimiter, dirname, extname, join, isAbsolute, resolve, sep } from 'node:path';
-import { BitwardenCli, type CliOptions, type CliPort } from './cli';
+import { BitwardenCli, bootstrapRuns, type CliOptions, type CliPort } from './cli';
 import { WarmBitwardenCli } from './serve';
 import { UserError } from '@latch/shared/protocol';
 
@@ -10,6 +10,12 @@ export const ENGINE_SETUP_MESSAGE =
   process.platform === 'darwin'
     ? 'Install the official Bitwarden CLI with “brew install bitwarden-cli”, then restart Bitlatch.'
     : 'Install the official Bitwarden CLI and add it to PATH, or set LATCH_BW_PATH to its full path, then restart Bitlatch.';
+
+/** Without the preload, keys would sit in the CLI's environment, where other apps can read them. */
+const PRIVATE_CHANNEL_MESSAGE =
+  process.platform === 'darwin'
+    ? 'This Bitwarden CLI cannot receive keys privately. Install the official CLI with “brew install bitwarden-cli”, then restart Bitlatch.'
+    : 'This Bitwarden CLI cannot receive keys privately. Install the official CLI with “npm install -g @bitwarden/cli”, then restart Bitlatch.';
 
 /**
  * Puts a warm vault server in front of the one-shot CLI, so reads and writes
@@ -26,6 +32,7 @@ function engineCli(options: CliOptions): CliPort {
 
 export async function localEngine(options: {
   dataDir: string;
+  bootstrap: string;
 }): Promise<{ cli: CliPort; setupError?: string }> {
   const windows = process.platform === 'win32';
   const names = windows ? ['bw.exe', 'bw.cmd'] : ['bw'];
@@ -47,12 +54,18 @@ export async function localEngine(options: {
       .filter(isAbsolute)
       .flatMap((directory) => names.map((name) => join(directory, name))),
   ]);
+  try {
+    await access(options.bootstrap, constants.R_OK);
+  } catch {
+    return unavailable('Bitlatch is missing one of its files. Reinstall Bitlatch, then try again.');
+  }
+  let privateChannelMissing = false;
   for (const executable of candidates) {
     if (!executable || !isAbsolute(executable)) continue;
     try {
       await access(executable, windows ? constants.R_OK : constants.X_OK);
       if (!(await stat(executable)).isFile()) continue;
-      let cliOptions: CliOptions = { dataDir: options.dataDir, executable };
+      let cliOptions: CliOptions = { ...options, executable };
       if (windows && extname(executable).toLowerCase() === '.cmd') {
         // npm's shim needs cmd.exe, whose argument expansion is unsuitable for
         // vault commands. Run only the installed official package's JS entry.
@@ -66,19 +79,27 @@ export async function localEngine(options: {
         if (!script.startsWith(`${packageDir}${sep}`) || !/\.[cm]?js$/i.test(script)) continue;
         await access(script, constants.R_OK);
         if (!(await stat(script)).isFile()) continue;
-        cliOptions = { dataDir: options.dataDir, executable: process.execPath, script };
+        cliOptions = { ...options, executable: process.execPath, script };
       } else if (windows && extname(executable).toLowerCase() !== '.exe') continue;
+      if (!(await bootstrapRuns(cliOptions))) {
+        privateChannelMissing = true;
+        continue;
+      }
       return { cli: engineCli(cliOptions) };
     } catch {
       /* Try the next standard installation path. */
     }
   }
+  return unavailable(privateChannelMissing ? PRIVATE_CHANNEL_MESSAGE : ENGINE_SETUP_MESSAGE);
+}
+
+function unavailable(setupError: string): { cli: CliPort; setupError: string } {
   return {
-    setupError: ENGINE_SETUP_MESSAGE,
+    setupError,
     cli: {
       cancel() {},
       async run() {
-        throw new UserError(ENGINE_SETUP_MESSAGE);
+        throw new UserError(setupError);
       },
     },
   };
