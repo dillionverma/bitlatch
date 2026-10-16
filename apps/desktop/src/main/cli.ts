@@ -9,24 +9,22 @@ import { homedir, tmpdir } from 'node:os';
 import { mkdir } from 'node:fs/promises';
 import { UserError } from '@latch/shared/protocol';
 import type { TwoStepMethod } from '@latch/shared/types';
-import { BOOTSTRAP_MARKER, type BootstrapPayload } from '../cli-bootstrap/payload';
+import { BOOTSTRAP_MARKER, type BootstrapPayload, type SecretName } from '../cli-bootstrap/payload';
 
 export interface CliOptions {
   dataDir: string;
   executable: string;
   script?: string;
   /** The CLI preload that takes secrets over a pipe; see `spawnCli`. */
-  bootstrap?: string;
+  bootstrap: string;
 }
 
-type CliSecrets = Partial<
-  Record<'BW_SESSION' | 'LATCH_MASTER_PASSWORD' | 'BW_CLIENTID' | 'BW_CLIENTSECRET', string>
->;
+type CliSecrets = Partial<Record<SecretName, string | undefined>>;
 
 /**
  * Starts the CLI. Any process running as this user can read a child's starting
- * environment with `ps -E`, so with a bootstrap the secrets travel over an extra
- * pipe and are set inside the CLI process instead.
+ * environment with `ps -E`, so secrets never go there: they travel over an extra
+ * pipe to the bootstrap, which hands them to the CLI inside its process.
  */
 export function spawnCli(
   options: CliOptions,
@@ -39,13 +37,6 @@ export function spawnCli(
   const values = Object.fromEntries(
     Object.entries(secrets).filter((entry): entry is [string, string] => Boolean(entry[1])),
   );
-  if (!options.bootstrap)
-    return spawn(options.executable, [...(options.script ? [options.script] : []), ...args], {
-      shell: false,
-      windowsHide: true,
-      stdio,
-      env: { ...env, ...values },
-    });
   const fd = stdio.length;
   const child = spawn(
     options.executable,
@@ -83,7 +74,7 @@ export function bootstrapRuns(options: CliOptions) {
       true,
     );
     let output = '';
-    const timer = setTimeout(() => child.kill('SIGKILL'), 15_000);
+    const timer = setTimeout(() => child.kill('SIGKILL'), 10_000);
     child.stdout!.setEncoding('utf8');
     child.stdout!.on('data', (chunk: string) => (output = (output + chunk).slice(0, 256)));
     child.on('error', () => settle(false));
