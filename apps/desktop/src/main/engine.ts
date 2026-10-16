@@ -54,6 +54,11 @@ export async function localEngine(options: {
       .filter(isAbsolute)
       .flatMap((directory) => names.map((name) => join(directory, name))),
   ]);
+  try {
+    await access(options.bootstrap, constants.R_OK);
+  } catch {
+    return unavailable('Bitlatch is missing one of its files. Reinstall Bitlatch, then try again.');
+  }
   let privateChannelMissing = false;
   for (const executable of candidates) {
     if (!executable || !isAbsolute(executable)) continue;
@@ -85,7 +90,10 @@ export async function localEngine(options: {
       /* Try the next standard installation path. */
     }
   }
-  const setupError = privateChannelMissing ? PRIVATE_CHANNEL_MESSAGE : ENGINE_SETUP_MESSAGE;
+  return unavailable(privateChannelMissing ? PRIVATE_CHANNEL_MESSAGE : ENGINE_SETUP_MESSAGE);
+}
+
+function unavailable(setupError: string): { cli: CliPort; setupError: string } {
   return {
     setupError,
     cli: {
