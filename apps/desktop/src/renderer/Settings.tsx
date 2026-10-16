@@ -401,7 +401,9 @@ export function Settings({
                         ? 'Your browser extension is communicating with Bitlatch.'
                         : connection === 'setup-error'
                           ? 'Browser setup could not finish. Restart Bitlatch to try again.'
-                          : 'Open the Bitlatch extension in your browser to connect.'}
+                          : connection === 'unavailable'
+                            ? 'Browser connections need the macOS app for now. Here Bitlatch cannot check which app asks for a password.'
+                            : 'Open the Bitlatch extension in your browser to connect.'}
                     </p>
                   </div>
                   <Badge
@@ -415,7 +417,9 @@ export function Settings({
                         ? 'Connected'
                         : connection === 'setup-error'
                           ? 'Setup unavailable'
-                          : 'Not detected'}
+                          : connection === 'unavailable'
+                            ? 'macOS only'
+                            : 'Not detected'}
                   </Badge>
                 </div>
                 {browsers.map((browser) => (
