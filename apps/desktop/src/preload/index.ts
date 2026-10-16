@@ -26,6 +26,7 @@ const api: LatchApi = {
   sync: () => request({ type: 'sync' }),
   items: () => request({ type: 'items' }),
   trash: () => request({ type: 'trash' }),
+  folders: () => request({ type: 'folders' }),
   detail: (id) => request({ type: 'detail', id }),
   save: (draft) => request({ type: 'save', draft }),
   setFavorite: (id, favorite) => request({ type: 'setFavorite', id, favorite }),

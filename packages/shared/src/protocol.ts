@@ -148,6 +148,7 @@ export const desktopRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('commitCapture'), url: z.string().max(4_096) }).strict(),
   z.object({ type: z.literal('items') }).strict(),
   z.object({ type: z.literal('trash') }).strict(),
+  z.object({ type: z.literal('folders') }).strict(),
   z.object({ type: z.literal('detail'), id }).strict(),
   z.object({ type: z.literal('save'), draft: itemDraftSchema }).strict(),
   z.object({ type: z.literal('setFavorite'), id, favorite: z.boolean() }).strict(),

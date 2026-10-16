@@ -465,6 +465,7 @@ const listed = (data: unknown) => json((data as { data?: unknown } | null)?.data
 
 const ITEMS: Route = { method: 'GET', path: '/list/object/items', pick: listed };
 const TRASH: Route = { method: 'GET', path: '/list/object/items?trash=true', pick: listed };
+const FOLDERS: Route = { method: 'GET', path: '/list/object/folders', pick: listed };
 const STATUS: Route = {
   method: 'GET',
   path: '/status',
@@ -504,6 +505,7 @@ export function routeFor(args: string[], options: RunOptions = {}): Route | unde
   if (args.length === 1 && command === 'status') return { ...STATUS };
   if (args.length === 1 && command === 'sync') return { ...SYNC };
   if (args.length === 2 && command === 'list' && object === 'items') return { ...ITEMS };
+  if (args.length === 2 && command === 'list' && object === 'folders') return { ...FOLDERS };
   if (args.length === 3 && command === 'list' && object === 'items' && args[2] === '--trash')
     return { ...TRASH };
   if (args.length === 3 && command === 'get' && object === 'item' && id)

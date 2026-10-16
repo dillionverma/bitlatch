@@ -75,6 +75,15 @@
 .vault-app .sidebar nav {
   display: grid;
   gap: 2px;
+  min-height: 0;
+  overflow-y: auto;
+}
+.vault-app .nav-heading {
+  padding: 12px 8px 4px;
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 500;
+  color: var(--muted-foreground);
 }
 .vault-app .nav-item {
   width: 100%;
@@ -92,6 +101,9 @@
 .vault-app .nav-item > span {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-align: left;
 }
 .vault-app .nav-item small {

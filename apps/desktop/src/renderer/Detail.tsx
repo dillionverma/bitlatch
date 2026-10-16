@@ -32,11 +32,13 @@ const fieldCopy = (field: CopyField): Copyable => ({
 
 export function Detail({
   item,
+  folder,
   onEdit,
   onGone,
   notify,
 }: {
   item: ItemDetail;
+  folder?: string;
   onEdit: () => void;
   onGone: () => void;
   notify: Notifier;
@@ -363,6 +365,12 @@ export function Detail({
               <dt>Vault</dt>
               <dd>Personal vault</dd>
             </div>
+            {folder && (
+              <div>
+                <dt>Folder</dt>
+                <dd>{folder}</dd>
+              </div>
+            )}
             {item.createdDate && (
               <div>
                 <dt>Created</dt>

@@ -27,6 +27,7 @@ import type {
   CaptureOffer,
   ChallengeAnswer,
   CustomField,
+  Folder,
   ItemDetail,
   ItemSummary,
   LoginChallenge,
@@ -144,6 +145,7 @@ export class Vault extends EventEmitter {
   private pending?: PendingLogin;
   private captured?: Captured;
   private counterWrites: Promise<unknown> = Promise.resolve();
+  private folderList: Folder[] = [];
   private state: Omit<
     VaultState,
     'biometrics' | 'biometricsOn' | 'revision' | 'itemsRevision' | 'trashLoaded'
@@ -446,6 +448,7 @@ export class Vault extends EventEmitter {
     if (!locking) this.cli.cancel();
     this.session = '';
     this.ciphers.clear();
+    this.folderList = [];
     this.trashLoaded = false;
     this.trashLoading = undefined;
     this.captured = undefined;
@@ -496,6 +499,11 @@ export class Vault extends EventEmitter {
   items(): ItemSummary[] {
     this.requireUnlocked();
     return this.listing((cipher) => !cipher.deletedDate);
+  }
+
+  folders(): Folder[] {
+    this.requireUnlocked();
+    return this.folderList;
   }
 
   /** Items sitting in Bitwarden's trash, which another client can restore. */
@@ -1146,6 +1154,7 @@ export class Vault extends EventEmitter {
         this.cli.cancel();
         this.session = '';
         this.ciphers.clear();
+        this.folderList = [];
         this.trashLoaded = false;
         this.trashLoading = undefined;
         this.state.status = 'locked';
@@ -1153,6 +1162,24 @@ export class Vault extends EventEmitter {
         this.publish();
       }
       throw error;
+    }
+    await this.loadFolders(generation);
+  }
+
+  /** Folders only label items, so failing to read them never locks the vault. */
+  private async loadFolders(generation: number) {
+    try {
+      const folders = JSON.parse(
+        await this.cli.run(['list', 'folders'], { session: this.session }),
+      ) as { id: string | null; name: string }[];
+      if (generation !== this.generation) return;
+      // The CLI lists a "No Folder" entry without an ID; the sidebar adds its own.
+      this.folderList = folders
+        .filter((folder): folder is Folder => Boolean(folder.id))
+        .map(({ id, name }) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    } catch {
+      if (generation === this.generation) this.folderList = [];
     }
   }
 
@@ -1206,6 +1233,7 @@ function cacheFields(cipher: Cipher): Cipher {
     revisionDate: cipher.revisionDate,
     creationDate: cipher.creationDate,
     deletedDate: cipher.deletedDate,
+    folderId: cipher.folderId,
     notes: isRestricted(cipher) ? null : cipher.notes,
     card: isRestricted(cipher) ? null : cipher.card,
     ...Object.fromEntries(
@@ -1320,6 +1348,7 @@ function summarize(cipher: Cipher): ItemSummary {
     username: isRestricted(cipher) ? '' : (cipher.login?.username ?? ''),
     website: cipher.login?.uris?.[0]?.uri ?? '',
     subtitle: subtitleOf(cipher),
+    folderId: typeof cipher.folderId === 'string' ? cipher.folderId : null,
     type: cipher.type,
     favorite: Boolean(cipher.favorite),
     hasPasskey: Boolean(cipher.login?.fido2Credentials?.length),

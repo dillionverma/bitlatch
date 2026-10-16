@@ -11,6 +11,7 @@ import {
   ArrowsClockwise as RefreshCw,
   Bank,
   CreditCard,
+  FolderSimple,
   IdentificationBadge,
   IdentificationCard,
   Terminal,
@@ -22,6 +23,7 @@ import {
   X,
 } from '@phosphor-icons/react';
 import type {
+  Folder,
   ItemDetail,
   ItemMenuAction,
   ItemSummary,
@@ -89,8 +91,9 @@ interface FilterSpec {
   optional?: true;
 }
 const ofType = (type: number) => (item: ItemSummary) => item.type === type;
-const filters = [
-  { id: 'all', label: 'All items', icon: FolderKey },
+const allItems: FilterSpec = { id: 'all', label: 'All items', icon: FolderKey };
+const filters: FilterSpec[] = [
+  allItems,
   {
     id: 'favorites',
     label: 'Favorites',
@@ -131,12 +134,30 @@ const filters = [
     description: 'Identities from Bitwarden appear here.',
     match: ofType(4),
   },
-  { id: 'ssh-keys', label: 'SSH keys', icon: Terminal, match: ofType(5), optional: true },
-  { id: 'bank-accounts', label: 'Bank accounts', icon: Bank, match: ofType(6), optional: true },
+  {
+    id: 'ssh-keys',
+    label: 'SSH keys',
+    icon: Terminal,
+    empty: 'No SSH keys',
+    description: 'SSH keys from Bitwarden appear here.',
+    match: ofType(5),
+    optional: true,
+  },
+  {
+    id: 'bank-accounts',
+    label: 'Bank accounts',
+    icon: Bank,
+    empty: 'No bank accounts',
+    description: 'Bank accounts from Bitwarden appear here.',
+    match: ofType(6),
+    optional: true,
+  },
   {
     id: 'drivers-licenses',
     label: "Driver's licenses",
     icon: IdentificationCard,
+    empty: "No driver's licenses",
+    description: "Driver's licenses from Bitwarden appear here.",
     match: ofType(7),
     optional: true,
   },
@@ -144,6 +165,8 @@ const filters = [
     id: 'passports',
     label: 'Passports',
     icon: IdentificationBadge,
+    empty: 'No passports',
+    description: 'Passports from Bitwarden appear here.',
     match: ofType(8),
     optional: true,
   },
@@ -162,8 +185,7 @@ const filters = [
     empty: 'Trash is empty',
     description: 'Items moved to Trash can be restored.',
   },
-] satisfies FilterSpec[];
-type Filter = (typeof filters)[number]['id'];
+];
 const copyFields: Record<Exclude<ItemMenuAction, 'edit' | 'trash' | 'restore'>, CopyField> = {
   copyUsername: 'username',
   copyPassword: 'password',
@@ -290,6 +312,7 @@ function VaultWorkspace({
   onState: (state: VaultState) => void;
 }) {
   const [items, setItems] = useState<ItemSummary[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [trashed, setTrashed] = useState<ItemSummary[]>([]);
   const [selection, setSelection] = useState<Selection>({ status: 'unselected' });
   const selected = selection.status === 'ready' ? selection.item : null;
@@ -301,7 +324,7 @@ function VaultWorkspace({
         : selection.id;
   const [revealSelection, setRevealSelection] = useState(0);
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState('all');
   const [modal, setModal] = useState<Modal>(null);
   const settings = modal === 'settings';
   const [syncing, setSyncing] = useState(false);
@@ -338,6 +361,12 @@ function VaultWorkspace({
 
   useEffect(() => {
     const version = ++listVersion.current;
+    void window.latch
+      .folders()
+      .then((listed) => {
+        if (alive.current && version === listVersion.current && listed.ok) setFolders(listed.value);
+      })
+      .catch(() => undefined);
     void window.latch
       .items()
       .then((listed) => {
@@ -427,6 +456,41 @@ function VaultWorkspace({
     return () => removeEventListener('keydown', keyboard);
   }, [runCommand]);
 
+  const folderFilters = useMemo((): (FilterSpec & { count: number })[] => {
+    if (!folders.length) return [];
+    const known = new Set(folders.map((folder) => folder.id));
+    const counts = new Map<string | null, number>();
+    for (const item of items) {
+      const key = item.folderId && known.has(item.folderId) ? item.folderId : null;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return [
+      ...folders.map((folder) => ({
+        id: `folder:${folder.id}`,
+        label: folder.name,
+        icon: FolderSimple,
+        empty: 'This folder is empty',
+        description: 'Items you put in this folder appear here.',
+        match: (item: ItemSummary) => item.folderId === folder.id,
+        count: counts.get(folder.id) ?? 0,
+      })),
+      {
+        id: 'folder:none',
+        label: 'No folder',
+        icon: FolderSimple,
+        empty: 'Every item is in a folder',
+        description: 'Items without a folder appear here.',
+        match: (item: ItemSummary) => !item.folderId || !known.has(item.folderId),
+        count: counts.get(null) ?? 0,
+      },
+    ];
+  }, [folders, items]);
+  // A folder deleted elsewhere falls back to All items.
+  const currentFilter =
+    [...filters, ...folderFilters].find((entry) => entry.id === filter) ?? allItems;
+  useEffect(() => {
+    if (currentFilter.id !== filter) setFilter('all');
+  }, [currentFilter, filter]);
   const indexed = useMemo(() => indexItems(items), [items]);
   const indexedTrash = useMemo(() => indexItems(trashed), [trashed]);
   const visible = useMemo(() => {
@@ -434,12 +498,12 @@ function VaultWorkspace({
     const source = filter === 'trash' ? indexedTrash : indexed;
     return source
       .filter(({ item, haystack }) => {
-        const match = (filters.find((entry) => entry.id === filter) as FilterSpec).match;
+        const { match } = currentFilter;
         if (match && !match(item)) return false;
         return terms.every((term) => haystack.includes(term));
       })
       .map(({ item }) => item);
-  }, [indexed, indexedTrash, query, filter]);
+  }, [indexed, indexedTrash, query, filter, currentFilter]);
   const selectionVisible = !!selectedId && visible.some((item) => item.id === selectedId);
 
   useLayoutEffect(() => {
@@ -611,7 +675,6 @@ function VaultWorkspace({
     }
   }
 
-  const currentFilter = filters.find((entry) => entry.id === filter)!;
   const activeDetail = selectionVisible ? selection.status : 'unselected';
   const currentListError = filter === 'trash' ? listError.trash : listError.all;
   return (
@@ -636,7 +699,7 @@ function VaultWorkspace({
               </div>
             </div>
             <nav aria-label="Vault filters">
-              {(filters as FilterSpec[])
+              {filters
                 .filter(
                   (entry) => !entry.optional || entry.id === filter || items.some(entry.match!),
                 )
@@ -657,6 +720,25 @@ function VaultWorkspace({
                     )}
                   </Button>
                 ))}
+              {folderFilters.length > 0 && (
+                <>
+                  <h2 className="nav-heading">Folders</h2>
+                  {folderFilters.map(({ id, label, icon: Icon, count }) => (
+                    <Button
+                      type="button"
+                      variant="sidebar"
+                      key={id}
+                      className={`nav-item ${filter === id ? 'active' : ''}`}
+                      aria-pressed={filter === id}
+                      onClick={() => setFilter(id)}
+                    >
+                      <Icon size={16} />
+                      <span title={label}>{label}</span>
+                      <small>{count.toLocaleString()}</small>
+                    </Button>
+                  ))}
+                </>
+              )}
             </nav>
             <div className="sidebar-bottom">
               <Separator />
@@ -790,6 +872,7 @@ function VaultWorkspace({
               <Detail
                 key={selected.id}
                 item={selected}
+                folder={folders.find((entry) => entry.id === selected.folderId)?.name}
                 onEdit={() => {
                   if (!hasModal()) setModal('edit');
                 }}
@@ -899,6 +982,7 @@ function VaultWorkspace({
                 username,
                 website,
                 subtitle,
+                folderId,
                 type,
                 favorite,
                 hasPasskey,
@@ -906,7 +990,18 @@ function VaultWorkspace({
               } = item;
               setItems((current) => [
                 ...current.filter((entry) => entry.id !== id),
-                { id, name, username, website, subtitle, type, favorite, hasPasskey, restricted },
+                {
+                  id,
+                  name,
+                  username,
+                  website,
+                  subtitle,
+                  folderId,
+                  type,
+                  favorite,
+                  hasPasskey,
+                  restricted,
+                },
               ]);
               setQuery('');
               setFilter('all');

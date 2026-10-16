@@ -304,6 +304,8 @@ async function handleRequest(request: DesktopRequest): Promise<unknown> {
       return vault.items();
     case 'trash':
       return vault.trash();
+    case 'folders':
+      return vault.folders();
     case 'detail':
       return vault.detail(request.id);
     case 'generate':
