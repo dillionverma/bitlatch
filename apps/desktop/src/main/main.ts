@@ -315,7 +315,7 @@ async function handleRequest(request: DesktopRequest): Promise<unknown> {
     case 'openProtected':
       return vault.openProtected(request.id, request.password);
     case 'closeProtected':
-      return vault.closeProtected();
+      return vault.closeProtected(request.id);
     case 'generate':
       return generatePassword(request.options);
     case 'browserSetup':

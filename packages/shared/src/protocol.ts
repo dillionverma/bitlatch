@@ -203,7 +203,7 @@ export const desktopRequestSchema = z.discriminatedUnion('type', [
       password: z.string().min(1).max(1_024),
     })
     .strict(),
-  z.object({ type: z.literal('closeProtected') }).strict(),
+  z.object({ type: z.literal('closeProtected'), id }).strict(),
   z.object({ type: z.literal('save'), draft: itemDraftSchema }).strict(),
   z.object({ type: z.literal('setFavorite'), id, favorite: z.boolean() }).strict(),
   z.object({ type: z.literal('delete'), id }).strict(),

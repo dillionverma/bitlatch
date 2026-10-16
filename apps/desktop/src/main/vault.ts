@@ -148,6 +148,8 @@ export class Vault extends EventEmitter {
   private counterWrites: Promise<unknown> = Promise.resolve();
   private folderList: Folder[] = [];
   private opened = new Map<string, Cipher>();
+  private opening?: string;
+  private openTicket = 0;
   private state: Omit<
     VaultState,
     'biometrics' | 'biometricsOn' | 'revision' | 'itemsRevision' | 'trashLoaded'
@@ -451,6 +453,7 @@ export class Vault extends EventEmitter {
     this.session = '';
     this.ciphers.clear();
     this.opened.clear();
+    ++this.openTicket;
     this.folderList = [];
     this.trashLoaded = false;
     this.trashLoading = undefined;
@@ -598,20 +601,37 @@ export class Vault extends EventEmitter {
     const generation = this.generation;
     if (!this.cli.verifyPassword)
       throw new UserError('Open this item in the official Bitwarden client.');
+    // Closing the item while the password is checked cancels the open.
+    const ticket = ++this.openTicket;
+    this.opening = id;
+    const current = () => {
+      this.assertGeneration(generation);
+      if (ticket !== this.openTicket) throw new UserError('This item was closed.');
+    };
     const verified = await this.cli.verifyPassword(password);
-    this.assertGeneration(generation);
+    current();
     if (!verified) throw new UserError('That master password is not correct.');
     const full = JSON.parse(
       await this.cli.run(['get', 'item', id], { session: this.session }),
     ) as Cipher;
-    this.assertGeneration(generation);
+    current();
+    this.opening = undefined;
     this.opened.clear();
     this.opened.set(id, full);
     return this.detail(id);
   }
 
-  closeProtected() {
-    this.opened.clear();
+  /** Closes an item opened, or being opened, with the master password. */
+  closeProtected(id: string) {
+    if (this.opening !== id && !this.opened.has(id)) return;
+    ++this.openTicket;
+    this.opening = undefined;
+    this.opened.delete(id);
+  }
+
+  /** Raycast never receives items that ask for the master password. */
+  requireLauncherItem(id: string) {
+    if (isRestricted(this.item(id))) throw new UserError('Open this item in Bitlatch.');
   }
 
   detail(id: string): ItemDetail {
@@ -1249,6 +1269,7 @@ export class Vault extends EventEmitter {
         this.session = '';
         this.ciphers.clear();
         this.opened.clear();
+        ++this.openTicket;
         this.folderList = [];
         this.trashLoaded = false;
         this.trashLoading = undefined;

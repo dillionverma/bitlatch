@@ -94,12 +94,13 @@ export { typeName } from '@latch/shared/item-fields';
 export function summaryOf(item: ItemSummary): ItemSummary {
   const { id, name, username, website, subtitle, folderId, type } = item;
   const { favorite, hasPasskey, restricted, reprompt } = item;
+  // An item opened with the master password keeps its details out of the list.
   return {
     id,
     name,
-    username,
+    username: restricted ? '' : username,
     website,
-    subtitle,
+    subtitle: restricted ? '' : subtitle,
     folderId,
     type,
     favorite,

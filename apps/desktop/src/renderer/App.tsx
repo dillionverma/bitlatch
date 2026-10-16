@@ -325,6 +325,13 @@ function VaultWorkspace({
       : selection.status === 'unselected'
         ? ''
         : selection.id;
+  const selectedReprompt =
+    !!selectedId && [...items, ...trashed].some((item) => item.id === selectedId && item.reprompt);
+  // Leaving an item that asks for the master password closes it, even mid-check.
+  useEffect(() => {
+    if (!selectedId || !selectedReprompt) return;
+    return () => void window.latch.closeProtected(selectedId).catch(() => undefined);
+  }, [selectedId, selectedReprompt]);
   const selectedSummary =
     selection.status === 'protected'
       ? ([...items, ...trashed].find((item) => item.id === selection.id) ?? null)
@@ -589,7 +596,10 @@ function VaultWorkspace({
     try {
       // Select before opening the menu so both the highlight and Edit target
       // follow the clicked row, even when a different detail request is pending.
-      const detail = await select(item);
+      const detail =
+        selection.status === 'ready' && selection.item.id === item.id
+          ? selection.item
+          : await select(item);
       if (!detail || !alive.current || hasModal()) return;
       const version = selectionVersion.current;
       const current = () => alive.current && version === selectionVersion.current;
@@ -932,9 +942,12 @@ function VaultWorkspace({
                 key={selectedSummary.id}
                 item={selectedSummary}
                 onOpened={(item) => {
-                  if (!alive.current || selectedId !== item.id) return;
-                  selectionVersion.current++;
-                  setSelection({ status: 'ready', item });
+                  if (!alive.current) return;
+                  setSelection((current) =>
+                    current.status === 'protected' && current.id === item.id
+                      ? { status: 'ready', item }
+                      : current,
+                  );
                 }}
               />
             ) : selected && selectionVisible ? (

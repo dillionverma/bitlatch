@@ -331,8 +331,8 @@ export interface LatchApi {
   detail(id: string): Promise<Result<ItemDetail>>;
   /** Opens an item that asks for the master password. */
   openProtected(id: string, password: string): Promise<Result<ItemDetail>>;
-  /** Forgets every item opened with the master password. */
-  closeProtected(): Promise<Result<void>>;
+  /** Closes an item opened, or being opened, with the master password. */
+  closeProtected(id: string): Promise<Result<void>>;
   save(draft: ItemDraft): Promise<Result<ItemDetail>>;
   setFavorite(id: string, favorite: boolean): Promise<Result<ItemSummary>>;
   remove(id: string): Promise<Result<VaultState>>;

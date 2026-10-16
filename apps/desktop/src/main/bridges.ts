@@ -198,6 +198,8 @@ export async function startBridges({
           externalAccess.grant('raycast', peer);
           return null;
         }
+        if (request.type === 'detail' || request.type === 'copy')
+          vault.requireLauncherItem(request.id);
         if (request.type === 'detail') {
           const item = vault.detail(request.id);
           if (item.type !== 1 && item.type !== 2)
