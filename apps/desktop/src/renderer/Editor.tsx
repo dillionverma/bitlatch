@@ -451,6 +451,7 @@ export function Editor({
                           </>
                         )}
                         <Button
+                          aria-label={`Remove website ${index + 1}`}
                           type="button"
                           variant="outline"
                           disabled={busy}
@@ -603,8 +604,11 @@ export function Editor({
                   <div key={index} className="task-uri-row">
                     {row.action === 'keep' ? (
                       <p className="text-xs text-muted-foreground">
-                        {item?.fields[row.sourceIndex]?.name || 'Linked field'} links to another
-                        field and is kept as it is. Edit it in Bitwarden or remove it.
+                        {item?.fields[row.sourceIndex]?.name || 'This field'}
+                        {item?.fields[row.sourceIndex]?.kind === 'linked'
+                          ? ' links to another field'
+                          : ' has a type Bitlatch cannot edit'}{' '}
+                        and is kept as it is. Edit it in Bitwarden or remove it.
                       </p>
                     ) : (
                       <>
@@ -684,6 +688,7 @@ export function Editor({
                       </>
                     )}
                     <Button
+                      aria-label={`Remove field ${index + 1}`}
                       type="button"
                       variant="outline"
                       disabled={busy}

@@ -61,7 +61,7 @@ export function itemDraft(item: ItemDetail): ItemDraft {
     favorite: item.favorite,
     folderId: item.folderId,
     fields: item.fields.map((field, sourceIndex): CustomFieldDraft =>
-      field.kind === 'linked'
+      field.kind === 'linked' || field.kind === 'unknown'
         ? { action: 'keep', sourceIndex }
         : { action: 'write', sourceIndex, name: field.name, value: field.value, kind: field.kind },
     ),

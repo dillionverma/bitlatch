@@ -143,7 +143,8 @@ export interface CardFields {
 export interface CustomField {
   name: string;
   value: string;
-  kind: 'text' | 'hidden' | 'boolean' | 'linked';
+  /** `unknown` is a field type Bitlatch does not know; it shows masked and is never rewritten. */
+  kind: 'text' | 'hidden' | 'boolean' | 'linked' | 'unknown';
 }
 
 /**

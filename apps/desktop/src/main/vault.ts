@@ -1094,7 +1094,8 @@ export class Vault extends EventEmitter {
       notes: draft.notes || null,
       favorite: draft.favorite,
     });
-    if (draft.folderId !== undefined) {
+    // Only a move is checked, so a folder list that failed to load never blocks a save.
+    if (draft.folderId !== undefined && draft.folderId !== (cipher.folderId ?? null)) {
       if (
         draft.folderId !== null &&
         !this.folderList.some((folder) => folder.id === draft.folderId)
@@ -1306,12 +1307,21 @@ function mergeFields(
       seen.add(index);
     }
     if (row.action === 'keep') return previous[row.sourceIndex]!;
-    const original = index === undefined ? {} : previous[index];
+    const original = index === undefined ? undefined : previous[index];
+    const type = fieldKinds[row.kind];
+    // An untouched row keeps the stored field exactly, including values such as "TRUE".
+    if (
+      original &&
+      (original.name ?? '') === row.name &&
+      (original.value ?? '') === row.value &&
+      (original.type ?? 0) === type
+    )
+      return original;
     return {
       ...original,
       name: row.name,
       value: row.kind === 'boolean' ? String(row.value === 'true') : row.value,
-      type: fieldKinds[row.kind],
+      type,
       linkedId: null,
     };
   });
@@ -1368,8 +1378,8 @@ const linkedFieldNames: Record<number, string> = {
 };
 const customFieldKinds: CustomField['kind'][] = ['text', 'hidden', 'boolean', 'linked'];
 function customField(field: NonNullable<Cipher['fields']>[number]): CustomField {
-  // An unknown kind could hold a secret, so it is masked like a hidden field.
-  const kind = customFieldKinds[field.type ?? 0] ?? 'hidden';
+  // An unknown kind could hold a secret, so it shows masked like a hidden field.
+  const kind = customFieldKinds[field.type ?? 0] ?? 'unknown';
   return {
     name: field.name ?? '',
     value: kind === 'linked' ? (linkedFieldNames[field.linkedId ?? -1] ?? '') : (field.value ?? ''),

@@ -497,7 +497,8 @@ function renderDetail(item: ItemDetail) {
     else if (!field.value) addField(item, label, 'Empty');
     else {
       const target = { custom: index, revisionDate: item.revisionDate };
-      if (field.kind === 'hidden') addSecretField(item, label, field.value, target);
+      if (field.kind === 'hidden' || field.kind === 'unknown')
+        addSecretField(item, label, field.value, target);
       else addField(item, label, field.value, target);
     }
   });
