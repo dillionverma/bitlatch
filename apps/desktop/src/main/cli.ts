@@ -75,9 +75,11 @@ export function cliVersion(options: CliOptions) {
     child.stdout!.setEncoding('utf8');
     child.stdout!.on('data', (chunk: string) => (output = (output + chunk).slice(0, 64)));
     child.on('error', () => settle(''));
-    child.on('close', () => {
+    // Only a clean run that prints a released version counts; prereleases do not.
+    child.on('close', (code) => {
       clearTimeout(timer);
-      settle(/^\d+\.\d+\.\d+/.exec(output.trim())?.[0] ?? '');
+      const version = output.trim();
+      settle(code === 0 && /^\d+\.\d+\.\d+$/.test(version) ? version : '');
     });
   });
 }
