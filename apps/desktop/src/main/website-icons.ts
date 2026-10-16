@@ -1,4 +1,4 @@
-import { nativeImage } from 'electron';
+import { nativeImage, net } from 'electron';
 import { readFile, writeFile } from 'node:fs/promises';
 import { parse } from 'tldts';
 import { webUrl } from './matching';
@@ -16,6 +16,21 @@ export function iconHostname(website: string): string | null {
   return host;
 }
 
+/**
+ * Bitwarden's cloud icon services, or a self-hosted server's own, so a
+ * self-hosted vault never sends website names to Bitwarden.
+ */
+export function iconService(server: string) {
+  const host = new URL(server).hostname;
+  if (host === 'vault.bitwarden.com') return 'https://icons.bitwarden.net';
+  if (host === 'vault.bitwarden.eu') return 'https://icons.bitwarden.eu';
+  return `${server.replace(/\/$/, '')}/icons`;
+}
+
+export function iconUrl(server: string, host: string) {
+  return `${iconService(server)}/${encodeURIComponent(host)}/icon.png`;
+}
+
 /** Icons stay in memory. Locking clears hostnames, images, and queued requests. */
 export class WebsiteIcons {
   enabled = true;
@@ -26,7 +41,10 @@ export class WebsiteIcons {
   private active = 0;
   private epoch = 0;
 
-  constructor(private preferencePath: string) {}
+  constructor(
+    private preferencePath: string,
+    private server: () => string,
+  ) {}
 
   async load() {
     try {
@@ -100,15 +118,15 @@ export class WebsiteIcons {
     this.controllers.add(controller);
     const timeout = setTimeout(() => controller.abort(), 5_000);
     try {
-      // Node fetch has no browser cookies or referrer. Redirects cannot escape this origin.
-      const response = await fetch(
-        `https://icons.bitwarden.net/${encodeURIComponent(host)}/icon.png`,
-        {
-          signal: controller.signal,
-          redirect: 'error',
-          credentials: 'omit',
-        },
-      );
+      // Chromium's network stack trusts the same certificates as the system, which
+      // a self-hosted server with a private CA needs. No cookies are sent, nothing
+      // goes to the HTTP cache, and redirects cannot escape this origin.
+      const response = await net.fetch(iconUrl(this.server(), host), {
+        signal: controller.signal,
+        redirect: 'error',
+        credentials: 'omit',
+        cache: 'no-store',
+      });
       if (!response.ok || !response.body) return null;
       if (Number(response.headers.get('content-length')) > MAX_BYTES) return null;
       const chunks: Uint8Array[] = [];
