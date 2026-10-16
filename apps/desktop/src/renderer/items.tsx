@@ -74,10 +74,16 @@ export function displayWebsite(website: string) {
 export function typeName(type: number) {
   return (
     (
-      { 1: 'Login', 2: 'Secure note', 3: 'Card', 4: 'Identity', 5: 'SSH key' } as Record<
-        number,
-        string
-      >
+      {
+        1: 'Login',
+        2: 'Secure note',
+        3: 'Card',
+        4: 'Identity',
+        5: 'SSH key',
+        6: 'Bank account',
+        7: "Driver's license",
+        8: 'Passport',
+      } as Record<number, string>
     )[type] ?? 'Vault item'
   );
 }
