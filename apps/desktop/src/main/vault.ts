@@ -147,6 +147,7 @@ export class Vault extends EventEmitter {
   private captured?: Captured;
   private counterWrites: Promise<unknown> = Promise.resolve();
   private folderList: Folder[] = [];
+  private opened = new Map<string, Cipher>();
   private state: Omit<
     VaultState,
     'biometrics' | 'biometricsOn' | 'revision' | 'itemsRevision' | 'trashLoaded'
@@ -449,6 +450,7 @@ export class Vault extends EventEmitter {
     if (!locking) this.cli.cancel();
     this.session = '';
     this.ciphers.clear();
+    this.opened.clear();
     this.folderList = [];
     this.trashLoaded = false;
     this.trashLoading = undefined;
@@ -577,21 +579,51 @@ export class Vault extends EventEmitter {
     return (
       [...this.ciphers.values()]
         .filter(include)
-        .map(summarize)
+        .map((cipher) => summarize(cipher))
         // Measured faster here than a shared Intl.Collator, which V8 beats with
         // its own fast path for these names.
         .sort((a, b) => a.name.localeCompare(b.name))
     );
   }
 
-  detail(id: string): ItemDetail {
+  /**
+   * Opens an item that asks for the master password, as Bitwarden's apps do.
+   * The cache never holds its secrets; the opened copy lives here until the
+   * item closes or the vault locks.
+   */
+  async openProtected(id: string, password: string) {
     const cipher = this.item(id);
-    if (isRestricted(cipher))
-      throw new UserError(
-        'Use the official Bitwarden client for shared or password-protected items.',
-      );
+    if (cipher.organizationId || !cipher.reprompt)
+      throw new UserError('This item does not ask for your master password.');
+    const generation = this.generation;
+    if (!this.cli.verifyPassword)
+      throw new UserError('Open this item in the official Bitwarden client.');
+    const verified = await this.cli.verifyPassword(password);
+    this.assertGeneration(generation);
+    if (!verified) throw new UserError('That master password is not correct.');
+    const full = JSON.parse(
+      await this.cli.run(['get', 'item', id], { session: this.session }),
+    ) as Cipher;
+    this.assertGeneration(generation);
+    this.opened.clear();
+    this.opened.set(id, full);
+    return this.detail(id);
+  }
+
+  closeProtected() {
+    this.opened.clear();
+  }
+
+  detail(id: string): ItemDetail {
+    const cached = this.item(id);
+    const opened = this.opened.get(id);
+    const cipher = opened ?? cached;
+    if (cipher.organizationId)
+      throw new UserError('Use the official Bitwarden client for shared items.');
+    if (cipher.reprompt && !opened)
+      throw new UserError('Enter your master password to open this item.');
     return {
-      ...summarize(cipher),
+      ...summarize(cipher, Boolean(opened)),
       password: cipher.login?.password ?? '',
       card:
         cipher.type === 3
@@ -623,9 +655,9 @@ export class Vault extends EventEmitter {
       notes: cipher.notes ?? '',
       revisionDate: cipher.revisionDate ?? null,
       createdDate: cipher.creationDate ?? null,
-      editable: isEditable(cipher) && !cipher.deletedDate,
-      deletable: isRemovable(cipher) && !cipher.deletedDate,
-      restorable: isRemovable(cipher) && Boolean(cipher.deletedDate),
+      editable: isEditable(cipher, Boolean(opened)) && !cipher.deletedDate,
+      deletable: isRemovable(cipher, Boolean(opened)) && !cipher.deletedDate,
+      restorable: isRemovable(cipher, Boolean(opened)) && Boolean(cipher.deletedDate),
     };
   }
 
@@ -634,7 +666,7 @@ export class Vault extends EventEmitter {
     this.requireUnlocked();
     const generation = this.generation;
     const cipher = this.item(id);
-    if (!isRemovable(cipher))
+    if (!isRemovable(cipher, this.opened.has(id)))
       throw new UserError('Delete this item in the official Bitwarden client.');
     if (cipher.deletedDate) throw new UserError('This item is already in the trash.');
     await this.cli.run(['delete', 'item', id], { session: this.session });
@@ -649,7 +681,7 @@ export class Vault extends EventEmitter {
     const generation = this.generation;
     const cipher = this.item(id);
     if (!cipher.deletedDate) throw new UserError('This item is not in the trash.');
-    if (!isRemovable(cipher))
+    if (!isRemovable(cipher, this.opened.has(id)))
       throw new UserError('Restore this item in the official Bitwarden client.');
     await this.cli.run(['restore', 'item', id], { session: this.session });
     this.assertGeneration(generation);
@@ -660,6 +692,8 @@ export class Vault extends EventEmitter {
   private mark(id: string, deletedDate: string | null) {
     const cipher = this.ciphers.get(id);
     if (cipher) cipher.deletedDate = deletedDate;
+    const opened = this.opened.get(id);
+    if (opened) opened.deletedDate = deletedDate;
     this.countItems();
   }
 
@@ -682,7 +716,7 @@ export class Vault extends EventEmitter {
       state: 'unlocked',
       items: [...this.ciphers.values()]
         .filter((cipher) => canFill(cipher, url))
-        .map(summarize)
+        .map((cipher) => summarize(cipher))
         .slice(0, 12),
     };
   }
@@ -712,7 +746,7 @@ export class Vault extends EventEmitter {
             .includes(term),
         ),
       )
-      .map(summarize)
+      .map((cipher) => summarize(cipher))
       .filter((item) => query.scope !== 'favorites' || item.favorite)
       .filter((item) => query.itemType === 'all' || item.type === browserItemTypes[query.itemType])
       .sort(
@@ -1053,6 +1087,7 @@ export class Vault extends EventEmitter {
     ) as Cipher;
     this.assertGeneration(generation);
     this.ciphers.set(saved.id, cacheFields(saved));
+    if (this.opened.has(saved.id)) this.opened.set(saved.id, saved);
     this.countItems();
     this.state.lastSync = new Date().toISOString();
     this.publish();
@@ -1071,7 +1106,7 @@ export class Vault extends EventEmitter {
 
   async setFavorite(id: string, favorite: boolean) {
     const existing = this.item(id);
-    if (existing.deletedDate || !isEditable(existing))
+    if (existing.deletedDate || !isEditable(existing, this.opened.has(id)))
       throw new UserError('Update this item in the official Bitwarden client.');
     const generation = this.generation;
     // Read the complete, latest cipher so a metadata change preserves unknown fields.
@@ -1079,7 +1114,7 @@ export class Vault extends EventEmitter {
       await this.cli.run(['get', 'item', id], { session: this.session }),
     ) as Cipher;
     this.assertGeneration(generation);
-    if (latest.deletedDate || !isEditable(latest))
+    if (latest.deletedDate || !isEditable(latest, this.opened.has(id)))
       throw new UserError('Update this item in the official Bitwarden client.');
     const payload = Buffer.from(JSON.stringify({ ...latest, favorite })).toString('base64');
     const saved = JSON.parse(
@@ -1087,6 +1122,7 @@ export class Vault extends EventEmitter {
     ) as Cipher;
     this.assertGeneration(generation);
     this.ciphers.set(saved.id, cacheFields(saved));
+    if (this.opened.has(saved.id)) this.opened.set(saved.id, saved);
     this.countItems();
     this.publish();
     return summarize(saved);
@@ -1098,7 +1134,7 @@ export class Vault extends EventEmitter {
     let cipher: Cipher;
     if (draft.id) {
       const existing = this.item(draft.id);
-      if (existing.deletedDate || !isEditable(existing))
+      if (existing.deletedDate || !isEditable(existing, this.opened.has(draft.id)))
         throw new UserError('Edit this item in the official Bitwarden client.');
       const latest = JSON.parse(
         await this.cli.run(['get', 'item', draft.id], { session: this.session }),
@@ -1106,7 +1142,11 @@ export class Vault extends EventEmitter {
       this.assertGeneration(generation);
       if ((latest.revisionDate ?? null) !== (draft.revisionDate ?? null))
         throw new UserError('This item changed elsewhere. Sync, reopen it, and try again.');
-      if (latest.deletedDate || !isEditable(latest) || latest.type !== draft.type)
+      if (
+        latest.deletedDate ||
+        !isEditable(latest, this.opened.has(draft.id)) ||
+        latest.type !== draft.type
+      )
         throw new UserError('Edit this item in the official Bitwarden client.');
       cipher = { ...latest };
     } else {
@@ -1183,6 +1223,7 @@ export class Vault extends EventEmitter {
     ) as Cipher;
     this.assertGeneration(generation);
     this.ciphers.set(saved.id, cacheFields(saved));
+    if (this.opened.has(saved.id)) this.opened.set(saved.id, saved);
     this.countItems();
     this.state.lastSync = new Date().toISOString();
     this.publish();
@@ -1207,6 +1248,7 @@ export class Vault extends EventEmitter {
         this.cli.cancel();
         this.session = '';
         this.ciphers.clear();
+        this.opened.clear();
         this.folderList = [];
         this.trashLoaded = false;
         this.trashLoading = undefined;
@@ -1315,16 +1357,16 @@ function passkeysOf(cipher: Cipher): Fido2Credential[] {
   return (cipher.login?.fido2Credentials ?? []).filter(usableCredential);
 }
 /** Whether Bitlatch will move an item to the trash. Type does not matter here. */
-function isRemovable(cipher: Cipher) {
-  return !isRestricted(cipher) && !cipher.login?.fido2Credentials?.length;
-}
-function isEditable(cipher: Cipher) {
+/** `opened`: the user entered the master password for this item. */
+function isRemovable(cipher: Cipher, opened = false) {
   return (
-    cipher.type >= 1 &&
-    cipher.type <= 5 &&
-    !isRestricted(cipher) &&
+    !cipher.organizationId &&
+    (!cipher.reprompt || opened) &&
     !cipher.login?.fido2Credentials?.length
   );
+}
+function isEditable(cipher: Cipher, opened = false) {
+  return cipher.type >= 1 && cipher.type <= 5 && isRemovable(cipher, opened);
 }
 const fieldKinds = { text: 0, hidden: 1, boolean: 2 } as const;
 /** Applies edited custom fields by position, keeping each field's unknown keys. */
@@ -1420,8 +1462,9 @@ function customField(field: NonNullable<Cipher['fields']>[number]): CustomField 
     kind,
   };
 }
-function subtitleOf(cipher: Cipher) {
-  if (isRestricted(cipher)) return '';
+/** `opened`: the master password was entered, so a re-prompt item may show its details. */
+function subtitleOf(cipher: Cipher, opened = false) {
+  if (isRestricted(cipher) && !opened) return '';
   if (cipher.type === 3) return cardLabel(cipher.card?.brand ?? '', cipher.card?.number ?? '');
   const details = detailsOf(cipher);
   return details ? detailSections[cipher.type]!.subtitle(details) : '';
@@ -1429,18 +1472,19 @@ function subtitleOf(cipher: Cipher) {
 function browserPreview(value: string, limit: number) {
   return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
 }
-function summarize(cipher: Cipher): ItemSummary {
+function summarize(cipher: Cipher, opened = false): ItemSummary {
   return {
     id: cipher.id,
     name: cipher.name || 'Untitled',
-    username: isRestricted(cipher) ? '' : (cipher.login?.username ?? ''),
+    username: isRestricted(cipher) && !opened ? '' : (cipher.login?.username ?? ''),
     website: cipher.login?.uris?.[0]?.uri ?? '',
-    subtitle: subtitleOf(cipher),
+    subtitle: subtitleOf(cipher, opened),
     folderId: typeof cipher.folderId === 'string' ? cipher.folderId : null,
     type: cipher.type,
     favorite: Boolean(cipher.favorite),
     hasPasskey: Boolean(cipher.login?.fido2Credentials?.length),
     restricted: isRestricted(cipher),
+    reprompt: Boolean(cipher.reprompt),
   };
 }
 

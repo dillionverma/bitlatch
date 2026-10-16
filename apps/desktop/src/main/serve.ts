@@ -117,6 +117,10 @@ export class WarmBitwardenCli implements CliPort {
     void this.reset().catch(() => undefined);
   }
 
+  verifyPassword(password: string) {
+    return this.cold.verifyPassword!(password);
+  }
+
   async stop() {
     this.cancel();
     await this.reset();

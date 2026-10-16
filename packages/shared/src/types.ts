@@ -127,6 +127,8 @@ export interface ItemSummary {
   favorite: boolean;
   hasPasskey: boolean;
   restricted: boolean;
+  /** Bitwarden asks for the master password before this item opens. */
+  reprompt: boolean;
 }
 
 /** Bitwarden's card fields, with the CLI's nulls read as empty strings. */
@@ -327,6 +329,10 @@ export interface LatchApi {
   saveFolder(id: string | null, name: string): Promise<Result<Folder>>;
   deleteFolder(id: string): Promise<Result<void>>;
   detail(id: string): Promise<Result<ItemDetail>>;
+  /** Opens an item that asks for the master password. */
+  openProtected(id: string, password: string): Promise<Result<ItemDetail>>;
+  /** Forgets every item opened with the master password. */
+  closeProtected(): Promise<Result<void>>;
   save(draft: ItemDraft): Promise<Result<ItemDetail>>;
   setFavorite(id: string, favorite: boolean): Promise<Result<ItemSummary>>;
   remove(id: string): Promise<Result<VaultState>>;

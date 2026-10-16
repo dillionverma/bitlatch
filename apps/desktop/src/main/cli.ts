@@ -6,7 +6,8 @@ import {
 } from 'node:child_process';
 import type { Writable } from 'node:stream';
 import { homedir, tmpdir } from 'node:os';
-import { mkdir } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { UserError } from '@latch/shared/protocol';
 import type { TwoStepMethod } from '@latch/shared/types';
 import { BOOTSTRAP_MARKER, type BootstrapPayload, type SecretName } from '../cli-bootstrap/payload';
@@ -140,6 +141,8 @@ export interface CliPort {
   prepare?(): Promise<void>;
   /** Cancel pending work and lock, retaining only an idle, locked worker. */
   lock?(): Promise<void>;
+  /** Checks the master password without touching the running session. */
+  verifyPassword?(password: string): Promise<boolean>;
 }
 
 /** Bitwarden rejected a two-step or new-device verification code. */
@@ -152,6 +155,8 @@ const LIST_RENDER_MS = 200;
 const TIMED_OUT = Symbol('timed out');
 const ANSI_SEQUENCE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[A-Za-z]`, 'g');
 
+const WRONG_PASSWORD = /decryption operation failed|invalid master password/i;
+
 export class BitwardenCli implements CliPort {
   private queue: Promise<unknown> = Promise.resolve();
   private generation = 0;
@@ -159,6 +164,48 @@ export class BitwardenCli implements CliPort {
   private abandon?: (error: UserError) => void;
 
   constructor(private readonly options: CliOptions) {}
+
+  /**
+   * `bw unlock` replaces the session key before it checks the password, so it
+   * runs against a private copy of the CLI's state. The copy's new session key
+   * is discarded with the copy; the running session never changes.
+   */
+  async verifyPassword(password: string): Promise<boolean> {
+    for (let attempt = 0; ; attempt++) {
+      const directory = await mkdtemp(join(dirname(this.options.dataDir), 'verify-'));
+      try {
+        await copyFile(join(this.options.dataDir, 'data.json'), join(directory, 'data.json'));
+        const { code, stderr } = await this.unlockCopy(directory, password);
+        if (code === 0) return true;
+        if (WRONG_PASSWORD.test(stderr)) return false;
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+      // The copy can catch the CLI mid-write; one more try reads a settled file.
+      if (attempt) throw new UserError('Could not check your master password. Try again.');
+    }
+  }
+
+  private unlockCopy(directory: string, password: string) {
+    return new Promise<{ code: number | null; stderr: string }>((settle) => {
+      const child = spawnCli(
+        { ...this.options, dataDir: directory },
+        ['unlock', '--passwordenv', 'LATCH_MASTER_PASSWORD', '--raw', '--nointeraction'],
+        { ...cliEnvironment(directory), BW_NOINTERACTION: 'true' },
+        { LATCH_MASTER_PASSWORD: password },
+        ['ignore', 'ignore', 'pipe'],
+      );
+      let stderr = '';
+      const timer = setTimeout(() => child.kill('SIGKILL'), COMMAND_TIMEOUT_MS);
+      child.stderr!.setEncoding('utf8');
+      child.stderr!.on('data', (chunk: string) => (stderr = (stderr + chunk).slice(-4_096)));
+      child.on('error', () => settle({ code: null, stderr }));
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        settle({ code, stderr });
+      });
+    });
+  }
 
   cancel() {
     this.generation += 1;

@@ -69,8 +69,10 @@ export function Detail({
       alive.current = false;
       epoch.current++;
       unsubscribe();
+      // Leaving an item opened with the master password closes it again.
+      if (item.reprompt) void window.latch.closeProtected().catch(() => undefined);
     };
-  }, [item.id]);
+  }, [item.id, item.reprompt]);
   useEffect(() => {
     if (!copied) return;
     const timer = setTimeout(() => setCopied(null), 1600);
