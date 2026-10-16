@@ -79,7 +79,12 @@
   overflow-y: auto;
 }
 .vault-app .nav-heading {
-  padding: 12px 8px 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 4px 4px 8px;
+}
+.vault-app .nav-heading h2 {
   font-size: 11px;
   line-height: 15px;
   font-weight: 500;

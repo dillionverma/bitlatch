@@ -2,7 +2,7 @@ export const MAX_BROWSER_MESSAGE_BYTES = 900_000;
 
 export type WindowMaterial = 'glass' | 'vibrancy' | 'solid';
 export type WindowCommand = 'search' | 'new' | 'settings';
-export type NativeConfirmation = 'discard' | 'trash';
+export type NativeConfirmation = 'discard' | 'trash' | 'deleteFolder';
 export type ItemMenuAction =
   | 'copyUsername'
   | 'copyPassword'
@@ -323,6 +323,9 @@ export interface LatchApi {
   items(): Promise<Result<ItemSummary[]>>;
   trash(): Promise<Result<ItemSummary[]>>;
   folders(): Promise<Result<Folder[]>>;
+  /** Creates a folder when `id` is null, otherwise renames it. */
+  saveFolder(id: string | null, name: string): Promise<Result<Folder>>;
+  deleteFolder(id: string): Promise<Result<void>>;
   detail(id: string): Promise<Result<ItemDetail>>;
   save(draft: ItemDraft): Promise<Result<ItemDetail>>;
   setFavorite(id: string, favorite: boolean): Promise<Result<ItemSummary>>;

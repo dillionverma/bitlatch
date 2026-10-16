@@ -147,7 +147,9 @@ export const desktopRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('websiteIcon'), id }).strict(),
   z.object({ type: z.literal('state') }).strict(),
   z.object({ type: z.literal('appearance') }).strict(),
-  z.object({ type: z.literal('confirm'), action: z.enum(['discard', 'trash']) }).strict(),
+  z
+    .object({ type: z.literal('confirm'), action: z.enum(['discard', 'trash', 'deleteFolder']) })
+    .strict(),
   z
     .object({
       type: z.literal('itemMenu'),
@@ -185,6 +187,14 @@ export const desktopRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('items') }).strict(),
   z.object({ type: z.literal('trash') }).strict(),
   z.object({ type: z.literal('folders') }).strict(),
+  z
+    .object({
+      type: z.literal('saveFolder'),
+      id: id.nullable(),
+      name: z.string().trim().min(1).max(1_000),
+    })
+    .strict(),
+  z.object({ type: z.literal('deleteFolder'), id }).strict(),
   z.object({ type: z.literal('detail'), id }).strict(),
   z.object({ type: z.literal('save'), draft: itemDraftSchema }).strict(),
   z.object({ type: z.literal('setFavorite'), id, favorite: z.boolean() }).strict(),

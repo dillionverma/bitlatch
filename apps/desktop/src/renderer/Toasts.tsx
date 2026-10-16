@@ -27,6 +27,10 @@ const messages = new Set([
   'Syncing with Bitwarden…',
   'Vault up to date',
   'Could not sync. Check your connection and try again.',
+  'Folder created',
+  'Folder renamed',
+  'Folder deleted',
+  'Could not delete the folder.',
   ...Object.values(fieldLabels).map((label) => `${label} copied`),
 ]);
 const fallback = {

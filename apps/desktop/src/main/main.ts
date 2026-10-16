@@ -306,6 +306,10 @@ async function handleRequest(request: DesktopRequest): Promise<unknown> {
       return vault.trash();
     case 'folders':
       return vault.folders();
+    case 'saveFolder':
+      return vault.saveFolder(request.id, request.name);
+    case 'deleteFolder':
+      return vault.deleteFolder(request.id);
     case 'detail':
       return vault.detail(request.id);
     case 'generate':

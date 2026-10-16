@@ -12,6 +12,7 @@ import {
   Bank,
   CreditCard,
   FolderSimple,
+  PencilSimple,
   IdentificationBadge,
   IdentificationCard,
   Terminal,
@@ -32,6 +33,7 @@ import type {
 } from '@latch/shared/types';
 import { Auth } from './Auth';
 import { Editor } from './Editor';
+import { FolderDialog } from './FolderDialog';
 import { Settings } from './Settings';
 import { Mark } from './Mark';
 import { Detail } from './Detail';
@@ -79,7 +81,7 @@ type Selection =
   | { status: 'unselected' }
   | { status: 'loading' | 'restricted' | 'error'; id: string }
   | { status: 'ready'; item: ItemDetail };
-type Modal = 'new' | 'edit' | 'settings' | 'search' | null;
+type Modal = 'new' | 'edit' | 'settings' | 'search' | 'newFolder' | 'renameFolder' | null;
 /** `match` selects a filter's items; `optional` filters show only while they have items. */
 interface FilterSpec {
   id: string;
@@ -491,6 +493,18 @@ function VaultWorkspace({
   useEffect(() => {
     if (currentFilter.id !== filter) setFilter('all');
   }, [currentFilter, filter]);
+  const selectedFolder = folders.find((folder) => `folder:${folder.id}` === filter) ?? null;
+  async function deleteFolder(folder: Folder) {
+    if (hasModal()) return;
+    const confirmed = await window.latch.confirm('deleteFolder').catch(() => null);
+    if (!alive.current || !confirmed?.ok || !confirmed.value) return;
+    const result = await window.latch.deleteFolder(folder.id).catch(() => null);
+    if (!alive.current) return;
+    if (result?.ok) {
+      notify.show('done', 'Folder deleted');
+      setFilter('folder:none');
+    } else notify.show('error', 'Could not delete the folder.');
+  }
   const indexed = useMemo(() => indexItems(items), [items]);
   const indexedTrash = useMemo(() => indexItems(trashed), [trashed]);
   const visible = useMemo(() => {
@@ -720,9 +734,21 @@ function VaultWorkspace({
                     )}
                   </Button>
                 ))}
+              <div className="nav-heading">
+                <h2>Folders</h2>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="New folder"
+                  title="New folder"
+                  onClick={() => !hasModal() && setModal('newFolder')}
+                >
+                  <Plus />
+                </Button>
+              </div>
               {folderFilters.length > 0 && (
                 <>
-                  <h2 className="nav-heading">Folders</h2>
                   {folderFilters.map(({ id, label, icon: Icon, count }) => (
                     <Button
                       type="button"
@@ -802,6 +828,30 @@ function VaultWorkspace({
                   <header className="list-heading">
                     <h1>{query ? 'Search results' : currentFilter.label}</h1>
                     <span>{visible.length.toLocaleString()}</span>
+                    {selectedFolder && (
+                      <>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Rename ${selectedFolder.name}`}
+                          title="Rename folder"
+                          onClick={() => !hasModal() && setModal('renameFolder')}
+                        >
+                          <PencilSimple size={14} />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Delete ${selectedFolder.name}`}
+                          title="Delete folder"
+                          onClick={() => void deleteFolder(selectedFolder)}
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      </>
+                    )}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -962,6 +1012,24 @@ function VaultWorkspace({
               setRevealSelection((request) => request + 1);
               if (item.id !== selectedId || selection.status === 'error') void select(item);
             }}
+          />
+        )}
+        {(modal === 'newFolder' || (modal === 'renameFolder' && selectedFolder)) && (
+          <FolderDialog
+            folder={modal === 'renameFolder' ? selectedFolder : null}
+            onClose={() => setModal(null)}
+            onSaved={(folder) => {
+              if (!alive.current) return;
+              setModal(null);
+              // Show the folder now; the vault's broadcast refresh follows.
+              setFolders((current) =>
+                [...current.filter((entry) => entry.id !== folder.id), folder].sort((a, b) =>
+                  a.name.localeCompare(b.name),
+                ),
+              );
+              setFilter(`folder:${folder.id}`);
+            }}
+            notify={notify}
           />
         )}
         {(modal === 'new' || modal === 'edit') && (
