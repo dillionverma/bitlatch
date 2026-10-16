@@ -84,7 +84,10 @@ lifecycle.startup = app
     }
     await mkdir(app.getPath('userData'), { recursive: true, mode: 0o700 });
     await lifecycle.loadPreferences(join(app.getPath('userData'), 'preferences.json'));
-    websiteIcons = new WebsiteIcons(join(app.getPath('userData'), 'website-icons.json'));
+    websiteIcons = new WebsiteIcons(
+      join(app.getPath('userData'), 'website-icons.json'),
+      () => vault.snapshot().server,
+    );
     await websiteIcons.load();
     const engine = await localEngine({
       dataDir: join(app.getPath('userData'), 'bitwarden'),

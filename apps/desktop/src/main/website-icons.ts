@@ -16,6 +16,21 @@ export function iconHostname(website: string): string | null {
   return host;
 }
 
+/**
+ * Bitwarden's cloud icon services, or a self-hosted server's own, so a
+ * self-hosted vault never sends website names to Bitwarden.
+ */
+export function iconService(server: string) {
+  const host = new URL(server).hostname;
+  if (host === 'vault.bitwarden.com') return 'https://icons.bitwarden.net';
+  if (host === 'vault.bitwarden.eu') return 'https://icons.bitwarden.eu';
+  return `${server.replace(/\/$/, '')}/icons`;
+}
+
+export function iconUrl(server: string, host: string) {
+  return `${iconService(server)}/${encodeURIComponent(host)}/icon.png`;
+}
+
 /** Icons stay in memory. Locking clears hostnames, images, and queued requests. */
 export class WebsiteIcons {
   enabled = true;
@@ -26,7 +41,10 @@ export class WebsiteIcons {
   private active = 0;
   private epoch = 0;
 
-  constructor(private preferencePath: string) {}
+  constructor(
+    private preferencePath: string,
+    private server: () => string,
+  ) {}
 
   async load() {
     try {
@@ -101,14 +119,11 @@ export class WebsiteIcons {
     const timeout = setTimeout(() => controller.abort(), 5_000);
     try {
       // Node fetch has no browser cookies or referrer. Redirects cannot escape this origin.
-      const response = await fetch(
-        `https://icons.bitwarden.net/${encodeURIComponent(host)}/icon.png`,
-        {
-          signal: controller.signal,
-          redirect: 'error',
-          credentials: 'omit',
-        },
-      );
+      const response = await fetch(iconUrl(this.server(), host), {
+        signal: controller.signal,
+        redirect: 'error',
+        credentials: 'omit',
+      });
       if (!response.ok || !response.body) return null;
       if (Number(response.headers.get('content-length')) > MAX_BYTES) return null;
       const chunks: Uint8Array[] = [];

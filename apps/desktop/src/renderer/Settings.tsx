@@ -383,9 +383,9 @@ export function Settings({
                 </Field>
               </FieldGroup>
               <p id="website-icons-privacy" className="settings-caption">
-                Requests send website hostnames to Bitwarden’s icon service, never passwords,
-                usernames, or URL paths. Local addresses stay private. Icons are cached until you
-                lock the vault.
+                Requests send website hostnames to your vault server’s icon service, or Bitwarden’s
+                for cloud accounts, never passwords, usernames, or URL paths. Local addresses stay
+                private. Icons are cached until you lock the vault.
               </p>
             </section>
           )}

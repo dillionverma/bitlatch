@@ -14,7 +14,7 @@ import type { VerifiedPeer } from './local-transport';
 import { ExternalAccess } from './external-access';
 import { installBrowser } from './browser-registration';
 import type { BrowserConnection, BrowserUnlockState } from '@latch/shared/types';
-import { iconHostname, type WebsiteIcons } from './website-icons';
+import { iconHostname, iconUrl, type WebsiteIcons } from './website-icons';
 import type { Vault } from './vault';
 import type { MacAutoFill } from './macos-autofill';
 
@@ -228,9 +228,7 @@ export async function startBridges({
               username,
               website,
               type,
-              ...(host
-                ? { iconUrl: `https://icons.bitwarden.net/${encodeURIComponent(host)}/icon.png` }
-                : {}),
+              ...(host ? { iconUrl: iconUrl(vault.snapshot().server, host) } : {}),
             };
           });
         return { ...state, items };
