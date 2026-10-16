@@ -15,7 +15,6 @@ export function formValues(item: ItemDetail): { kind: FormKind; values: FormValu
         ccGivenName: given,
         ccFamilyName: family.join(' '),
         ccNumber: number.replace(/\s+/g, ''),
-        ccExp: month && year ? `${month}/${year.slice(-2)}` : '',
         ccExpMonth: month,
         ccExpYear: year,
         ccCsc: code,

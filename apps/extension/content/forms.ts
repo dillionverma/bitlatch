@@ -114,23 +114,50 @@ function describe(field: Field) {
     .toLowerCase();
 }
 
+/**
+ * A field a person can see: large enough, on the page, mostly opaque through
+ * its ancestors, and, where it is in view, not covered by another element.
+ * Decoys that a page hides, shrinks, or covers never receive values.
+ */
 function fillable(field: Field) {
   const rect = field.getBoundingClientRect();
+  if (rect.width < 24 || rect.height < 14) return false;
+  const { scrollWidth, scrollHeight } = document.documentElement;
+  if (
+    rect.right + scrollX <= 0 ||
+    rect.bottom + scrollY <= 0 ||
+    rect.left + scrollX >= Math.max(scrollWidth, innerWidth) ||
+    rect.top + scrollY >= Math.max(scrollHeight, innerHeight)
+  )
+    return false;
+  if (
+    !field.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) ||
+    field.disabled ||
+    (field instanceof HTMLInputElement && field.readOnly) ||
+    (field instanceof HTMLTextAreaElement && field.readOnly) ||
+    field.closest('[inert]')
+  )
+    return false;
+  let opacity = 1;
+  for (let element: Element | null = field; element; element = element.parentElement)
+    opacity *= Number(getComputedStyle(element).opacity);
+  if (opacity < 0.5) return false;
+  const x = rect.left + rect.width / 2;
+  const y = rect.top + rect.height / 2;
+  if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return true;
+  const hit = document.elementFromPoint(x, y);
   return (
-    rect.width >= 20 &&
-    rect.height >= 10 &&
-    field.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) &&
-    !field.disabled &&
-    !(field instanceof HTMLInputElement && field.readOnly) &&
-    !(field instanceof HTMLTextAreaElement && field.readOnly) &&
-    !field.closest('[inert]')
+    !!hit &&
+    (hit === field ||
+      field.contains(hit) ||
+      (hit instanceof HTMLLabelElement && hit.control === field))
   );
 }
 
 export function classify(field: Field): Slot | undefined {
   if (
     field instanceof HTMLInputElement &&
-    !['text', 'email', 'tel', 'number', 'search', ''].includes(field.type)
+    !['text', 'email', 'tel', 'number', 'search', 'month', ''].includes(field.type)
   )
     return undefined;
   // Drop section-*, shipping, and billing prefixes; the last token names the field.
@@ -142,14 +169,19 @@ export function classify(field: Field): Slot | undefined {
   return patterns.find(([, pattern]) => pattern.test(text))?.[0];
 }
 
+/** The matching fields of the one form with the most of them, so unrelated forms stay empty. */
 function fields(kind: FormKind) {
-  return Array.from(document.querySelectorAll<Field>('input, select, textarea'))
+  const matched = Array.from(document.querySelectorAll<Field>('input, select, textarea'))
     .filter(fillable)
     .map((field) => ({ field, slot: classify(field) }))
     .filter(
       (entry): entry is { field: Field; slot: Slot } =>
         !!entry.slot && cardSlots.has(entry.slot) === (kind === 'card'),
     );
+  const groups = new Map<HTMLFormElement | null, typeof matched>();
+  for (const entry of matched)
+    groups.set(entry.field.form, [...(groups.get(entry.field.form) ?? []), entry]);
+  return [...groups.values()].sort((a, b) => b.length - a.length)[0] ?? [];
 }
 
 /** The slots this document can fill, for the extension to decide which frames to ask. */
@@ -157,9 +189,23 @@ export function scanForm(kind: FormKind): Slot[] {
   return fields(kind).map(({ slot }) => slot);
 }
 
-function choose(select: HTMLSelectElement, value: string) {
+const regions = new Intl.DisplayNames(['en'], { type: 'region' });
+function regionName(code: string) {
+  try {
+    return /^[a-z]{2}$/i.test(code) ? (regions.of(code.toUpperCase()) ?? '') : '';
+  } catch {
+    return '';
+  }
+}
+
+function choose(select: HTMLSelectElement, value: string, slot: Slot) {
   const wanted = value.trim().toLowerCase();
   const options = Array.from(select.options);
+  // A country stored as a code matches a name, and a stored name matches a code.
+  const country = (option: HTMLOptionElement) =>
+    slot === 'country' &&
+    (option.text.trim().toLowerCase() === regionName(wanted).toLowerCase() ||
+      regionName(option.value).toLowerCase() === wanted);
   const match =
     options.find((option) => option.value.trim().toLowerCase() === wanted) ??
     options.find((option) => option.text.trim().toLowerCase() === wanted) ??
@@ -168,6 +214,7 @@ function choose(select: HTMLSelectElement, value: string) {
       (option) => /^\d+$/.test(wanted) && Number(option.value) === Number(wanted) && option.value,
     ) ??
     options.find((option) => /^\d{4}$/.test(wanted) && option.value === wanted.slice(2)) ??
+    options.find((option) => option.value && country(option)) ??
     options.find(
       (option) => wanted.length > 2 && option.text.trim().toLowerCase().startsWith(wanted),
     );
@@ -178,14 +225,23 @@ function choose(select: HTMLSelectElement, value: string) {
   return true;
 }
 
+/** A combined expiration in the format the field asks for: a month input, MM/YYYY, or MM/YY. */
+function expiration(field: Field, values: FormValues) {
+  const month = values.ccExpMonth;
+  const year = values.ccExpYear;
+  if (!month || !year) return '';
+  if (field instanceof HTMLInputElement && field.type === 'month') return `${year}-${month}`;
+  return /yyyy/.test(describe(field)) ? `${month}/${year}` : `${month}/${year.slice(-2)}`;
+}
+
 /** Fills every field this document has a value for; returns how many it filled. */
 export function fillForm(kind: FormKind, values: FormValues) {
   let filled = 0;
   for (const { field, slot } of fields(kind)) {
-    const value = values[slot];
+    const value = slot === 'ccExp' ? expiration(field, values) : values[slot];
     if (!value) continue;
     if (field instanceof HTMLSelectElement) {
-      if (choose(field, value)) filled++;
+      if (choose(field, value, slot)) filled++;
     } else if (field instanceof HTMLInputElement) {
       setValue(field, value);
       filled++;

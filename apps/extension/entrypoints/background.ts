@@ -19,49 +19,67 @@ import type {
 } from '@latch/shared/types';
 import { formValues } from '../form-values';
 
+type Native = <T>(request: BrowserRequest) => Promise<Result<T>>;
+type FrameTarget = { frameId: number; documentId?: string; origin: string };
+
 /**
  * Fills a card or identity into the active tab after a click in the popup.
- * Frames from the page's own origin fill at once; frames from other origins,
- * such as a payment provider's, fill only once the user confirms that origin.
+ * Frames from the page's own origin fill at once; each frame from another
+ * origin, such as a payment provider's, fills only once the user confirms that
+ * origin. Every value goes to the exact document that was scanned.
  */
 async function fillForm(
-  detailOf: (request: BrowserRequest) => Promise<Result<ItemDetail>>,
+  native: Native,
   id: string,
   tabId: unknown,
   url: unknown,
   confirmed: string[],
 ) {
-  const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
-  const unchanged = async () =>
-    !!tab?.id &&
-    tab.id === tabId &&
-    tab.url === url &&
-    /^https?:\/\//.test(tab.url ?? '') &&
-    (await browser.windows.get(tab.windowId)).focused;
-  if (!tab?.id || !(await unchanged()))
-    return { ok: false, error: 'This page changed. Open Bitlatch again.' };
+  if (typeof tabId !== 'number') return { ok: false, error: 'Invalid fill request.' };
+  const changed = { ok: false, error: 'This page changed. Open Bitlatch again.' } as const;
+  // Re-read the tab each time: a navigation must stop the fill.
+  const current = async () => {
+    const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+    return !!tab &&
+      tab.id === tabId &&
+      tab.url === url &&
+      /^https?:\/\//.test(tab.url ?? '') &&
+      (await browser.windows.get(tab.windowId)).focused
+      ? tab
+      : null;
+  };
+  const tab = await current();
+  if (!tab) return changed;
   const request = browserRequestSchema.safeParse({ type: 'detail', id });
   if (!request.success) return { ok: false, error: 'Invalid fill request.' };
-  const detail = await detailOf(request.data);
+  const detail = await native<ItemDetail>(request.data);
   if (!detail.ok) return detail;
   const form = formValues(detail.value);
   if (!form) return { ok: false, error: 'Only cards and identities fill forms.' };
   const top = new URL(tab.url!).origin;
-  let frames: { frameId: number; origin: string; slots: unknown }[];
+  const target = (frame: FrameTarget) =>
+    frame.documentId ? { documentId: frame.documentId } : { frameId: frame.frameId };
+  let frames: (FrameTarget & { slots: unknown })[];
   try {
     const injected = await browser.scripting.executeScript({
-      target: { tabId: tab.id, allFrames: true },
+      target: { tabId, allFrames: true },
       // self.origin is "null" in sandboxed frames, where location.origin is not.
       func: () => self.origin,
     });
     frames = await Promise.all(
-      injected.map(async (frame) => ({
-        frameId: frame.frameId,
-        origin: String(frame.result),
-        slots: await browser.tabs
-          .sendMessage(tab.id!, { type: 'scanForm', kind: form.kind }, { frameId: frame.frameId })
-          .catch(() => []),
-      })),
+      injected.map(async (frame) => {
+        const entry = {
+          frameId: frame.frameId,
+          documentId: (frame as { documentId?: string }).documentId,
+          origin: String(frame.result),
+        };
+        return {
+          ...entry,
+          slots: await browser.tabs
+            .sendMessage(tabId, { type: 'scanForm', kind: form.kind }, target(entry))
+            .catch(() => []),
+        };
+      }),
     );
   } catch {
     return { ok: false, error: 'Reload this page to enable autofill.' };
@@ -89,22 +107,25 @@ async function fillForm(
   const foreign = [...new Set(targets.map((frame) => frame.origin).filter((o) => o !== top))];
   const unconfirmed = foreign.filter((origin) => !confirmed.includes(origin));
   if (unconfirmed.length) return { ok: true, value: { confirm: unconfirmed } };
-  if (!(await unchanged())) return { ok: false, error: 'This page changed. Open Bitlatch again.' };
   let filled = 0;
-  for (const frame of targets)
+  for (const frame of targets) {
+    // A lock or a navigation while frames were scanned stops every delivery.
+    if (!(await current())) return changed;
+    const status = await native<VaultStatus>({ type: 'status' });
+    if (!status.ok || status.value !== 'unlocked')
+      return { ok: false, error: 'Unlock Bitlatch to continue.' };
     filled +=
       Number(
         await browser.tabs
           .sendMessage(
-            tab.id,
+            tabId,
             { type: 'fillForm', kind: form.kind, values: form.values, origin: frame.origin },
-            { frameId: frame.frameId },
+            target(frame),
           )
           .catch(() => 0),
       ) || 0;
-  return filled
-    ? { ok: true, value: { filled } }
-    : { ok: false, error: 'This page changed. Open Bitlatch again.' };
+  }
+  return filled ? { ok: true, value: { filled } } : changed;
 }
 
 export default defineBackground(() => {
@@ -329,13 +350,7 @@ export default defineBackground(() => {
           'confirmed' in message && Array.isArray(message.confirmed)
             ? message.confirmed.filter((origin): origin is string => typeof origin === 'string')
             : [];
-        return fillForm(
-          (request) => native<ItemDetail>(request),
-          message.id,
-          message.tabId,
-          message.url,
-          confirmed,
-        );
+        return fillForm(native, message.id, message.tabId, message.url, confirmed);
       }
       if (isPopup && type === 'browse' && 'query' in message) {
         const query = browserVaultQuerySchema.safeParse(message.query);

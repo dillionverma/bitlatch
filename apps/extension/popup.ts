@@ -354,15 +354,17 @@ function formFillButton(item: ItemDetail) {
       window.close();
       return;
     }
-    const hosts = origins.map((origin) => new URL(origin).host).join(', ');
+    // One origin at a time, each named in full, so a list cannot hide a lookalike.
+    const origin = origins[0]!;
+    const host = new URL(origin).host;
     const confirm = element('div', 'confirm');
     confirm.append(
       element(
         'p',
         'muted',
-        `Some ${item.type === 3 ? 'card ' : ''}fields on this page are in a frame from ${hosts}. Fill them only if you expect this page to use ${hosts}.`,
+        `Some ${item.type === 3 ? 'card ' : ''}fields on this page are in a frame from ${host}. Fill them only if you expect this page to use ${host}.`,
       ),
-      button(`Fill in ${hosts}`, () => void run([...confirmed, ...origins])),
+      button(`Fill in ${host}`, () => void run([...confirmed, origin])),
     );
     container.append(confirm);
   }
