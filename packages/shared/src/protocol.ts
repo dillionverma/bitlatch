@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { lockTimeoutMinutes } from './types';
+import { identityRowKeys, lockTimeoutMinutes } from './types';
 
 export const lockTimeoutSchema = z.literal(lockTimeoutMinutes);
 export const passwordOptionsSchema = z
@@ -34,6 +34,15 @@ const challengeAnswer = z.union([
   z.object({ cancel: z.literal(true) }).strict(),
 ]);
 const id = z.string().uuid();
+const copyTarget = z.union([
+  z.object({ identity: z.enum(identityRowKeys) }).strict(),
+  z
+    .object({
+      custom: z.number().int().min(0).max(1_000),
+      revisionDate: z.string().max(100).nullable(),
+    })
+    .strict(),
+]);
 export const browserSaveResultSchema = z.object({ id });
 const draftBase = {
   id: id.optional(),
@@ -150,7 +159,10 @@ export const desktopRequestSchema = z.discriminatedUnion('type', [
     .object({
       type: z.literal('copy'),
       id,
-      field: z.enum(['username', 'password', 'notes', 'website', 'cardNumber', 'cardCode']),
+      field: z.union([
+        z.enum(['username', 'password', 'notes', 'website', 'cardNumber', 'cardCode']),
+        copyTarget,
+      ]),
     })
     .strict(),
   z.object({ type: z.literal('generate'), options: passwordOptionsSchema }).strict(),
@@ -166,7 +178,7 @@ export const browserVaultQuerySchema = z
   .object({
     query: z.string().max(500),
     scope: z.enum(['all', 'favorites', 'site', 'trash']),
-    itemType: z.enum(['all', 'login', 'note']),
+    itemType: z.enum(['all', 'login', 'note', 'identity']),
     offset: z.number().int().min(0).max(1_000_000),
   })
   .strict();
@@ -195,7 +207,7 @@ export const browserRequestSchema = z.discriminatedUnion('type', [
     .object({
       type: z.literal('copy'),
       id,
-      field: z.enum(['username', 'password', 'notes', 'website']),
+      field: z.union([z.enum(['username', 'password', 'notes', 'website']), copyTarget]),
     })
     .strict(),
   z.object({ type: z.literal('open') }).strict(),

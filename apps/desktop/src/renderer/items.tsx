@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ItemSummary, LatchApi } from '@latch/shared/types';
 import { useWebsiteIcons } from './WebsiteIcons';
 
-export type CopyField = Parameters<LatchApi['copy']>[1];
+export type CopyField = Extract<Parameters<LatchApi['copy']>[1], string>;
 export const fieldLabels: Record<CopyField, string> = {
   username: 'Username',
   password: 'Password',

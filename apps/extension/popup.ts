@@ -3,6 +3,7 @@ import '@latch/shared/theme.css';
 import './popup.css';
 import { element, mark } from './content/render';
 import { itemDraft, uriMatchOptions } from '@latch/shared/item-drafts';
+import { identityRows } from '@latch/shared/item-fields';
 import { uriMatchSchema } from '@latch/shared/protocol';
 import { defaultPasswordOptions } from '@latch/shared/types';
 import type { BrowserVaultQuery } from '@latch/shared/protocol';
@@ -11,6 +12,7 @@ import type {
   BrowserSaveResult,
   BrowserUnlockState,
   BrowserVaultPage,
+  CopyTarget,
   ItemSummary,
   ItemDetail,
   ItemDraft,
@@ -46,6 +48,7 @@ const paths = {
   refresh: 'M15 7a6 6 0 1 0 0 5 M15 2v5h-5',
   back: 'M11 3 5 9l6 6 M5 9h11',
   note: 'M4 2h8l3 3v11H4z M7 7h5 M7 10h5 M7 13h3',
+  person: 'M9 9a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7 M2.5 16.5a6.5 6.5 0 0 1 13 0',
   copy: 'M6 6h10v11H6z M12 6V2H2v11h4',
 } satisfies Record<string, string>;
 function icon(name: keyof typeof paths) {
@@ -90,6 +93,8 @@ function clearView() {
   if (view.kind !== 'list' && view.item) {
     view.item.password = '';
     view.item.notes = '';
+    view.item.identity = null;
+    view.item.fields = [];
   }
   detail.querySelectorAll('input, textarea').forEach((node) => {
     if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) node.value = '';
@@ -273,6 +278,7 @@ function tile(item: ItemSummary) {
   const node = element('span', 'tile');
   node.setAttribute('aria-hidden', 'true');
   if (item.type === 2) node.append(icon('note'));
+  else if (item.type === 4) node.append(icon('person'));
   else {
     node.textContent = (Array.from(item.name.trim())[0] ?? '?').toUpperCase();
     if (item.website) {
@@ -399,9 +405,11 @@ function renderDetail(item: ItemDetail) {
         ? 'In Trash'
         : item.type === 2
           ? 'Secure note'
-          : item.hasPasskey
-            ? 'Login · Passkey'
-            : 'Login',
+          : item.type === 4
+            ? 'Identity'
+            : item.hasPasskey
+              ? 'Login · Passkey'
+              : 'Login',
     ),
   );
   heading.append(tile(item), title);
@@ -461,23 +469,8 @@ function renderDetail(item: ItemDetail) {
     detail.append(fillButton(item));
   if (item.type === 1) {
     addField(item, 'Username', item.username || 'No username', 'username');
-    const row = addField(
-      item,
-      'Password',
-      item.password ? '••••••••••••' : 'No password',
-      'password',
-    );
-    const value = row.querySelector('.field-value')!;
-    let revealed = false;
-    if (item.password)
-      row.append(
-        button('Reveal', () => {
-          revealed = !revealed;
-          value.textContent = revealed ? item.password : '••••••••••••';
-          const reveal = row.lastElementChild;
-          if (reveal) reveal.textContent = revealed ? 'Hide' : 'Reveal';
-        }),
-      );
+    if (item.password) addSecretField(item, 'Password', item.password, 'password');
+    else addField(item, 'Password', 'No password');
     for (const uri of item.uris) {
       const match =
         uriMatchOptions.find(
@@ -491,15 +484,39 @@ function renderDetail(item: ItemDetail) {
       );
     }
   }
+  for (const row of item.identity ? identityRows(item.identity) : []) {
+    if (row.secret) addSecretField(item, row.label, row.value, { identity: row.key });
+    else addField(item, row.label, row.value, { identity: row.key });
+  }
+  item.fields.forEach((field, index) => {
+    const label = field.name || 'Custom field';
+    if (field.kind === 'boolean') addField(item, label, field.value === 'true' ? 'Yes' : 'No');
+    else if (field.kind === 'linked')
+      addField(item, label, field.value ? `Linked to ${field.value}` : 'Linked field');
+    else if (!field.value) addField(item, label, 'Empty');
+    else {
+      const target = { custom: index, revisionDate: item.revisionDate };
+      if (field.kind === 'hidden') addSecretField(item, label, field.value, target);
+      else addField(item, label, field.value, target);
+    }
+  });
   addField(item, 'Notes', item.notes || 'No notes', 'notes');
   back.focus();
 }
-function addField(
-  item: ItemSummary,
-  label: string,
-  value: string,
-  field?: 'username' | 'password' | 'notes' | 'website',
-) {
+type CopyField = 'username' | 'password' | 'notes' | 'website' | CopyTarget;
+function addSecretField(item: ItemSummary, label: string, secret: string, field: CopyField) {
+  const row = addField(item, label, '••••••••••••', field);
+  const value = row.querySelector('.field-value')!;
+  let revealed = false;
+  const reveal = button('Reveal', () => {
+    revealed = !revealed;
+    value.textContent = revealed ? secret : '••••••••••••';
+    reveal.textContent = revealed ? 'Hide' : 'Reveal';
+  });
+  reveal.setAttribute('aria-label', `Reveal ${label.toLowerCase()}`);
+  row.append(reveal);
+}
+function addField(item: ItemSummary, label: string, value: string, field?: CopyField) {
   const row = element('div', 'field');
   const text = element('div', 'field-text');
   text.append(element('span', 'field-label', label), element('span', 'field-value', value));
@@ -749,7 +766,11 @@ function itemRow(item: ItemSummary, canFill: boolean) {
     element(
       'span',
       'item-sub',
-      item.type === 2 ? 'Secure note' : item.username || item.website || 'Login',
+      item.type === 2
+        ? 'Secure note'
+        : item.type === 4
+          ? item.subtitle || 'Identity'
+          : item.username || item.website || 'Login',
     ),
   );
   row.append(tile(item), text);
@@ -778,7 +799,9 @@ function renderItems() {
           : 'Your vault';
   results.replaceChildren();
   const suggested =
-    query.scope === 'all' && !query.query.trim() && query.itemType !== 'note'
+    query.scope === 'all' &&
+    !query.query.trim() &&
+    (query.itemType === 'all' || query.itemType === 'login')
       ? (suggestions?.items ?? [])
       : [];
   const suggestedIds = new Set(suggested.map((item) => item.id));
@@ -895,7 +918,7 @@ scopes.addEventListener('click', (event) => {
 });
 itemType.addEventListener('change', () => {
   const type = itemType.value;
-  if (type !== 'all' && type !== 'login' && type !== 'note') return;
+  if (type !== 'all' && type !== 'login' && type !== 'note' && type !== 'identity') return;
   query.itemType = type;
   changeQuery();
 });

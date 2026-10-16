@@ -85,7 +85,7 @@ export function QuickOpen({
                     <strong className="truncate font-medium">{item.name || 'Untitled item'}</strong>
                     <small className="truncate text-muted-foreground">
                       {item.username ||
-                        item.cardLabel ||
+                        item.subtitle ||
                         displayWebsite(item.website) ||
                         typeName(item.type)}
                     </small>

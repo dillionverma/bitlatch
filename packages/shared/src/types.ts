@@ -120,7 +120,8 @@ export interface ItemSummary {
   name: string;
   username: string;
   website: string;
-  cardLabel: string;
+  /** A card's brand and last four, or an identity's name. Empty for other types and restricted items. */
+  subtitle: string;
   type: number;
   favorite: boolean;
   hasPasskey: boolean;
@@ -137,9 +138,62 @@ export interface CardFields {
   code: string;
 }
 
+export const identityKeys = [
+  'title',
+  'firstName',
+  'middleName',
+  'lastName',
+  'address1',
+  'address2',
+  'address3',
+  'city',
+  'state',
+  'postalCode',
+  'country',
+  'company',
+  'email',
+  'phone',
+  'ssn',
+  'username',
+  'passportNumber',
+  'licenseNumber',
+] as const;
+/** Bitwarden's identity fields, with the CLI's nulls read as empty strings. */
+export type IdentityFields = Record<(typeof identityKeys)[number], string>;
+/** The rows an identity shows, some of which combine several fields. */
+export const identityRowKeys = [
+  'name',
+  'username',
+  'company',
+  'email',
+  'phone',
+  'address',
+  'ssn',
+  'passportNumber',
+  'licenseNumber',
+] as const;
+export type IdentityRowKey = (typeof identityRowKeys)[number];
+
+/** A custom field. A linked field's value names the item field it points to, when known. */
+export interface CustomField {
+  name: string;
+  value: string;
+  kind: 'text' | 'hidden' | 'boolean' | 'linked';
+}
+
+/**
+ * A copy target beyond the fixed fields: an identity row, or a custom field by
+ * position in the item revision the caller showed.
+ */
+export type CopyTarget =
+  | { identity: IdentityRowKey }
+  | { custom: number; revisionDate: string | null };
+
 export interface ItemDetail extends ItemSummary {
   password: string;
   card: CardFields | null;
+  identity: IdentityFields | null;
+  fields: CustomField[];
   uris: { sourceIndex: number; uri: string | null; match: number | null }[];
   notes: string;
   revisionDate: string | null;
@@ -253,7 +307,7 @@ export interface LatchApi {
   restore(id: string): Promise<Result<VaultState>>;
   copy(
     id: string,
-    field: 'username' | 'password' | 'cardNumber' | 'cardCode',
+    field: 'username' | 'password' | 'cardNumber' | 'cardCode' | CopyTarget,
   ): Promise<Result<void>>;
   generate(options: PasswordOptions): Promise<Result<string>>;
   browserSetup(): Promise<Result<BrowserSetup>>;

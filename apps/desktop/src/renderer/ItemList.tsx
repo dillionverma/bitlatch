@@ -244,7 +244,7 @@ export function ItemList({
                       <strong>{item.name || 'Untitled item'}</strong>
                       <small>
                         {item.username ||
-                          item.cardLabel ||
+                          item.subtitle ||
                           displayWebsite(item.website) ||
                           typeName(item.type)}
                       </small>
