@@ -273,7 +273,7 @@ export interface MacAutoFillState {
 export type Browser = 'safari' | 'chrome' | 'firefox';
 export type BrowserSetup = Record<Browser, { available: boolean; reason?: string }>;
 
-export type BrowserConnection = 'connected' | 'not-detected' | 'setup-error';
+export type BrowserConnection = 'connected' | 'not-detected' | 'setup-error' | 'unavailable';
 
 export interface LatchApi {
   lockTimeout(): Promise<Result<LockTimeoutMinutes>>;

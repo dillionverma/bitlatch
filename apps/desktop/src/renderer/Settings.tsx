@@ -401,7 +401,9 @@ export function Settings({
                         ? 'Your browser extension is communicating with Bitlatch.'
                         : connection === 'setup-error'
                           ? 'Browser setup could not finish. Restart Bitlatch to try again.'
-                          : 'Open the Bitlatch extension in your browser to connect.'}
+                          : connection === 'unavailable'
+                            ? 'Browser connections need the macOS app for now. Here Bitlatch cannot check which app asks for a password.'
+                            : 'Open the Bitlatch extension in your browser to connect.'}
                     </p>
                   </div>
                   <Badge
@@ -415,59 +417,70 @@ export function Settings({
                         ? 'Connected'
                         : connection === 'setup-error'
                           ? 'Setup unavailable'
-                          : 'Not detected'}
+                          : connection === 'unavailable'
+                            ? 'macOS only'
+                            : 'Not detected'}
                   </Badge>
                 </div>
-                {browsers.map((browser) => (
-                  <div className="settings-row" key={browser.id}>
-                    <div>
-                      <strong>{browser.name}</strong>
-                      <p id={`browser-${browser.id}-description`}>
-                        {browserSetup?.[browser.id].reason ?? browser.description}
-                      </p>
+                {connection !== 'unavailable' &&
+                  browsers.map((browser) => (
+                    <div className="settings-row" key={browser.id}>
+                      <div>
+                        <strong>{browser.name}</strong>
+                        <p id={`browser-${browser.id}-description`}>
+                          {browserSetup?.[browser.id].reason ?? browser.description}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        aria-label={
+                          browser.id === 'safari'
+                            ? 'Open Safari extension settings'
+                            : `Install ${browser.name} extension`
+                        }
+                        aria-describedby={`browser-${browser.id}-description`}
+                        onClick={() => void run(browser.id)}
+                        disabled={pending || !browserSetup?.[browser.id].available}
+                      >
+                        {busy === browser.id ? (
+                          <Spinner />
+                        ) : (
+                          <ArrowUpRight data-icon="inline-end" />
+                        )}
+                        {browser.id === 'safari' ? 'Open settings' : 'Install extension'}
+                      </Button>
                     </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      aria-label={
-                        browser.id === 'safari'
-                          ? 'Open Safari extension settings'
-                          : `Install ${browser.name} extension`
-                      }
-                      aria-describedby={`browser-${browser.id}-description`}
-                      onClick={() => void run(browser.id)}
-                      disabled={pending || !browserSetup?.[browser.id].available}
-                    >
-                      {busy === browser.id ? <Spinner /> : <ArrowUpRight data-icon="inline-end" />}
-                      {browser.id === 'safari' ? 'Open settings' : 'Install extension'}
-                    </Button>
-                  </div>
-                ))}
+                  ))}
               </div>
-              <p className="settings-caption">
-                Install the extension in your browser, then open it to connect. Keep Bitlatch
-                running for autofill. The connection above updates automatically.
-              </p>
-              <details className="settings-caption">
-                <summary>Developer installation</summary>
-                <div className="flex flex-col gap-3 pt-3">
-                  <p>
-                    For Chrome, Aside and other Chromium browsers: open the extension folder, enable
-                    Developer mode on your browser’s extensions page, then choose Load unpacked and
-                    select that folder. After updating Bitlatch, reload the extension and refresh
-                    open website tabs.
+              {connection !== 'unavailable' && (
+                <>
+                  <p className="settings-caption">
+                    Install the extension in your browser, then open it to connect. Keep Bitlatch
+                    running for autofill. The connection above updates automatically.
                   </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void run('folder')}
-                    disabled={pending}
-                  >
-                    {busy === 'folder' ? <Spinner /> : <ArrowUpRight data-icon="inline-end" />}
-                    Open extension folder
-                  </Button>
-                </div>
-              </details>
+                  <details className="settings-caption">
+                    <summary>Developer installation</summary>
+                    <div className="flex flex-col gap-3 pt-3">
+                      <p>
+                        For Chrome, Aside and other Chromium browsers: open the extension folder,
+                        enable Developer mode on your browser’s extensions page, then choose Load
+                        unpacked and select that folder. After updating Bitlatch, reload the
+                        extension and refresh open website tabs.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void run('folder')}
+                        disabled={pending}
+                      >
+                        {busy === 'folder' ? <Spinner /> : <ArrowUpRight data-icon="inline-end" />}
+                        Open extension folder
+                      </Button>
+                    </div>
+                  </details>
+                </>
+              )}
             </section>
           )}
           {section === 'security' && (
