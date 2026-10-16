@@ -13,9 +13,140 @@ import type {
   BrowserUnlockState,
   CaptureOffer,
   FillCredential,
+  ItemDetail,
   Result,
   VaultStatus,
 } from '@latch/shared/types';
+import { formValues } from '../form-values';
+import type { FormKind } from '../content/forms';
+
+type Native = <T>(request: BrowserRequest) => Promise<Result<T>>;
+type FrameTarget = { frameId: number; documentId?: string; origin: string; token?: unknown };
+
+/**
+ * Fills a card or identity into the active tab after a click in the popup.
+ * Frames from the page's own origin fill at once; each frame from another
+ * origin, such as a payment provider's, fills only once the user confirms that
+ * origin. Every value goes to the exact document that was scanned.
+ */
+async function fillForm(
+  native: Native,
+  id: string,
+  kind: FormKind,
+  tabId: unknown,
+  url: unknown,
+  confirmed: string[],
+) {
+  if (typeof tabId !== 'number') return { ok: false, error: 'Invalid fill request.' };
+  const changed = { ok: false, error: 'This page changed. Open Bitlatch again.' } as const;
+  // Re-read the tab each time: a navigation must stop the fill.
+  const current = async () => {
+    const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+    return !!tab &&
+      tab.id === tabId &&
+      tab.url === url &&
+      /^https?:\/\//.test(tab.url ?? '') &&
+      (await browser.windows.get(tab.windowId)).focused
+      ? tab
+      : null;
+  };
+  const tab = await current();
+  if (!tab) return changed;
+  const request = browserRequestSchema.safeParse({ type: 'detail', id });
+  if (!request.success) return { ok: false, error: 'Invalid fill request.' };
+  const top = new URL(tab.url!).origin;
+  const target = (frame: FrameTarget) =>
+    frame.documentId ? { documentId: frame.documentId } : { frameId: frame.frameId };
+  let frames: (FrameTarget & { slots: unknown })[];
+  try {
+    const injected = await browser.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      // self.origin is "null" in sandboxed frames, where location.origin is not.
+      func: () => self.origin,
+    });
+    frames = await Promise.all(
+      injected.map(async (frame) => {
+        const entry = {
+          frameId: frame.frameId,
+          documentId: (frame as { documentId?: string }).documentId,
+          origin: String(frame.result),
+        };
+        return {
+          ...entry,
+          slots: await browser.tabs
+            .sendMessage(tabId, { type: 'scanForm', kind }, target(entry))
+            .then((reply: { token?: unknown; slots?: unknown } | undefined) => reply)
+            .catch(() => undefined),
+        };
+      }),
+    ).then((scanned) =>
+      scanned.map(({ slots: reply, ...frame }) => ({
+        ...frame,
+        token: reply?.token,
+        slots: reply?.slots,
+      })),
+    );
+  } catch {
+    return { ok: false, error: 'Reload this page to enable autofill.' };
+  }
+  // Opaque origins, such as sandboxed frames, never receive values, and an
+  // HTTPS page never sends them to a frame from another origin over plain HTTP.
+  const targets = frames.filter(
+    (frame) =>
+      frame.origin !== 'null' &&
+      (frame.origin === top ||
+        frame.origin.startsWith('https://') ||
+        !top.startsWith('https://')) &&
+      /^https?:\/\//.test(frame.origin) &&
+      typeof frame.token === 'string' &&
+      Array.isArray(frame.slots) &&
+      frame.slots.length,
+  );
+  if (!targets.length)
+    return {
+      ok: false,
+      error:
+        kind === 'card'
+          ? 'This page has no card fields Bitlatch can fill.'
+          : 'This page has no name, contact, or address fields Bitlatch can fill.',
+    };
+  const foreign = [...new Set(targets.map((frame) => frame.origin).filter((o) => o !== top))];
+  const unconfirmed = foreign.filter((origin) => !confirmed.includes(origin));
+  if (unconfirmed.length) return { ok: true, value: { confirm: unconfirmed } };
+  // The values leave the desktop only now, after scanning and confirmation, so a
+  // lock before this point leaves nothing to deliver.
+  if (!(await current())) return changed;
+  const detail = await native<ItemDetail>(request.data);
+  if (!detail.ok) return detail;
+  const form = formValues(detail.value);
+  if (!form || form.kind !== kind)
+    return { ok: false, error: 'Only cards and identities fill forms.' };
+  let filled = 0;
+  for (const frame of targets) {
+    // A lock or a navigation after the values arrived stops the rest.
+    if (!(await current())) return changed;
+    const status = await native<VaultStatus>({ type: 'status' });
+    if (!status.ok || status.value !== 'unlocked')
+      return { ok: false, error: 'Vault locked. Try again after unlocking.' };
+    filled +=
+      Number(
+        await browser.tabs
+          .sendMessage(
+            tabId,
+            {
+              type: 'fillForm',
+              kind,
+              values: form.values,
+              origin: frame.origin,
+              token: frame.token,
+            },
+            target(frame),
+          )
+          .catch(() => 0),
+      ) || 0;
+  }
+  return filled ? { ok: true, value: { filled } } : changed;
+}
 
 export default defineBackground(() => {
   const HOST = 'app.latch.vault';
@@ -226,6 +357,22 @@ export default defineBackground(() => {
         } catch {
           return { ok: false, error: 'Reload this page to enable autofill.' };
         }
+      }
+      if (
+        isPopup &&
+        type === 'formFill' &&
+        'id' in message &&
+        typeof message.id === 'string' &&
+        'url' in message &&
+        'tabId' in message
+      ) {
+        const confirmed =
+          'confirmed' in message && Array.isArray(message.confirmed)
+            ? message.confirmed.filter((origin): origin is string => typeof origin === 'string')
+            : [];
+        if (!('kind' in message) || (message.kind !== 'card' && message.kind !== 'identity'))
+          return { ok: false, error: 'Invalid fill request.' };
+        return fillForm(native, message.id, message.kind, message.tabId, message.url, confirmed);
       }
       if (isPopup && type === 'browse' && 'query' in message) {
         const query = browserVaultQuerySchema.safeParse(message.query);

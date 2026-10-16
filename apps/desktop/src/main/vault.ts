@@ -1359,10 +1359,11 @@ export class Vault extends EventEmitter {
   }
 }
 
-/** Item types the browser extension may list and open. Cards stay desktop-only. */
+/** Item types the browser extension may list and open. Only logins and notes are edited there. */
 const browserItemTypes = {
   login: 1,
   note: 2,
+  card: 3,
   identity: 4,
   sshKey: 5,
   bankAccount: 6,

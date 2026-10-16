@@ -4,6 +4,7 @@ import { isLocalHost } from '@latch/shared/urls';
 import sharedTheme from '@latch/shared/theme.css?inline';
 import contentStyles from './content/styles.css?inline';
 import { brand, element, mark } from './content/render';
+import { fillForm, scanForm, type FormValues } from './content/forms';
 import {
   fillTargets,
   isLoginInput,
@@ -27,6 +28,55 @@ export function startContent(ctx: ContentScriptContext) {
   // where a certificate is not possible. The app re-checks before releasing
   // anything, so this only decides whether to put UI on the page.
   if (location.protocol === 'http:' && !isLocalHost(location.hostname)) return;
+
+  // Card and identity fills arrive from the background only after a click in
+  // the popup; a frame from another origin only after the user confirms it.
+  // This listener is the only part that runs in frames from another origin,
+  // where payment fields often sit; it shows no UI there.
+  // Names this document, so a fill meant for it never lands in a replacement.
+  const documentToken = crypto.randomUUID();
+  const onFormFill = (
+    message: unknown,
+    sender: Browser.runtime.MessageSender,
+    respond: (value: unknown) => void,
+  ) => {
+    if (
+      !message ||
+      typeof message !== 'object' ||
+      !('type' in message) ||
+      sender.id !== browser.runtime.id ||
+      sender.tab ||
+      ctx.isInvalid ||
+      document.hidden ||
+      !('kind' in message) ||
+      (message.kind !== 'card' && message.kind !== 'identity')
+    )
+      return false;
+    if (message.type === 'scanForm') {
+      respond({ token: documentToken, slots: scanForm(message.kind) });
+      return false;
+    }
+    if (
+      message.type === 'fillForm' &&
+      'origin' in message &&
+      message.origin === self.origin &&
+      self.origin !== 'null' &&
+      'token' in message &&
+      message.token === documentToken &&
+      'values' in message &&
+      message.values &&
+      typeof message.values === 'object'
+    ) {
+      const values = Object.fromEntries(
+        Object.entries(message.values).filter(([, value]) => typeof value === 'string'),
+      ) as FormValues;
+      respond(fillForm(message.kind, values));
+      return false;
+    }
+    return false;
+  };
+  browser.runtime.onMessage.addListener(onFormFill);
+  ctx.onInvalidated(() => browser.runtime.onMessage.removeListener(onFormFill));
 
   if (window !== window.top) {
     try {

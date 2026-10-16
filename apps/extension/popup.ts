@@ -317,6 +317,60 @@ function fillButton(item: ItemSummary) {
   });
   return button;
 }
+/**
+ * Fills a card or identity into the active tab. Fields inside a frame from
+ * another origin, such as a payment provider's, wait for the user to confirm
+ * that origin here.
+ */
+function formFillButton(item: ItemDetail) {
+  const container = element('div', 'form-fill');
+  const fill = button('Fill on this page', () => void run([]));
+  fill.className = 'fill-button';
+  container.append(fill);
+  async function run(confirmed: string[]) {
+    const context = suggestions;
+    if (!context || context.tabId === null) return;
+    const lifetime = generation;
+    container.querySelector('.confirm')?.remove();
+    fill.disabled = true;
+    fill.textContent = 'Filling…';
+    feedback('');
+    const response = await send<{ filled?: number; confirm?: string[] }>({
+      type: 'formFill',
+      id: item.id,
+      kind: item.type === 3 ? 'card' : 'identity',
+      tabId: context.tabId,
+      url: context.url,
+      confirmed,
+    });
+    if (disposed || lifetime !== generation) return;
+    fill.disabled = false;
+    fill.textContent = 'Fill on this page';
+    if (!response.ok) {
+      feedback(response.error, true);
+      return;
+    }
+    const origins = response.value.confirm;
+    if (!origins?.length) {
+      window.close();
+      return;
+    }
+    // One origin at a time, each named in full, so a list cannot hide a lookalike.
+    const origin = origins[0]!;
+    const host = new URL(origin).host;
+    const confirm = element('div', 'confirm');
+    confirm.append(
+      element(
+        'p',
+        'muted',
+        `Some ${item.type === 3 ? 'card ' : ''}fields on this page are in a frame from ${host}. Fill them only if you expect this page to use ${host}.`,
+      ),
+      button(`Fill in ${host}`, () => void run([...confirmed, origin])),
+    );
+    container.append(confirm);
+  }
+  return container;
+}
 function showList(focusId?: string) {
   clearView();
   detail.hidden = true;
@@ -466,6 +520,17 @@ function renderDetail(item: ItemDetail) {
     suggestions?.items.some((entry) => entry.id === item.id)
   )
     detail.append(fillButton(item));
+  if ((item.type === 3 || item.type === 4) && !item.restorable && suggestions?.tabId != null)
+    detail.append(formFillButton(item));
+  if (item.card) {
+    const { cardholderName, brand, number, expMonth, expYear, code } = item.card;
+    if (cardholderName) addField(item, 'Cardholder name', cardholderName);
+    if (brand) addField(item, 'Brand', brand);
+    if (number) addSecretField(item, 'Number', number, 'cardNumber');
+    if (expMonth || expYear)
+      addField(item, 'Expiration', `${expMonth.padStart(2, '0') || '—'} / ${expYear || '—'}`);
+    if (code) addSecretField(item, 'Security code', code, 'cardCode');
+  }
   if (item.type === 1) {
     addField(item, 'Username', item.username || 'No username', 'username');
     if (item.password) addSecretField(item, 'Password', item.password, 'password');
@@ -519,7 +584,14 @@ function renderDetail(item: ItemDetail) {
   addField(item, 'Notes', item.notes || 'No notes', 'notes');
   back.focus();
 }
-type CopyField = 'username' | 'password' | 'notes' | 'website' | CopyTarget;
+type CopyField =
+  | 'username'
+  | 'password'
+  | 'notes'
+  | 'website'
+  | 'cardNumber'
+  | 'cardCode'
+  | CopyTarget;
 function addSecretField(item: ItemSummary, label: string, secret: string, field: CopyField) {
   const row = addField(item, label, '••••••••••••', field);
   const value = row.querySelector('.field-value')!;

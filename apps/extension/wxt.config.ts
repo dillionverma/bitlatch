@@ -51,7 +51,7 @@ export default defineConfig({
     description:
       'Search, filter, and copy from your Bitwarden vault, and fill logins with the Bitlatch desktop app.',
     ...(browser === 'chrome' || browser === 'edge' ? { key: identity.key } : {}),
-    permissions: ['nativeMessaging', 'activeTab', 'storage'],
+    permissions: ['nativeMessaging', 'activeTab', 'storage', 'scripting'],
     host_permissions: EXTENSION_MATCHES,
     action: {
       default_title: 'Bitlatch',
