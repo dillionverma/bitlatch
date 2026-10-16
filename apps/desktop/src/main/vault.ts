@@ -507,6 +507,40 @@ export class Vault extends EventEmitter {
     return this.folderList;
   }
 
+  async saveFolder(id: string | null, name: string): Promise<Folder> {
+    this.requireUnlocked();
+    const generation = this.generation;
+    if (id && !this.folderList.some((folder) => folder.id === id))
+      throw new UserError('That folder no longer exists. Sync your vault and try again.');
+    const payload = Buffer.from(JSON.stringify({ name })).toString('base64');
+    const saved = JSON.parse(
+      await this.cli.run(id ? ['edit', 'folder', id] : ['create', 'folder'], {
+        session: this.session,
+        input: payload,
+      }),
+    ) as Folder;
+    this.assertGeneration(generation);
+    const folder = { id: saved.id, name: saved.name };
+    this.folderList = [...this.folderList.filter((entry) => entry.id !== folder.id), folder].sort(
+      (a, b) => a.name.localeCompare(b.name),
+    );
+    this.countItems();
+    this.publish();
+    return folder;
+  }
+
+  /** Bitwarden moves a deleted folder's items to No folder. */
+  async deleteFolder(id: string) {
+    this.requireUnlocked();
+    const generation = this.generation;
+    await this.cli.run(['delete', 'folder', id], { session: this.session });
+    this.assertGeneration(generation);
+    this.folderList = this.folderList.filter((folder) => folder.id !== id);
+    for (const cipher of this.ciphers.values()) if (cipher.folderId === id) cipher.folderId = null;
+    this.countItems();
+    this.publish();
+  }
+
   /** Items sitting in Bitwarden's trash, which another client can restore. */
   async trash(): Promise<ItemSummary[]> {
     this.requireUnlocked();

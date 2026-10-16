@@ -6,6 +6,27 @@ import type {
   NativeConfirmation,
 } from '@latch/shared/types';
 
+const confirmations: Record<
+  NativeConfirmation,
+  { message: string; detail: string; buttons: [string, string] }
+> = {
+  trash: {
+    message: 'Move this item to Trash?',
+    detail: 'You can restore it from Trash. This does not delete it permanently.',
+    buttons: ['Cancel', 'Move to Trash'],
+  },
+  discard: {
+    message: 'Discard changes?',
+    detail: 'Your unsaved changes will be lost.',
+    buttons: ['Keep editing', 'Discard changes'],
+  },
+  deleteFolder: {
+    message: 'Delete this folder?',
+    detail: 'Its items move to No folder. They are not deleted.',
+    buttons: ['Cancel', 'Delete folder'],
+  },
+};
+
 export function installNativeInteractions(window: BrowserWindow) {
   let confirmation: AbortController | undefined;
   let dismissMenu: (() => void) | undefined;
@@ -104,14 +125,12 @@ export function installNativeInteractions(window: BrowserWindow) {
       const controller = new AbortController();
       confirmation = controller;
       try {
-        const trash = action === 'trash';
+        const { message, detail, buttons } = confirmations[action];
         const result = await dialog.showMessageBox(window, {
           type: 'warning',
-          message: trash ? 'Move this item to Trash?' : 'Discard changes?',
-          detail: trash
-            ? 'You can restore it from Trash. This does not delete it permanently.'
-            : 'Your unsaved changes will be lost.',
-          buttons: trash ? ['Cancel', 'Move to Trash'] : ['Keep editing', 'Discard changes'],
+          message,
+          detail,
+          buttons,
           defaultId: 0,
           cancelId: 0,
           noLink: true,

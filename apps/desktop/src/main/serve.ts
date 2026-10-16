@@ -517,6 +517,8 @@ export function routeFor(args: string[], options: RunOptions = {}): Route | unde
       pick: json,
       restores: id,
     };
+  if (args.length === 3 && command === 'delete' && object === 'folder' && id)
+    return { method: 'DELETE', path: `/object/folder/${encodeURIComponent(id)}`, pick: json };
   // Without --permanent this moves the item to Bitwarden's trash.
   if (args.length === 3 && command === 'delete' && object === 'item' && id)
     return {
@@ -527,6 +529,10 @@ export function routeFor(args: string[], options: RunOptions = {}): Route | unde
     };
   const body = options.input ? decode(options.input) : undefined;
   if (body === undefined) return undefined;
+  if (args.length === 2 && command === 'create' && object === 'folder')
+    return { method: 'POST', path: '/object/folder', body, pick: json };
+  if (args.length === 3 && command === 'edit' && object === 'folder' && id)
+    return { method: 'PUT', path: `/object/folder/${encodeURIComponent(id)}`, body, pick: json };
   if (args.length === 2 && command === 'create' && object === 'item')
     return { method: 'POST', path: '/object/item', body, pick: json, settles: true };
   if (args.length === 3 && command === 'edit' && object === 'item' && id)
