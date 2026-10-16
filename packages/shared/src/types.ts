@@ -54,7 +54,7 @@ export type WindowAppearance = Readonly<{
 export type VaultStatus = 'signed-out' | 'locked' | 'unlocked';
 
 export const lockTimeoutMinutes = [5, 15, 30, 60, 0] as const;
-/** Zero disables idle locking; sleep and screen lock always lock the vault. */
+/** Timed locking also locks on sleep and screen lock. Zero never locks until the user does. */
 export type LockTimeoutMinutes = (typeof lockTimeoutMinutes)[number];
 
 export interface PasswordOptions {
