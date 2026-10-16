@@ -376,6 +376,12 @@ function Challenge({ challenge, onCancel }: { challenge: LoginChallenge; onCance
   const [error, setError] = useState('');
   const epoch = useRef(0);
   const working = useRef(false);
+  const input = useRef<HTMLInputElement>(null);
+  // The field is disabled while a code is checked, which drops focus; return it
+  // so a rejected code can be retyped at once.
+  useEffect(() => {
+    if (!busy) input.current?.focus();
+  }, [busy, challenge]);
   useLayoutEffect(() => {
     epoch.current++;
     working.current = false;
@@ -452,12 +458,19 @@ function Challenge({ challenge, onCancel }: { challenge: LoginChallenge; onCance
               <Field data-invalid={!!message}>
                 <FieldLabel htmlFor="auth-code">Verification code</FieldLabel>
                 <Input
+                  ref={input}
                   className="h-8"
                   id="auth-code"
                   autoComplete="one-time-code"
                   inputMode={challenge.method === 'yubikey' ? 'text' : 'numeric'}
                   value={code}
-                  onChange={(event) => setCode(event.target.value)}
+                  onChange={(event) => {
+                    setCode(event.target.value);
+                    // Authenticator, email, and new-device codes are six digits. A
+                    // YubiKey's code is 44 letters, so it never submits early.
+                    if (/^\d{6}$/.test(event.target.value.replace(/\s/g, '')))
+                      void answer({ code: event.target.value });
+                  }}
                   required
                   autoFocus
                   disabled={busy}
