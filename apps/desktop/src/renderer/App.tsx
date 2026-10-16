@@ -967,6 +967,10 @@ function VaultWorkspace({
         {(modal === 'new' || modal === 'edit') && (
           <Editor
             item={modal === 'edit' ? selected : null}
+            folders={folders}
+            folderId={
+              filter.startsWith('folder:') && filter !== 'folder:none' ? filter.slice(7) : null
+            }
             onClose={() => {
               if (alive.current) setModal(null);
             }}

@@ -260,7 +260,8 @@ export function ItemList({
                     {onFavorite &&
                     !item.restricted &&
                     !item.hasPasskey &&
-                    (item.type === 1 || item.type === 2 || item.type === 3) ? (
+                    item.type >= 1 &&
+                    item.type <= 5 ? (
                       <Button
                         type="button"
                         variant="ghost"

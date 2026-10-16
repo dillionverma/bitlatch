@@ -83,6 +83,7 @@ let working = false;
 function clearView() {
   if (view.kind === 'editor') {
     view.draft.notes = '';
+    view.draft.fields = [];
     view.initial = '';
     if (view.draft.type === 1) {
       view.draft.password = '';
@@ -413,8 +414,9 @@ function renderDetail(item: ItemDetail) {
   detail.append(back, heading);
   const actions = element('div', 'detail-actions');
   if (item.editable) {
+    if (item.type === 1 || item.type === 2)
+      actions.append(button('Edit', () => showEditor(itemDraft(item), item)));
     actions.append(
-      button('Edit', () => showEditor(itemDraft(item), item)),
       button(item.favorite ? 'Unfavorite' : 'Favorite', () => {
         void operation<ItemSummary>(
           { type: 'setFavorite', id: item.id, favorite: !item.favorite },

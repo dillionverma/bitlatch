@@ -1,3 +1,5 @@
+import { identityKeys } from './types';
+
 /** An item type's own Bitwarden fields, with the CLI's nulls read as empty strings. */
 export type DetailFields = Record<string, string>;
 
@@ -44,26 +46,7 @@ const passportName = joined(' ', 'givenName', 'surname');
 export const detailSections: Record<number, DetailSection> = {
   4: {
     field: 'identity',
-    keys: [
-      'title',
-      'firstName',
-      'middleName',
-      'lastName',
-      'address1',
-      'address2',
-      'address3',
-      'city',
-      'state',
-      'postalCode',
-      'country',
-      'company',
-      'email',
-      'phone',
-      'ssn',
-      'username',
-      'passportNumber',
-      'licenseNumber',
-    ],
+    keys: identityKeys,
     rows: [
       { key: 'name', label: 'Name', value: identityName },
       { key: 'username', label: 'Username' },

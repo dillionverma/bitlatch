@@ -379,6 +379,7 @@ html[data-reduced-motion='true'] .auth-mark[data-scanning='true'] {
 }
 .task-uri-row select,
 #editor-type,
+#editor-folder,
 #editor-brand,
 #editor-exp-month {
   background: var(--background);

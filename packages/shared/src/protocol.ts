@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { lockTimeoutMinutes } from './types';
+import { identityKeys, lockTimeoutMinutes } from './types';
 
 export const lockTimeoutSchema = z.literal(lockTimeoutMinutes);
 export const passwordOptionsSchema = z
@@ -91,13 +91,49 @@ const cardDraftSchema = z
       .strict(),
   })
   .strict();
+const identityShape = Object.fromEntries(identityKeys.map((key) => [key, boundedText])) as Record<
+  (typeof identityKeys)[number],
+  typeof boundedText
+>;
+const desktopDraftFields = {
+  folderId: id.nullable().optional(),
+  fields: z
+    .array(
+      z.discriminatedUnion('action', [
+        z.object({ action: z.literal('keep'), sourceIndex }).strict(),
+        z
+          .object({
+            action: z.literal('write'),
+            sourceIndex: sourceIndex.optional(),
+            name: z.string().max(1_000),
+            value: boundedText,
+            kind: z.enum(['text', 'hidden', 'boolean']),
+          })
+          .strict(),
+      ]),
+    )
+    .max(200)
+    .optional(),
+};
 export const itemDraftSchema = z.discriminatedUnion('type', [
-  loginDraftSchema,
-  noteDraftSchema,
-  cardDraftSchema,
+  loginDraftSchema.extend(desktopDraftFields),
+  noteDraftSchema.extend(desktopDraftFields),
+  cardDraftSchema.extend(desktopDraftFields),
+  z
+    .object({
+      ...draftBase,
+      ...desktopDraftFields,
+      type: z.literal(4),
+      identity: z.object(identityShape).strict(),
+    })
+    .strict(),
+  z.object({ ...draftBase, ...desktopDraftFields, type: z.literal(5) }).strict(),
 ]);
 // Cards stay desktop-only, so the extension cannot send one.
-const browserDraftSchema = z.discriminatedUnion('type', [loginDraftSchema, noteDraftSchema]);
+const browserDraftSchema = z.discriminatedUnion('type', [
+  loginDraftSchema.extend(desktopDraftFields),
+  noteDraftSchema.extend(desktopDraftFields),
+]);
 export { MAX_BROWSER_MESSAGE_BYTES } from './types';
 
 export const desktopRequestSchema = z.discriminatedUnion('type', [

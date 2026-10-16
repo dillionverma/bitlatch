@@ -27,6 +27,7 @@ import type {
   CaptureOffer,
   ChallengeAnswer,
   CustomField,
+  CustomFieldDraft,
   Folder,
   ItemDetail,
   ItemSummary,
@@ -1075,6 +1076,8 @@ export class Vault extends EventEmitter {
         throw new UserError('Edit this item in the official Bitwarden client.');
       cipher = { ...latest };
     } else {
+      if (draft.type === 5)
+        throw new UserError('Add SSH keys in the official Bitwarden client for now.');
       cipher = {
         id: '',
         type: draft.type,
@@ -1091,6 +1094,15 @@ export class Vault extends EventEmitter {
       notes: draft.notes || null,
       favorite: draft.favorite,
     });
+    if (draft.folderId !== undefined) {
+      if (
+        draft.folderId !== null &&
+        !this.folderList.some((folder) => folder.id === draft.folderId)
+      )
+        throw new UserError('That folder no longer exists. Sync your vault and try again.');
+      cipher.folderId = draft.folderId;
+    }
+    if (draft.fields) cipher.fields = mergeFields(cipher.fields ?? [], draft.fields);
     if (draft.type === 2) {
       delete cipher.login;
       cipher.secureNote ??= { type: 0 };
@@ -1100,7 +1112,13 @@ export class Vault extends EventEmitter {
         ([key, value]) => [key, value || null] as const,
       );
       cipher.card = { ...cipher.card, ...Object.fromEntries(fields) };
-    } else {
+    } else if (draft.type === 4) {
+      delete cipher.login;
+      const fields = Object.entries(draft.identity).map(
+        ([key, value]) => [key, value || null] as const,
+      );
+      cipher.identity = { ...(cipher.identity as object), ...Object.fromEntries(fields) };
+    } else if (draft.type === 1) {
       const previous = cipher.login?.uris ?? [];
       const seen = new Set<number>();
       const uris = draft.uris.map((row): CipherUri => {
@@ -1267,10 +1285,36 @@ function isRemovable(cipher: Cipher) {
 }
 function isEditable(cipher: Cipher) {
   return (
-    (cipher.type === 1 || cipher.type === 2 || cipher.type === 3) &&
+    cipher.type >= 1 &&
+    cipher.type <= 5 &&
     !isRestricted(cipher) &&
     !cipher.login?.fido2Credentials?.length
   );
+}
+const fieldKinds = { text: 0, hidden: 1, boolean: 2 } as const;
+/** Applies edited custom fields by position, keeping each field's unknown keys. */
+function mergeFields(
+  previous: NonNullable<Cipher['fields']>,
+  drafts: CustomFieldDraft[],
+): NonNullable<Cipher['fields']> {
+  const seen = new Set<number>();
+  return drafts.map((row) => {
+    const index = row.sourceIndex;
+    if (index !== undefined) {
+      if (index >= previous.length || seen.has(index))
+        throw new UserError('The custom fields changed. Reopen this item and try again.');
+      seen.add(index);
+    }
+    if (row.action === 'keep') return previous[row.sourceIndex]!;
+    const original = index === undefined ? {} : previous[index];
+    return {
+      ...original,
+      name: row.name,
+      value: row.kind === 'boolean' ? String(row.value === 'true') : row.value,
+      type: fieldKinds[row.kind],
+      linkedId: null,
+    };
+  });
 }
 function canFill(cipher: Cipher, url: string) {
   return (
