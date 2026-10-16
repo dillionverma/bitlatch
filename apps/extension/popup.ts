@@ -3,8 +3,8 @@ import '@latch/shared/theme.css';
 import './popup.css';
 import { element, mark } from './content/render';
 import { itemDraft, uriMatchOptions } from '@latch/shared/item-drafts';
-import { identityRows } from '@latch/shared/item-fields';
-import { uriMatchSchema } from '@latch/shared/protocol';
+import { detailRows, inSentence, typeName } from '@latch/shared/item-fields';
+import { browserVaultQuerySchema, uriMatchSchema } from '@latch/shared/protocol';
 import { defaultPasswordOptions } from '@latch/shared/types';
 import type { BrowserVaultQuery } from '@latch/shared/protocol';
 import type {
@@ -93,8 +93,9 @@ function clearView() {
   if (view.kind !== 'list' && view.item) {
     view.item.password = '';
     view.item.notes = '';
-    view.item.identity = null;
+    view.item.details = null;
     view.item.fields = [];
+    view.item.passwordHistory = [];
   }
   detail.querySelectorAll('input, textarea').forEach((node) => {
     if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) node.value = '';
@@ -278,7 +279,7 @@ function tile(item: ItemSummary) {
   const node = element('span', 'tile');
   node.setAttribute('aria-hidden', 'true');
   if (item.type === 2) node.append(icon('note'));
-  else if (item.type === 4) node.append(icon('person'));
+  else if ([4, 7, 8].includes(item.type)) node.append(icon('person'));
   else {
     node.textContent = (Array.from(item.name.trim())[0] ?? '?').toUpperCase();
     if (item.website) {
@@ -403,13 +404,9 @@ function renderDetail(item: ItemDetail) {
       '',
       item.restorable
         ? 'In Trash'
-        : item.type === 2
-          ? 'Secure note'
-          : item.type === 4
-            ? 'Identity'
-            : item.hasPasskey
-              ? 'Login · Passkey'
-              : 'Login',
+        : item.type === 1 && item.hasPasskey
+          ? 'Login · Passkey'
+          : typeName(item.type),
     ),
   );
   heading.append(tile(item), title);
@@ -484,10 +481,12 @@ function renderDetail(item: ItemDetail) {
       );
     }
   }
-  for (const row of item.identity ? identityRows(item.identity) : []) {
-    if (row.secret) addSecretField(item, row.label, row.value, { identity: row.key });
-    else addField(item, row.label, row.value, { identity: row.key });
+  for (const row of detailRows(item.type, item.details ?? {})) {
+    if (row.secret) addSecretField(item, row.label, row.value, { detail: row.key });
+    else addField(item, row.label, row.value, { detail: row.key });
   }
+  for (const passkey of item.passkeys)
+    addField(item, 'Passkey', [passkey.rpId, passkey.userName].filter(Boolean).join(' · '));
   item.fields.forEach((field, index) => {
     const label = field.name || 'Custom field';
     if (field.kind === 'boolean') addField(item, label, field.value === 'true' ? 'Yes' : 'No');
@@ -499,6 +498,15 @@ function renderDetail(item: ItemDetail) {
       if (field.kind === 'hidden') addSecretField(item, label, field.value, target);
       else addField(item, label, field.value, target);
     }
+  });
+  item.passwordHistory.forEach((entry, index) => {
+    const label = entry.lastUsedDate
+      ? `Previous password · ${new Date(entry.lastUsedDate).toLocaleDateString()}`
+      : 'Previous password';
+    addSecretField(item, label, entry.password, {
+      history: index,
+      revisionDate: item.revisionDate,
+    });
   });
   addField(item, 'Notes', item.notes || 'No notes', 'notes');
   back.focus();
@@ -513,7 +521,7 @@ function addSecretField(item: ItemSummary, label: string, secret: string, field:
     value.textContent = revealed ? secret : '••••••••••••';
     reveal.textContent = revealed ? 'Hide' : 'Reveal';
   });
-  reveal.setAttribute('aria-label', `Reveal ${label.toLowerCase()}`);
+  reveal.setAttribute('aria-label', `Reveal ${inSentence(label)}`);
   row.append(reveal);
 }
 function addField(item: ItemSummary, label: string, value: string, field?: CopyField) {
@@ -529,7 +537,7 @@ function addField(item: ItemSummary, label: string, value: string, field?: CopyF
         'Copying…',
       );
     });
-    copy.setAttribute('aria-label', `Copy ${label.toLowerCase()}`);
+    copy.setAttribute('aria-label', `Copy ${inSentence(label)}`);
     row.append(copy);
   }
   detail.append(row);
@@ -766,11 +774,9 @@ function itemRow(item: ItemSummary, canFill: boolean) {
     element(
       'span',
       'item-sub',
-      item.type === 2
-        ? 'Secure note'
-        : item.type === 4
-          ? item.subtitle || 'Identity'
-          : item.username || item.website || 'Login',
+      item.type === 1
+        ? item.username || item.website || 'Login'
+        : item.subtitle || typeName(item.type),
     ),
   );
   row.append(tile(item), text);
@@ -917,9 +923,9 @@ scopes.addEventListener('click', (event) => {
   changeQuery();
 });
 itemType.addEventListener('change', () => {
-  const type = itemType.value;
-  if (type !== 'all' && type !== 'login' && type !== 'note' && type !== 'identity') return;
-  query.itemType = type;
+  const type = browserVaultQuerySchema.shape.itemType.safeParse(itemType.value);
+  if (!type.success) return;
+  query.itemType = type.data;
   changeQuery();
 });
 refresh.addEventListener('click', async () => {

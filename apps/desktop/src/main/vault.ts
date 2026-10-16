@@ -4,8 +4,7 @@ import { CodeRejectedError, type CliPort, type CliPrompt } from './cli';
 import { fillableUrl, matchesUri, normalizeServer, webUrl, type CipherUri } from './matching';
 import { UserError, type BrowserVaultQuery } from '@latch/shared/protocol';
 import { cardLabel } from '@latch/shared/item-drafts';
-import { identityLabel } from '@latch/shared/item-fields';
-import { identityKeys } from '@latch/shared/types';
+import { detailSections } from '@latch/shared/item-fields';
 import {
   ES256,
   attestationObject,
@@ -28,7 +27,6 @@ import type {
   CaptureOffer,
   ChallengeAnswer,
   CustomField,
-  IdentityFields,
   ItemDetail,
   ItemSummary,
   LoginChallenge,
@@ -66,7 +64,7 @@ export interface Cipher {
     code?: string | null;
     [key: string]: unknown;
   } | null;
-  identity?: Partial<Record<keyof IdentityFields, string | null>> | null;
+  passwordHistory?: { password?: string | null; lastUsedDate?: string | null }[] | null;
   fields?: {
     name?: string | null;
     value?: string | null;
@@ -563,8 +561,17 @@ export class Vault extends EventEmitter {
               code: cipher.card?.code ?? '',
             }
           : null,
-      identity: cipher.type === 4 ? identityOf(cipher) : null,
+      details: detailsOf(cipher),
       fields: (cipher.fields ?? []).map(customField),
+      passwordHistory: (cipher.passwordHistory ?? []).map((entry) => ({
+        password: entry.password ?? '',
+        lastUsedDate: entry.lastUsedDate ?? null,
+      })),
+      passkeys: (cipher.login?.fido2Credentials ?? []).map((credential) => ({
+        rpId: credential.rpId,
+        userName: credential.userName || credential.userDisplayName || '',
+        creationDate: credential.creationDate ?? null,
+      })),
       uris: (cipher.login?.uris ?? []).map((row, sourceIndex) => ({
         sourceIndex,
         uri: row.uri,
@@ -1175,7 +1182,15 @@ export class Vault extends EventEmitter {
 }
 
 /** Item types the browser extension may list and open. Cards stay desktop-only. */
-const browserItemTypes = { login: 1, note: 2, identity: 4 } as const;
+const browserItemTypes = {
+  login: 1,
+  note: 2,
+  identity: 4,
+  sshKey: 5,
+  bankAccount: 6,
+  driversLicense: 7,
+  passport: 8,
+} as const;
 const browserTypes = new Set<number>(Object.values(browserItemTypes));
 function isRestricted(cipher: Cipher) {
   return Boolean(cipher.organizationId || cipher.reprompt);
@@ -1193,8 +1208,14 @@ function cacheFields(cipher: Cipher): Cipher {
     deletedDate: cipher.deletedDate,
     notes: isRestricted(cipher) ? null : cipher.notes,
     card: isRestricted(cipher) ? null : cipher.card,
-    identity: isRestricted(cipher) ? null : cipher.identity,
+    ...Object.fromEntries(
+      Object.values(detailSections).map(({ field }) => [
+        field,
+        isRestricted(cipher) ? null : cipher[field],
+      ]),
+    ),
     fields: isRestricted(cipher) ? [] : cipher.fields,
+    passwordHistory: isRestricted(cipher) ? [] : cipher.passwordHistory,
     login: {
       username: isRestricted(cipher) ? null : cipher.login?.username,
       password: isRestricted(cipher) ? null : cipher.login?.password,
@@ -1232,10 +1253,16 @@ function canFill(cipher: Cipher, url: string) {
     (cipher.login?.uris ?? []).some((uri) => matchesUri(uri, url))
   );
 }
-function identityOf(cipher: Cipher): IdentityFields {
+function detailsOf(cipher: Cipher) {
+  const section = detailSections[cipher.type];
+  if (!section) return null;
+  const source = (cipher[section.field] ?? {}) as Record<string, unknown>;
   return Object.fromEntries(
-    identityKeys.map((key) => [key, cipher.identity?.[key] ?? '']),
-  ) as IdentityFields;
+    section.keys.map((key) => {
+      const value = source[key];
+      return [key, typeof value === 'string' || typeof value === 'number' ? String(value) : ''];
+    }),
+  );
 }
 /** Bitwarden's LinkedId values, named for display. */
 const linkedFieldNames: Record<number, string> = {
@@ -1280,8 +1307,8 @@ function customField(field: NonNullable<Cipher['fields']>[number]): CustomField 
 function subtitleOf(cipher: Cipher) {
   if (isRestricted(cipher)) return '';
   if (cipher.type === 3) return cardLabel(cipher.card?.brand ?? '', cipher.card?.number ?? '');
-  if (cipher.type === 4) return identityLabel(identityOf(cipher));
-  return '';
+  const details = detailsOf(cipher);
+  return details ? detailSections[cipher.type]!.subtitle(details) : '';
 }
 function browserPreview(value: string, limit: number) {
   return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;

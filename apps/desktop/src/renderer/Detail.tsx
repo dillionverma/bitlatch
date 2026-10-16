@@ -11,7 +11,7 @@ import {
   WarningCircle as CircleAlert,
 } from '@phosphor-icons/react';
 import { uriMatchOptions } from '@latch/shared/item-drafts';
-import { identityRows } from '@latch/shared/item-fields';
+import { detailRows, inSentence } from '@latch/shared/item-fields';
 import type { CardFields, CopyTarget, ItemDetail } from '@latch/shared/types';
 import { ItemIcon, displayWebsite, fieldLabels, typeName, type CopyField } from './items';
 import type { Notifier } from './Toasts';
@@ -138,7 +138,7 @@ export function Detail({
       type="button"
       variant="ghost"
       size="icon-sm"
-      aria-label={`${revealed[key] ? 'Hide' : 'Reveal'} ${label.toLowerCase()}`}
+      aria-label={`${revealed[key] ? 'Hide' : 'Reveal'} ${inSentence(label)}`}
       aria-pressed={!!revealed[key]}
       disabled={!value || deleting}
       onClick={() => setRevealed((current) => ({ ...current, [key]: !current[key] }))}
@@ -151,7 +151,7 @@ export function Detail({
       type="button"
       variant="ghost"
       size="icon-sm"
-      aria-label={`Copy ${copyable.label.toLowerCase()}`}
+      aria-label={`Copy ${inSentence(copyable.label)}`}
       disabled={!!copying || deleting || !value}
       aria-busy={copying === copyable.key}
       onClick={() => void copy(copyable)}
@@ -320,8 +320,10 @@ export function Detail({
           </section>
         )}
         {item.card && rowsSection('Card details', cardRows(item.card))}
-        {item.identity && rowsSection('Identity details', identityDetailRows(item.identity))}
+        {item.details && rowsSection(`${typeName(item.type)} details`, detailSectionRows(item))}
         {rowsSection('Custom fields', customFieldRows(item))}
+        {rowsSection('Passkeys', passkeyRows(item))}
+        {rowsSection('Password history', passwordHistoryRows(item))}
         <span role="status" className="sr-only">
           {copied ? `${copied.label} copied` : ''}
         </span>
@@ -341,7 +343,7 @@ export function Detail({
             <p className="text-sm text-foreground leading-relaxed">{item.notes}</p>
           </section>
         )}
-        {![1, 2, 3, 4].includes(item.type) && (
+        {![1, 2, 3].includes(item.type) && !item.details && (
           <Alert>
             <AlertTitle>Read-only in Bitlatch</AlertTitle>
             <AlertDescription>
@@ -411,14 +413,37 @@ function cardRows(card: CardFields): DetailRow[] {
   return rows.filter((row) => row.value || row.name === 'cardNumber');
 }
 
-function identityDetailRows(identity: ItemDetail['identity'] & {}): DetailRow[] {
-  return identityRows(identity).map((row) => ({
-    name: `identity-${row.key}`,
+function detailSectionRows({ type, details }: ItemDetail): DetailRow[] {
+  return detailRows(type, details ?? {}).map((row) => ({
+    name: `detail-${row.key}`,
     label: row.label,
     value: row.value,
     masked: row.secret ? '••••••••' : undefined,
-    copy: { key: `identity-${row.key}`, label: row.label, target: { identity: row.key } },
+    copy: { key: `detail-${row.key}`, label: row.label, target: { detail: row.key } },
   }));
+}
+
+function passkeyRows({ passkeys }: ItemDetail): DetailRow[] {
+  return passkeys.map((passkey, index) => ({
+    name: `passkey-${index}`,
+    label: passkey.creationDate ? `Passkey · created ${stamp(passkey.creationDate)}` : 'Passkey',
+    value: [passkey.rpId, passkey.userName].filter(Boolean).join(' · '),
+  }));
+}
+
+function passwordHistoryRows({ passwordHistory, revisionDate }: ItemDetail): DetailRow[] {
+  return passwordHistory.map((entry, index) => {
+    const name = `history-${index}`;
+    const used = entry.lastUsedDate ? `last used ${stamp(entry.lastUsedDate)}` : `${index + 1}`;
+    const label = `Previous password · ${used}`;
+    return {
+      name,
+      label,
+      value: entry.password,
+      masked: '••••••••',
+      copy: { key: name, label, target: { history: index, revisionDate } },
+    };
+  });
 }
 
 function customFieldRows({ fields, revisionDate }: ItemDetail): DetailRow[] {

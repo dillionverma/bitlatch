@@ -9,7 +9,11 @@ import {
   LockKey as LockKeyhole,
   Plus,
   ArrowsClockwise as RefreshCw,
+  Bank,
   CreditCard,
+  IdentificationBadge,
+  IdentificationCard,
+  Terminal,
   User as UserRound,
   MagnifyingGlass as Search,
   SlidersHorizontal as Settings2,
@@ -69,28 +73,31 @@ const initialState: VaultState = {
   biometrics: 'unsupported',
   biometricsOn: false,
 };
-type Filter =
-  | 'all'
-  | 'favorites'
-  | 'logins'
-  | 'notes'
-  | 'cards'
-  | 'identities'
-  | 'passkeys'
-  | 'trash';
 type Selection =
   | { status: 'unselected' }
   | { status: 'loading' | 'restricted' | 'error'; id: string }
   | { status: 'ready'; item: ItemDetail };
 type Modal = 'new' | 'edit' | 'settings' | 'search' | null;
+/** `match` selects a filter's items; `optional` filters show only while they have items. */
+interface FilterSpec {
+  id: string;
+  label: string;
+  icon: typeof Star;
+  empty?: string;
+  description?: string;
+  match?: (item: ItemSummary) => boolean;
+  optional?: true;
+}
+const ofType = (type: number) => (item: ItemSummary) => item.type === type;
 const filters = [
-  { id: 'all', label: 'All items', icon: FolderKey, empty: undefined, description: undefined },
+  { id: 'all', label: 'All items', icon: FolderKey },
   {
     id: 'favorites',
     label: 'Favorites',
     icon: Star,
     empty: 'No favorites',
     description: 'Mark an item as a favorite to find it here.',
+    match: (item) => item.favorite,
   },
   {
     id: 'logins',
@@ -98,6 +105,7 @@ const filters = [
     icon: KeyRound,
     empty: 'No logins',
     description: 'Use New item to add one.',
+    match: ofType(1),
   },
   {
     id: 'notes',
@@ -105,6 +113,7 @@ const filters = [
     icon: FileText,
     empty: 'No secure notes',
     description: 'Secure notes from Bitwarden appear here.',
+    match: ofType(2),
   },
   {
     id: 'cards',
@@ -112,6 +121,7 @@ const filters = [
     icon: CreditCard,
     empty: 'No cards',
     description: 'Use New item to add one.',
+    match: ofType(3),
   },
   {
     id: 'identities',
@@ -119,6 +129,23 @@ const filters = [
     icon: UserRound,
     empty: 'No identities',
     description: 'Identities from Bitwarden appear here.',
+    match: ofType(4),
+  },
+  { id: 'ssh-keys', label: 'SSH keys', icon: Terminal, match: ofType(5), optional: true },
+  { id: 'bank-accounts', label: 'Bank accounts', icon: Bank, match: ofType(6), optional: true },
+  {
+    id: 'drivers-licenses',
+    label: "Driver's licenses",
+    icon: IdentificationCard,
+    match: ofType(7),
+    optional: true,
+  },
+  {
+    id: 'passports',
+    label: 'Passports',
+    icon: IdentificationBadge,
+    match: ofType(8),
+    optional: true,
   },
   {
     id: 'passkeys',
@@ -126,6 +153,7 @@ const filters = [
     icon: Fingerprint,
     empty: 'No saved passkeys',
     description: 'Passkeys sign in through macOS AutoFill. Edit them in Bitwarden.',
+    match: (item) => item.hasPasskey,
   },
   {
     id: 'trash',
@@ -134,7 +162,8 @@ const filters = [
     empty: 'Trash is empty',
     description: 'Items moved to Trash can be restored.',
   },
-] as const;
+] satisfies FilterSpec[];
+type Filter = (typeof filters)[number]['id'];
 const copyFields: Record<Exclude<ItemMenuAction, 'edit' | 'trash' | 'restore'>, CopyField> = {
   copyUsername: 'username',
   copyPassword: 'password',
@@ -405,12 +434,8 @@ function VaultWorkspace({
     const source = filter === 'trash' ? indexedTrash : indexed;
     return source
       .filter(({ item, haystack }) => {
-        if (filter === 'favorites' && !item.favorite) return false;
-        if (filter === 'logins' && item.type !== 1) return false;
-        if (filter === 'notes' && item.type !== 2) return false;
-        if (filter === 'cards' && item.type !== 3) return false;
-        if (filter === 'identities' && item.type !== 4) return false;
-        if (filter === 'passkeys' && !item.hasPasskey) return false;
+        const match = (filters.find((entry) => entry.id === filter) as FilterSpec).match;
+        if (match && !match(item)) return false;
         return terms.every((term) => haystack.includes(term));
       })
       .map(({ item }) => item);
@@ -611,23 +636,27 @@ function VaultWorkspace({
               </div>
             </div>
             <nav aria-label="Vault filters">
-              {filters.map(({ id, label, icon: Icon }) => (
-                <Button
-                  type="button"
-                  variant="sidebar"
-                  key={id}
-                  className={`nav-item ${filter === id ? 'active' : ''}`}
-                  aria-pressed={filter === id}
-                  onClick={() => setFilter(id)}
-                >
-                  <Icon size={16} />
-                  <span>{label}</span>
-                  {id === 'all' && <small>{items.length.toLocaleString()}</small>}
-                  {id === 'trash' && state.trashLoaded && state.trashCount > 0 && (
-                    <small>{state.trashCount.toLocaleString()}</small>
-                  )}
-                </Button>
-              ))}
+              {(filters as FilterSpec[])
+                .filter(
+                  (entry) => !entry.optional || entry.id === filter || items.some(entry.match!),
+                )
+                .map(({ id, label, icon: Icon }) => (
+                  <Button
+                    type="button"
+                    variant="sidebar"
+                    key={id}
+                    className={`nav-item ${filter === id ? 'active' : ''}`}
+                    aria-pressed={filter === id}
+                    onClick={() => setFilter(id)}
+                  >
+                    <Icon size={16} />
+                    <span>{label}</span>
+                    {id === 'all' && <small>{items.length.toLocaleString()}</small>}
+                    {id === 'trash' && state.trashLoaded && state.trashCount > 0 && (
+                      <small>{state.trashCount.toLocaleString()}</small>
+                    )}
+                  </Button>
+                ))}
             </nav>
             <div className="sidebar-bottom">
               <Separator />

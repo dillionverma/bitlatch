@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { identityRowKeys, lockTimeoutMinutes } from './types';
+import { lockTimeoutMinutes } from './types';
 
 export const lockTimeoutSchema = z.literal(lockTimeoutMinutes);
 export const passwordOptionsSchema = z
@@ -34,14 +34,12 @@ const challengeAnswer = z.union([
   z.object({ cancel: z.literal(true) }).strict(),
 ]);
 const id = z.string().uuid();
+const position = z.number().int().min(0).max(1_000);
+const revisionDate = z.string().max(100).nullable();
 const copyTarget = z.union([
-  z.object({ identity: z.enum(identityRowKeys) }).strict(),
-  z
-    .object({
-      custom: z.number().int().min(0).max(1_000),
-      revisionDate: z.string().max(100).nullable(),
-    })
-    .strict(),
+  z.object({ detail: z.string().regex(/^[A-Za-z]{1,40}$/) }).strict(),
+  z.object({ custom: position, revisionDate }).strict(),
+  z.object({ history: position, revisionDate }).strict(),
 ]);
 export const browserSaveResultSchema = z.object({ id });
 const draftBase = {
@@ -178,7 +176,16 @@ export const browserVaultQuerySchema = z
   .object({
     query: z.string().max(500),
     scope: z.enum(['all', 'favorites', 'site', 'trash']),
-    itemType: z.enum(['all', 'login', 'note', 'identity']),
+    itemType: z.enum([
+      'all',
+      'login',
+      'note',
+      'identity',
+      'sshKey',
+      'bankAccount',
+      'driversLicense',
+      'passport',
+    ]),
     offset: z.number().int().min(0).max(1_000_000),
   })
   .strict();

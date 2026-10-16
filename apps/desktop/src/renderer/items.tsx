@@ -1,4 +1,12 @@
-import { CreditCard, FileText, User as UserRound } from '@phosphor-icons/react';
+import {
+  Bank,
+  CreditCard,
+  FileText,
+  IdentificationBadge,
+  IdentificationCard,
+  Terminal,
+  User as UserRound,
+} from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 import type { ItemSummary, LatchApi } from '@latch/shared/types';
 import { useWebsiteIcons } from './WebsiteIcons';
@@ -9,6 +17,16 @@ export const fieldLabels: Record<CopyField, string> = {
   password: 'Password',
   cardNumber: 'Card number',
   cardCode: 'Security code',
+};
+
+const typeIcons: Record<number, typeof FileText | undefined> = {
+  2: FileText,
+  3: CreditCard,
+  4: UserRound,
+  5: Terminal,
+  6: Bank,
+  7: IdentificationCard,
+  8: IdentificationBadge,
 };
 
 export function ItemIcon({ item, large = false }: { item: ItemSummary; large?: boolean }) {
@@ -37,8 +55,7 @@ export function ItemIcon({ item, large = false }: { item: ItemSummary; large?: b
     };
   }, [enabled, item.id, item.website, item.type, item.restricted]);
   const src = enabled && logo?.id === item.id && logo.website === item.website ? logo.src : null;
-  const Icon =
-    item.type === 2 ? FileText : item.type === 3 ? CreditCard : item.type === 4 ? UserRound : null;
+  const Icon = typeIcons[item.type];
   let hash = 0;
   for (const char of item.name) hash += char.charCodeAt(0);
   const tone = hash % 5;
@@ -71,19 +88,4 @@ export function displayWebsite(website: string) {
     return website;
   }
 }
-export function typeName(type: number) {
-  return (
-    (
-      {
-        1: 'Login',
-        2: 'Secure note',
-        3: 'Card',
-        4: 'Identity',
-        5: 'SSH key',
-        6: 'Bank account',
-        7: "Driver's license",
-        8: 'Passport',
-      } as Record<number, string>
-    )[type] ?? 'Vault item'
-  );
-}
+export { typeName } from '@latch/shared/item-fields';
