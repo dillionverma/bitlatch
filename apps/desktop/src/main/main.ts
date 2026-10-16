@@ -60,6 +60,9 @@ const extensionPath = app.isPackaged
 const hostScript = app.isPackaged
   ? join(process.resourcesPath, 'app.asar.unpacked/dist/desktop/native-host.cjs')
   : join(__dirname, 'native-host.cjs');
+const cliBootstrap = app.isPackaged
+  ? join(process.resourcesPath, 'app.asar.unpacked/dist/desktop/cli-bootstrap.cjs')
+  : join(__dirname, 'cli-bootstrap.cjs');
 
 function showWindow() {
   if (!window) return;
@@ -88,6 +91,7 @@ lifecycle.startup = app
     await websiteIcons.load();
     const engine = await localEngine({
       dataDir: join(app.getPath('userData'), 'bitwarden'),
+      bootstrap: cliBootstrap,
     });
     setupError = engine.setupError;
     lifecycle.cli = engine.cli;

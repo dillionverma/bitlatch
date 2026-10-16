@@ -13,7 +13,7 @@ export default defineConfig({
     },
   },
   // Independent bundles keep the sandboxed preload and unpacked native host self-contained.
-  pack: ['main', 'preload', 'native-host'].map((name) => ({
+  pack: ['main', 'preload', 'native-host', 'cli-bootstrap'].map((name) => ({
     entry: { [name]: name === 'main' ? 'src/main/main.ts' : `src/${name}/index.ts` },
     outDir: 'dist/desktop',
     format: 'cjs',

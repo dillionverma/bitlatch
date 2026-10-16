@@ -2,7 +2,7 @@ import { access, readFile, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
 import { delimiter, dirname, extname, join, isAbsolute, resolve, sep } from 'node:path';
-import { BitwardenCli, type CliOptions, type CliPort } from './cli';
+import { BitwardenCli, bootstrapRuns, type CliOptions, type CliPort } from './cli';
 import { WarmBitwardenCli } from './serve';
 import { UserError } from '@latch/shared/protocol';
 
@@ -26,6 +26,7 @@ function engineCli(options: CliOptions): CliPort {
 
 export async function localEngine(options: {
   dataDir: string;
+  bootstrap: string;
 }): Promise<{ cli: CliPort; setupError?: string }> {
   const windows = process.platform === 'win32';
   const names = windows ? ['bw.exe', 'bw.cmd'] : ['bw'];
@@ -68,6 +69,12 @@ export async function localEngine(options: {
         if (!(await stat(script)).isFile()) continue;
         cliOptions = { dataDir: options.dataDir, executable: process.execPath, script };
       } else if (windows && extname(executable).toLowerCase() !== '.exe') continue;
+      const withBootstrap = { ...cliOptions, bootstrap: options.bootstrap };
+      if (await bootstrapRuns(withBootstrap)) cliOptions = withBootstrap;
+      else
+        console.warn(
+          'The Bitwarden CLI ignored the Bitlatch preload; secrets use its environment.',
+        );
       return { cli: engineCli(cliOptions) };
     } catch {
       /* Try the next standard installation path. */
