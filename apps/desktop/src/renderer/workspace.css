@@ -390,3 +390,10 @@ html[data-reduced-motion='true'] .vault-app .workspace {
     animation: none;
   }
 }
+
+.vault-app .protected-form {
+  display: grid;
+  gap: 12px;
+  width: min(320px, 100%);
+  text-align: left;
+}

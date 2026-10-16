@@ -12,5 +12,7 @@ export interface BootstrapPayload {
   env: Partial<Record<SecretName, string>>;
   /** Print the marker and exit instead of running the CLI. */
   probe?: true;
+  /** Refuse every outgoing connection, so the CLI can only work locally. */
+  offline?: true;
 }
 export const BOOTSTRAP_MARKER = 'bitlatch-cli-bootstrap-ready';

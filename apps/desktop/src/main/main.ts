@@ -312,6 +312,10 @@ async function handleRequest(request: DesktopRequest): Promise<unknown> {
       return vault.deleteFolder(request.id);
     case 'detail':
       return vault.detail(request.id);
+    case 'openProtected':
+      return vault.openProtected(request.id, request.password);
+    case 'closeProtected':
+      return vault.closeProtected(request.id);
     case 'generate':
       return generatePassword(request.options);
     case 'browserSetup':

@@ -2,7 +2,13 @@ import { access, readFile, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
 import { delimiter, dirname, extname, join, isAbsolute, resolve, sep } from 'node:path';
-import { BitwardenCli, bootstrapRuns, type CliOptions, type CliPort } from './cli';
+import {
+  BitwardenCli,
+  bootstrapRuns,
+  removeVerifyCopies,
+  type CliOptions,
+  type CliPort,
+} from './cli';
 import { WarmBitwardenCli } from './serve';
 import { UserError } from '@latch/shared/protocol';
 
@@ -59,6 +65,7 @@ export async function localEngine(options: {
   } catch {
     return unavailable('Bitlatch is missing one of its files. Reinstall Bitlatch, then try again.');
   }
+  await removeVerifyCopies(options.dataDir);
   let privateChannelMissing = false;
   for (const executable of candidates) {
     if (!executable || !isAbsolute(executable)) continue;

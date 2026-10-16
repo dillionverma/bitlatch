@@ -34,11 +34,12 @@ import type {
 import { Auth } from './Auth';
 import { Editor } from './Editor';
 import { FolderDialog } from './FolderDialog';
+import { Protected } from './Protected';
 import { Settings } from './Settings';
 import { Mark } from './Mark';
 import { Detail } from './Detail';
 import { ItemList } from './ItemList';
-import { fieldLabels, type CopyField } from './items';
+import { fieldLabels, summaryOf, type CopyField } from './items';
 import { QuickOpen } from './QuickOpen';
 import { WebsiteIconsProvider } from './WebsiteIcons';
 import { Toasts, useToasts, type Notifier } from './Toasts';
@@ -79,7 +80,7 @@ const initialState: VaultState = {
 };
 type Selection =
   | { status: 'unselected' }
-  | { status: 'loading' | 'restricted' | 'error'; id: string }
+  | { status: 'loading' | 'restricted' | 'protected' | 'error'; id: string }
   | { status: 'ready'; item: ItemDetail };
 type Modal = 'new' | 'edit' | 'settings' | 'search' | 'newFolder' | 'renameFolder' | null;
 /** `match` selects a filter's items; `optional` filters show only while they have items. */
@@ -324,6 +325,17 @@ function VaultWorkspace({
       : selection.status === 'unselected'
         ? ''
         : selection.id;
+  const selectedReprompt =
+    !!selectedId && [...items, ...trashed].some((item) => item.id === selectedId && item.reprompt);
+  // Leaving an item that asks for the master password closes it, even mid-check.
+  useEffect(() => {
+    if (!selectedId || !selectedReprompt) return;
+    return () => void window.latch.closeProtected(selectedId).catch(() => undefined);
+  }, [selectedId, selectedReprompt]);
+  const selectedSummary =
+    selection.status === 'protected'
+      ? ([...items, ...trashed].find((item) => item.id === selection.id) ?? null)
+      : null;
   const [revealSelection, setRevealSelection] = useState(0);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
@@ -530,14 +542,17 @@ function VaultWorkspace({
   async function select(item: ItemSummary, refresh = false) {
     if (!alive.current) return;
     const version = ++selectionVersion.current;
-    if (
-      !refresh ||
-      selection.status !== 'ready' ||
-      selection.item.id !== item.id ||
-      item.restricted
-    )
-      setSelection({ status: item.restricted ? 'restricted' : 'loading', id: item.id });
-    if (item.restricted) return;
+    const reopened = refresh && selection.status === 'ready' && selection.item.id === item.id;
+    // A re-prompt item stays open across its own refreshes, never across selections.
+    const blocked = item.reprompt
+      ? reopened
+        ? null
+        : 'protected'
+      : item.restricted
+        ? 'restricted'
+        : null;
+    if (!reopened || blocked) setSelection({ status: blocked ?? 'loading', id: item.id });
+    if (blocked) return;
     try {
       const response = await window.latch.detail(item.id);
       if (!alive.current || version !== selectionVersion.current) return;
@@ -581,7 +596,10 @@ function VaultWorkspace({
     try {
       // Select before opening the menu so both the highlight and Edit target
       // follow the clicked row, even when a different detail request is pending.
-      const detail = await select(item);
+      const detail =
+        selection.status === 'ready' && selection.item.id === item.id
+          ? selection.item
+          : await select(item);
       if (!detail || !alive.current || hasModal()) return;
       const version = selectionVersion.current;
       const current = () => alive.current && version === selectionVersion.current;
@@ -919,7 +937,20 @@ function VaultWorkspace({
               });
             }}
           >
-            {selected && selectionVisible ? (
+            {activeDetail === 'protected' && selectedSummary ? (
+              <Protected
+                key={selectedSummary.id}
+                item={selectedSummary}
+                onOpened={(item) => {
+                  if (!alive.current) return;
+                  setSelection((current) =>
+                    current.status === 'protected' && current.id === item.id
+                      ? { status: 'ready', item }
+                      : current,
+                  );
+                }}
+              />
+            ) : selected && selectionVisible ? (
               <Detail
                 key={selected.id}
                 item={selected}
@@ -1049,32 +1080,9 @@ function VaultWorkspace({
               setModal(null);
               // Keep summaries secret-free, including the newly created item while
               // its broadcast list refresh is still in flight.
-              const {
-                id,
-                name,
-                username,
-                website,
-                subtitle,
-                folderId,
-                type,
-                favorite,
-                hasPasskey,
-                restricted,
-              } = item;
               setItems((current) => [
-                ...current.filter((entry) => entry.id !== id),
-                {
-                  id,
-                  name,
-                  username,
-                  website,
-                  subtitle,
-                  folderId,
-                  type,
-                  favorite,
-                  hasPasskey,
-                  restricted,
-                },
+                ...current.filter((entry) => entry.id !== item.id),
+                summaryOf(item),
               ]);
               setQuery('');
               setFilter('all');

@@ -1,4 +1,5 @@
 import { closeSync, readSync, writeSync } from 'node:fs';
+import { Socket } from 'node:net';
 import { pathToFileURL } from 'node:url';
 import { BOOTSTRAP_MARKER, secretNames, type BootstrapPayload } from './payload';
 
@@ -17,6 +18,14 @@ if (Number.isInteger(fd) && fd > 2) {
   if (payload.probe) {
     writeSync(1, BOOTSTRAP_MARKER);
     process.exit(0);
+  }
+  if (payload.offline) {
+    // Every TCP and TLS connection, from node-fetch, undici, or the SDK, opens
+    // through Socket.prototype.connect.
+    Socket.prototype.connect = function (this: Socket) {
+      process.nextTick(() => this.destroy(new Error('This Bitwarden CLI run is offline.')));
+      return this;
+    } as Socket['connect'];
   }
   const secrets = new Map<string | symbol, string>(Object.entries(payload.env));
   const secret = (key: string | symbol) =>
