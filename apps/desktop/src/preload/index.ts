@@ -27,6 +27,7 @@ const api: LatchApi = {
   items: () => request({ type: 'items' }),
   trash: () => request({ type: 'trash' }),
   folders: () => request({ type: 'folders' }),
+  sharing: () => request({ type: 'sharing' }),
   saveFolder: (id, name) => request({ type: 'saveFolder', id, name }),
   deleteFolder: (id) => request({ type: 'deleteFolder', id }),
   detail: (id) => request({ type: 'detail', id }),

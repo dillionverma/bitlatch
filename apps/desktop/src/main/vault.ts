@@ -27,8 +27,10 @@ import type {
   CaptureOffer,
   ChallengeAnswer,
   CustomField,
+  Collection,
   CustomFieldDraft,
   Folder,
+  Organization,
   ItemDetail,
   ItemSummary,
   LoginChallenge,
@@ -147,6 +149,8 @@ export class Vault extends EventEmitter {
   private captured?: Captured;
   private counterWrites: Promise<unknown> = Promise.resolve();
   private folderList: Folder[] = [];
+  private organizationList: Organization[] = [];
+  private collectionList: Collection[] = [];
   private opened = new Map<string, Cipher>();
   private opening?: string;
   private openTicket = 0;
@@ -165,8 +169,14 @@ export class Vault extends EventEmitter {
   constructor(
     private readonly cli: CliPort,
     private readonly sessions?: SessionStore,
+    /** CLI 2026.8.0 and later redact what organizations hide; older ones would reveal it. */
+    private readonly sharedItems = false,
   ) {
     super();
+  }
+
+  private cache(cipher: Cipher) {
+    return cacheFields(cipher, this.sharedItems);
   }
 
   /** Whether Touch ID could stand in for the master password, and whether it does. */
@@ -454,6 +464,8 @@ export class Vault extends EventEmitter {
     this.ciphers.clear();
     this.opened.clear();
     ++this.openTicket;
+    this.organizationList = [];
+    this.collectionList = [];
     this.folderList = [];
     this.trashLoaded = false;
     this.trashLoading = undefined;
@@ -572,7 +584,7 @@ export class Vault extends EventEmitter {
     this.assertGeneration(generation);
     if (version !== this.itemsRevision) return;
     for (const [id, cipher] of this.ciphers) if (cipher.deletedDate) this.ciphers.delete(id);
-    for (const cipher of trashed) this.ciphers.set(cipher.id, cacheFields(cipher));
+    for (const cipher of trashed) this.ciphers.set(cipher.id, this.cache(cipher));
     this.trashLoaded = true;
     this.countItems(false);
     this.publish();
@@ -596,8 +608,8 @@ export class Vault extends EventEmitter {
    */
   async openProtected(id: string, password: string) {
     const cipher = this.item(id);
-    if (cipher.organizationId || !cipher.reprompt)
-      throw new UserError('This item does not ask for your master password.');
+    if (cipher.sharedUnsupported) throw new UserError(UPDATE_FOR_SHARED);
+    if (!cipher.reprompt) throw new UserError('This item does not ask for your master password.');
     const generation = this.generation;
     if (!this.cli.verifyPassword)
       throw new UserError('Open this item in the official Bitwarden client.');
@@ -636,12 +648,12 @@ export class Vault extends EventEmitter {
 
   detail(id: string): ItemDetail {
     const cached = this.item(id);
+    if (cached.sharedUnsupported) throw new UserError(UPDATE_FOR_SHARED);
     const opened = this.opened.get(id);
     const cipher = opened ?? cached;
-    if (cipher.organizationId)
-      throw new UserError('Use the official Bitwarden client for shared items.');
     if (cipher.reprompt && !opened)
       throw new UserError('Enter your master password to open this item.');
+
     return {
       ...summarize(cipher, Boolean(opened)),
       password: cipher.login?.password ?? '',
@@ -675,6 +687,7 @@ export class Vault extends EventEmitter {
       notes: cipher.notes ?? '',
       revisionDate: cipher.revisionDate ?? null,
       createdDate: cipher.creationDate ?? null,
+      passwordsHidden: hidesPasswords(cached),
       editable: isEditable(cipher, Boolean(opened)) && !cipher.deletedDate,
       deletable: isRemovable(cipher, Boolean(opened)) && !cipher.deletedDate,
       restorable: isRemovable(cipher, Boolean(opened)) && Boolean(cipher.deletedDate),
@@ -1024,6 +1037,8 @@ export class Vault extends EventEmitter {
         const credential = latest.login?.fido2Credentials?.find(
           (entry) => entry.credentialId === credentialId,
         );
+        if (hidesPasswords(latest))
+          throw new UserError('Your organization does not let Bitlatch update this passkey.');
         if (!credential)
           throw new UserError('This passkey is no longer in your vault. Sync Bitlatch.');
         const saved = Math.max(counter, (Number(credential.counter) || 0) + 1);
@@ -1033,7 +1048,7 @@ export class Vault extends EventEmitter {
           await this.cli.run(['edit', 'item', id], { session: this.session, input: payload }),
         ) as Cipher;
         this.assertGeneration(generation);
-        this.ciphers.set(stored.id, cacheFields(stored));
+        this.ciphers.set(stored.id, this.cache(stored));
         this.publish();
         return saved;
       });
@@ -1106,7 +1121,7 @@ export class Vault extends EventEmitter {
       await this.cli.run(['create', 'item'], { session: this.session, input: payload }),
     ) as Cipher;
     this.assertGeneration(generation);
-    this.ciphers.set(saved.id, cacheFields(saved));
+    this.ciphers.set(saved.id, this.cache(saved));
     if (this.opened.has(saved.id)) this.opened.set(saved.id, saved);
     this.countItems();
     this.state.lastSync = new Date().toISOString();
@@ -1141,7 +1156,7 @@ export class Vault extends EventEmitter {
       await this.cli.run(['edit', 'item', id], { session: this.session, input: payload }),
     ) as Cipher;
     this.assertGeneration(generation);
-    this.ciphers.set(saved.id, cacheFields(saved));
+    this.ciphers.set(saved.id, this.cache(saved));
     if (this.opened.has(saved.id)) this.opened.set(saved.id, saved);
     this.countItems();
     this.publish();
@@ -1242,7 +1257,7 @@ export class Vault extends EventEmitter {
       await this.cli.run(args, { session: this.session, input: payload }),
     ) as Cipher;
     this.assertGeneration(generation);
-    this.ciphers.set(saved.id, cacheFields(saved));
+    this.ciphers.set(saved.id, this.cache(saved));
     if (this.opened.has(saved.id)) this.opened.set(saved.id, saved);
     this.countItems();
     this.state.lastSync = new Date().toISOString();
@@ -1259,7 +1274,7 @@ export class Vault extends EventEmitter {
       this.trashLoaded = false;
       this.trashLoading = undefined;
       this.ciphers = new Map(
-        items.filter((item) => !item.deletedDate).map((item) => [item.id, cacheFields(item)]),
+        items.filter((item) => !item.deletedDate).map((item) => [item.id, this.cache(item)]),
       );
       this.state.status = 'unlocked';
       this.countItems();
@@ -1270,6 +1285,8 @@ export class Vault extends EventEmitter {
         this.ciphers.clear();
         this.opened.clear();
         ++this.openTicket;
+        this.organizationList = [];
+        this.collectionList = [];
         this.folderList = [];
         this.trashLoaded = false;
         this.trashLoading = undefined;
@@ -1284,19 +1301,33 @@ export class Vault extends EventEmitter {
 
   /** Folders only label items, so failing to read them never locks the vault. */
   private async loadFolders(generation: number) {
-    try {
-      const folders = JSON.parse(
-        await this.cli.run(['list', 'folders'], { session: this.session }),
-      ) as { id: string | null; name: string }[];
-      if (generation !== this.generation) return;
-      // The CLI lists a "No Folder" entry without an ID; the sidebar adds its own.
-      this.folderList = folders
-        .filter((folder): folder is Folder => Boolean(folder.id))
-        .map(({ id, name }) => ({ id, name }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-    } catch {
-      if (generation === this.generation) this.folderList = [];
-    }
+    const list = async <T>(object: string): Promise<T[]> => {
+      try {
+        return JSON.parse(await this.cli.run(['list', object], { session: this.session })) as T[];
+      } catch {
+        return [];
+      }
+    };
+    const folders = await list<{ id: string | null; name: string }>('folders');
+    const organizations = await list<Organization>('organizations');
+    const collections = await list<Collection>('collections');
+    if (generation !== this.generation) return;
+    const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
+    // The CLI lists a "No Folder" entry without an ID; the sidebar adds its own.
+    this.folderList = folders
+      .filter((folder): folder is Folder => Boolean(folder.id))
+      .map(({ id, name }) => ({ id, name }))
+      .sort(byName);
+    this.organizationList = organizations.map(({ id, name }) => ({ id, name })).sort(byName);
+    this.collectionList = collections
+      .map(({ id, organizationId, name }) => ({ id, organizationId, name }))
+      .sort(byName);
+  }
+
+  /** Organizations and their collections, which label shared items. */
+  sharing() {
+    this.requireUnlocked();
+    return { organizations: this.organizationList, collections: this.collectionList };
   }
 
   private item(id: string) {
@@ -1335,16 +1366,38 @@ const browserItemTypes = {
   passport: 8,
 } as const;
 const browserTypes = new Set<number>(Object.values(browserItemTypes));
+const UPDATE_FOR_SHARED =
+  'Update the Bitwarden CLI to 2026.8.0 or later to open shared items in Bitlatch.';
+/**
+ * Items whose secrets stay out of the cache: those that ask for the master
+ * password, and shared items when the CLI cannot redact what organizations hide.
+ */
 function isRestricted(cipher: Cipher) {
-  return Boolean(cipher.organizationId || cipher.reprompt);
+  return typeof cipher.restricted === 'boolean' ? cipher.restricted : Boolean(cipher.reprompt);
 }
-function cacheFields(cipher: Cipher): Cipher {
+/**
+ * An organization item whose collection hides passwords. The CLI then omits
+ * the password, TOTP, history, and hidden fields, and marks it by leaving out
+ * `passwordHistory`. Writing such an item back would erase what it omitted.
+ */
+function hidesPasswords(cipher: Cipher) {
+  if (typeof cipher.passwordsHidden === 'boolean') return cipher.passwordsHidden;
+  return Boolean(cipher.organizationId) && !Object.hasOwn(cipher, 'passwordHistory');
+}
+function cacheFields(cipher: Cipher, sharedItems: boolean): Cipher {
+  const sharedUnsupported = Boolean(cipher.organizationId) && !sharedItems;
+  const restricted = Boolean(cipher.reprompt) || sharedUnsupported;
+  cipher = { ...cipher, restricted };
   return {
+    restricted,
+    sharedUnsupported,
     id: cipher.id,
     name: cipher.name,
     type: cipher.type,
     favorite: cipher.favorite,
     organizationId: cipher.organizationId,
+    collectionIds: cipher.collectionIds,
+    passwordsHidden: hidesPasswords(cipher),
     reprompt: cipher.reprompt,
     revisionDate: cipher.revisionDate,
     creationDate: cipher.creationDate,
@@ -1374,20 +1427,26 @@ function cacheFields(cipher: Cipher): Cipher {
 }
 /** The passkeys on an item that this Mac can sign with. */
 function passkeysOf(cipher: Cipher): Fido2Credential[] {
-  if (cipher.type !== 1 || cipher.deletedDate || isRestricted(cipher)) return [];
+  // A counter write would send back an item whose passwords the organization hides.
+  if (cipher.type !== 1 || cipher.deletedDate || isRestricted(cipher) || hidesPasswords(cipher))
+    return [];
   return (cipher.login?.fido2Credentials ?? []).filter(usableCredential);
 }
-/** Whether Bitlatch will move an item to the trash. Type does not matter here. */
-/** `opened`: the user entered the master password for this item. */
+/**
+ * Whether Bitlatch will move an item to the trash; `opened` means the master
+ * password was entered for it. For organization items the server decides.
+ */
 function isRemovable(cipher: Cipher, opened = false) {
   return (
-    !cipher.organizationId &&
+    !cipher.sharedUnsupported &&
     (!cipher.reprompt || opened) &&
     !cipher.login?.fido2Credentials?.length
   );
 }
 function isEditable(cipher: Cipher, opened = false) {
-  return cipher.type >= 1 && cipher.type <= 5 && isRemovable(cipher, opened);
+  return (
+    cipher.type >= 1 && cipher.type <= 5 && isRemovable(cipher, opened) && !hidesPasswords(cipher)
+  );
 }
 const fieldKinds = { text: 0, hidden: 1, boolean: 2 } as const;
 /** Applies edited custom fields by position, keeping each field's unknown keys. */
@@ -1501,6 +1560,8 @@ function summarize(cipher: Cipher, opened = false): ItemSummary {
     website: cipher.login?.uris?.[0]?.uri ?? '',
     subtitle: subtitleOf(cipher, opened),
     folderId: typeof cipher.folderId === 'string' ? cipher.folderId : null,
+    organizationId: cipher.organizationId ?? null,
+    collectionIds: Array.isArray(cipher.collectionIds) ? (cipher.collectionIds as string[]) : [],
     type: cipher.type,
     favorite: Boolean(cipher.favorite),
     hasPasskey: Boolean(cipher.login?.fido2Credentials?.length),

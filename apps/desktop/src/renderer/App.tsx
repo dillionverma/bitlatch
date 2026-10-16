@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { flushSync } from 'react-dom';
 import {
   WarningCircle as AlertCircle,
@@ -11,12 +19,14 @@ import {
   ArrowsClockwise as RefreshCw,
   Bank,
   CreditCard,
+  Cube,
   FolderSimple,
   PencilSimple,
   IdentificationBadge,
   IdentificationCard,
   Terminal,
   User as UserRound,
+  UsersThree,
   MagnifyingGlass as Search,
   SlidersHorizontal as Settings2,
   Star,
@@ -24,7 +34,9 @@ import {
   X,
 } from '@phosphor-icons/react';
 import type {
+  Collection,
   Folder,
+  Organization,
   ItemDetail,
   ItemMenuAction,
   ItemSummary,
@@ -316,6 +328,10 @@ function VaultWorkspace({
 }) {
   const [items, setItems] = useState<ItemSummary[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
+  const [sharing, setSharing] = useState<{
+    organizations: Organization[];
+    collections: Collection[];
+  }>({ organizations: [], collections: [] });
   const [trashed, setTrashed] = useState<ItemSummary[]>([]);
   const [selection, setSelection] = useState<Selection>({ status: 'unselected' });
   const selected = selection.status === 'ready' ? selection.item : null;
@@ -379,6 +395,12 @@ function VaultWorkspace({
       .folders()
       .then((listed) => {
         if (alive.current && version === listVersion.current && listed.ok) setFolders(listed.value);
+      })
+      .catch(() => undefined);
+    void window.latch
+      .sharing()
+      .then((listed) => {
+        if (alive.current && version === listVersion.current && listed.ok) setSharing(listed.value);
       })
       .catch(() => undefined);
     void window.latch
@@ -500,8 +522,58 @@ function VaultWorkspace({
     ];
   }, [folders, items]);
   // A folder deleted elsewhere falls back to All items.
+  const sharingFilters = useMemo(() => {
+    const { organizations, collections } = sharing;
+    if (!organizations.length) return { vaults: [], collections: [] };
+    const vaultCounts = new Map<string | null, number>();
+    const collectionCounts = new Map<string, number>();
+    for (const item of items) {
+      vaultCounts.set(item.organizationId, (vaultCounts.get(item.organizationId) ?? 0) + 1);
+      for (const id of item.collectionIds)
+        collectionCounts.set(id, (collectionCounts.get(id) ?? 0) + 1);
+    }
+    const organizationName = (id: string) =>
+      organizations.find((organization) => organization.id === id)?.name ?? 'Organization';
+    const vaults: (FilterSpec & { count: number })[] = [
+      {
+        id: 'vault:personal',
+        label: 'My vault',
+        icon: FolderKey,
+        empty: 'Your personal vault is empty',
+        description: 'Items only you can see appear here.',
+        match: (item: ItemSummary) => !item.organizationId,
+        count: vaultCounts.get(null) ?? 0,
+      },
+      ...organizations.map((organization) => ({
+        id: `vault:${organization.id}`,
+        label: organization.name,
+        icon: UsersThree,
+        empty: 'No shared items',
+        description: 'Items shared with this organization appear here.',
+        match: (item: ItemSummary) => item.organizationId === organization.id,
+        count: vaultCounts.get(organization.id) ?? 0,
+      })),
+    ];
+    return {
+      vaults,
+      collections: collections.map((collection) => ({
+        id: `collection:${collection.id}`,
+        label:
+          organizations.length > 1
+            ? `${collection.name} · ${organizationName(collection.organizationId)}`
+            : collection.name,
+        icon: Cube,
+        empty: 'This collection is empty',
+        description: 'Items in this collection appear here.',
+        match: (item: ItemSummary) => item.collectionIds.includes(collection.id),
+        count: collectionCounts.get(collection.id) ?? 0,
+      })),
+    };
+  }, [sharing, items]);
   const currentFilter =
-    [...filters, ...folderFilters].find((entry) => entry.id === filter) ?? allItems;
+    [...filters, ...folderFilters, ...sharingFilters.vaults, ...sharingFilters.collections].find(
+      (entry) => entry.id === filter,
+    ) ?? allItems;
   useEffect(() => {
     if (currentFilter.id !== filter) setFilter('all');
   }, [currentFilter, filter]);
@@ -784,6 +856,32 @@ function VaultWorkspace({
                   ))}
                 </>
               )}
+              {[
+                { heading: 'Vaults', entries: sharingFilters.vaults },
+                { heading: 'Collections', entries: sharingFilters.collections },
+              ]
+                .filter(({ entries }) => entries.length)
+                .map(({ heading, entries }) => (
+                  <Fragment key={heading}>
+                    <div className="nav-heading">
+                      <h2>{heading}</h2>
+                    </div>
+                    {entries.map(({ id, label, icon: Icon, count }) => (
+                      <Button
+                        type="button"
+                        variant="sidebar"
+                        key={id}
+                        className={`nav-item ${filter === id ? 'active' : ''}`}
+                        aria-pressed={filter === id}
+                        onClick={() => setFilter(id)}
+                      >
+                        <Icon size={16} />
+                        <span title={label}>{label}</span>
+                        <small>{count.toLocaleString()}</small>
+                      </Button>
+                    ))}
+                  </Fragment>
+                ))}
             </nav>
             <div className="sidebar-bottom">
               <Separator />
@@ -955,6 +1053,15 @@ function VaultWorkspace({
                 key={selected.id}
                 item={selected}
                 folder={folders.find((entry) => entry.id === selected.folderId)?.name}
+                vault={
+                  selected.organizationId
+                    ? (sharing.organizations.find((entry) => entry.id === selected.organizationId)
+                        ?.name ?? 'Organization')
+                    : undefined
+                }
+                collections={sharing.collections
+                  .filter((entry) => selected.collectionIds.includes(entry.id))
+                  .map((entry) => entry.name)}
                 onEdit={() => {
                   if (!hasModal()) setModal('edit');
                 }}
@@ -983,7 +1090,7 @@ function VaultWorkspace({
                     {activeDetail === 'loading'
                       ? 'Loading item…'
                       : activeDetail === 'restricted'
-                        ? 'Open this item in Bitwarden'
+                        ? 'Shared items need a newer Bitwarden CLI'
                         : activeDetail === 'error'
                           ? 'Could not load item'
                           : query && !visible.length
@@ -994,7 +1101,7 @@ function VaultWorkspace({
                     {activeDetail === 'loading'
                       ? 'Reading item details.'
                       : activeDetail === 'restricted'
-                        ? 'Shared and protected items are available in the official Bitwarden client.'
+                        ? 'Update the Bitwarden CLI to 2026.8.0 or later to open shared items in Bitlatch.'
                         : activeDetail === 'error'
                           ? 'Could not load this item. Try again.'
                           : query && !visible.length

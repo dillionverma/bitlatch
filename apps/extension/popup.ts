@@ -469,7 +469,12 @@ function renderDetail(item: ItemDetail) {
   if (item.type === 1) {
     addField(item, 'Username', item.username || 'No username', 'username');
     if (item.password) addSecretField(item, 'Password', item.password, 'password');
-    else addField(item, 'Password', 'No password');
+    else
+      addField(
+        item,
+        'Password',
+        item.passwordsHidden ? 'Hidden by your organization' : 'No password',
+      );
     for (const uri of item.uris) {
       const match =
         uriMatchOptions.find(
