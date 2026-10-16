@@ -143,7 +143,7 @@ export const itemDraftSchema = z.discriminatedUnion('type', [
     })
     .strict(),
 ]);
-// Cards stay desktop-only, so the extension cannot send one.
+// The extension edits only logins and notes.
 const browserDraftSchema = z.discriminatedUnion('type', [
   loginDraftSchema.extend(desktopDraftFields),
   noteDraftSchema.extend(desktopDraftFields),
@@ -252,6 +252,7 @@ export const browserVaultQuerySchema = z
       'all',
       'login',
       'note',
+      'card',
       'identity',
       'sshKey',
       'bankAccount',
@@ -286,7 +287,10 @@ export const browserRequestSchema = z.discriminatedUnion('type', [
     .object({
       type: z.literal('copy'),
       id,
-      field: z.union([z.enum(['username', 'password', 'notes', 'website']), copyTarget]),
+      field: z.union([
+        z.enum(['username', 'password', 'notes', 'website', 'cardNumber', 'cardCode']),
+        copyTarget,
+      ]),
     })
     .strict(),
   z.object({ type: z.literal('open') }).strict(),
