@@ -475,8 +475,15 @@ function Challenge({ challenge, onCancel }: { challenge: LoginChallenge; onCance
                   autoFocus
                   disabled={busy}
                   aria-invalid={!!message}
-                  aria-describedby={message ? 'challenge-error' : undefined}
+                  aria-describedby={[message && 'challenge-error', 'auth-code-hint']
+                    .filter(Boolean)
+                    .join(' ')}
                 />
+                <FieldDescription id="auth-code-hint">
+                  {challenge.method === 'yubikey'
+                    ? 'Choose Continue after your YubiKey enters its code.'
+                    : 'Six-digit codes submit automatically.'}
+                </FieldDescription>
               </Field>
             )}
           </FieldGroup>
