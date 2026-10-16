@@ -154,6 +154,7 @@ const TIMED_OUT = Symbol('timed out');
 const ANSI_SEQUENCE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[A-Za-z]`, 'g');
 
 const WRONG_PASSWORD = /decryption operation failed|invalid master password/i;
+const LOCKED = 'Vault locked. Try again after unlocking.';
 
 /** Removes password-check copies a crash left behind; they hold encrypted account state. */
 export async function removeVerifyCopies(dataDir: string) {
@@ -183,12 +184,14 @@ export class BitwardenCli implements CliPort {
   async verifyPassword(password: string): Promise<boolean> {
     const generation = this.generation;
     for (let attempt = 0; ; attempt++) {
+      if (generation !== this.generation) throw new UserError(LOCKED);
       const directory = await mkdtemp(join(dirname(this.options.dataDir), 'verify-'));
       try {
         await copyFile(join(this.options.dataDir, 'data.json'), join(directory, 'data.json'));
+        // A lock while the copy was made must stop the check before it starts.
+        if (generation !== this.generation) throw new UserError(LOCKED);
         const { code, stderr } = await this.unlockCopy(directory, password);
-        if (generation !== this.generation)
-          throw new UserError('Vault locked. Try again after unlocking.');
+        if (generation !== this.generation) throw new UserError(LOCKED);
         if (code === 0) return true;
         if (WRONG_PASSWORD.test(stderr)) return false;
       } finally {

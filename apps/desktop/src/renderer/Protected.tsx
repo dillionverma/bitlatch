@@ -25,13 +25,13 @@ export function Protected({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const working = useRef(false);
-  const mounted = useRef(true);
-  useEffect(
-    () => () => {
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
       mounted.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
   const input = useRef<HTMLInputElement>(null);
   // The field is disabled while the password is checked; give focus back for a retry.
   useEffect(() => {
