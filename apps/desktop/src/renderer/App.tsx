@@ -456,30 +456,35 @@ function VaultWorkspace({
     return () => removeEventListener('keydown', keyboard);
   }, [runCommand]);
 
-  const folderFilters = useMemo(
-    (): FilterSpec[] =>
-      folders.length
-        ? [
-            ...folders.map((folder) => ({
-              id: `folder:${folder.id}`,
-              label: folder.name,
-              icon: FolderSimple,
-              empty: 'This folder is empty',
-              description: 'Items you put in this folder appear here.',
-              match: (item: ItemSummary) => item.folderId === folder.id,
-            })),
-            {
-              id: 'folder:none',
-              label: 'No folder',
-              icon: FolderSimple,
-              empty: 'Every item is in a folder',
-              description: 'Items without a folder appear here.',
-              match: (item: ItemSummary) => !folders.some((folder) => folder.id === item.folderId),
-            },
-          ]
-        : [],
-    [folders],
-  );
+  const folderFilters = useMemo((): (FilterSpec & { count: number })[] => {
+    if (!folders.length) return [];
+    const known = new Set(folders.map((folder) => folder.id));
+    const counts = new Map<string | null, number>();
+    for (const item of items) {
+      const key = item.folderId && known.has(item.folderId) ? item.folderId : null;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return [
+      ...folders.map((folder) => ({
+        id: `folder:${folder.id}`,
+        label: folder.name,
+        icon: FolderSimple,
+        empty: 'This folder is empty',
+        description: 'Items you put in this folder appear here.',
+        match: (item: ItemSummary) => item.folderId === folder.id,
+        count: counts.get(folder.id) ?? 0,
+      })),
+      {
+        id: 'folder:none',
+        label: 'No folder',
+        icon: FolderSimple,
+        empty: 'Every item is in a folder',
+        description: 'Items without a folder appear here.',
+        match: (item: ItemSummary) => !item.folderId || !known.has(item.folderId),
+        count: counts.get(null) ?? 0,
+      },
+    ];
+  }, [folders, items]);
   // A folder deleted elsewhere falls back to All items.
   const currentFilter =
     [...filters, ...folderFilters].find((entry) => entry.id === filter) ?? allItems;
@@ -718,7 +723,7 @@ function VaultWorkspace({
               {folderFilters.length > 0 && (
                 <>
                   <h2 className="nav-heading">Folders</h2>
-                  {folderFilters.map(({ id, label, icon: Icon, match }) => (
+                  {folderFilters.map(({ id, label, icon: Icon, count }) => (
                     <Button
                       type="button"
                       variant="sidebar"
@@ -729,7 +734,7 @@ function VaultWorkspace({
                     >
                       <Icon size={16} />
                       <span title={label}>{label}</span>
-                      <small>{items.filter(match!).length.toLocaleString()}</small>
+                      <small>{count.toLocaleString()}</small>
                     </Button>
                   ))}
                 </>

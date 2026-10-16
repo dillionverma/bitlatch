@@ -1142,15 +1142,6 @@ export class Vault extends EventEmitter {
         await this.cli.run(['list', 'items'], { session: this.session }),
       ) as Cipher[];
       this.assertGeneration(generation);
-      const folders = JSON.parse(
-        await this.cli.run(['list', 'folders'], { session: this.session }),
-      ) as { id: string | null; name: string }[];
-      this.assertGeneration(generation);
-      // The CLI lists a "No Folder" entry without an ID; the sidebar adds its own.
-      this.folderList = folders
-        .filter((folder): folder is Folder => Boolean(folder.id))
-        .map(({ id, name }) => ({ id, name }))
-        .sort((a, b) => a.name.localeCompare(b.name));
       this.trashLoaded = false;
       this.trashLoading = undefined;
       this.ciphers = new Map(
@@ -1171,6 +1162,24 @@ export class Vault extends EventEmitter {
         this.publish();
       }
       throw error;
+    }
+    await this.loadFolders(generation);
+  }
+
+  /** Folders only label items, so failing to read them never locks the vault. */
+  private async loadFolders(generation: number) {
+    try {
+      const folders = JSON.parse(
+        await this.cli.run(['list', 'folders'], { session: this.session }),
+      ) as { id: string | null; name: string }[];
+      if (generation !== this.generation) return;
+      // The CLI lists a "No Folder" entry without an ID; the sidebar adds its own.
+      this.folderList = folders
+        .filter((folder): folder is Folder => Boolean(folder.id))
+        .map(({ id, name }) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    } catch {
+      if (generation === this.generation) this.folderList = [];
     }
   }
 
