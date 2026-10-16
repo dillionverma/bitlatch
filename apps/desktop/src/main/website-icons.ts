@@ -119,12 +119,13 @@ export class WebsiteIcons {
     const timeout = setTimeout(() => controller.abort(), 5_000);
     try {
       // Chromium's network stack trusts the same certificates as the system, which
-      // a self-hosted server with a private CA needs. No cookies are sent, and
-      // redirects cannot escape this origin.
+      // a self-hosted server with a private CA needs. No cookies are sent, nothing
+      // goes to the HTTP cache, and redirects cannot escape this origin.
       const response = await net.fetch(iconUrl(this.server(), host), {
         signal: controller.signal,
         redirect: 'error',
         credentials: 'omit',
+        cache: 'no-store',
       });
       if (!response.ok || !response.body) return null;
       if (Number(response.headers.get('content-length')) > MAX_BYTES) return null;
