@@ -25,7 +25,7 @@ function copyValue(item: ItemDetail, field: CopyField) {
     throw new UserError('This item changed. Reopen it and try again.');
   if ('history' in field) return item.passwordHistory[field.history]?.password ?? '';
   const custom = item.fields[field.custom];
-  return custom?.kind === 'text' || custom?.kind === 'hidden' ? custom.value : '';
+  return custom && custom.kind !== 'boolean' && custom.kind !== 'linked' ? custom.value : '';
 }
 
 /** Owns desktop invalidation and shutdown; vault session state stays in Vault. */

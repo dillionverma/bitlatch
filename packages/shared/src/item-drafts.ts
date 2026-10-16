@@ -1,4 +1,12 @@
-import type { CardFields, ItemDetail, ItemDraft, UriDraft } from './types';
+import type {
+  CardFields,
+  CustomFieldDraft,
+  IdentityFields,
+  ItemDetail,
+  ItemDraft,
+  UriDraft,
+} from './types';
+import { identityKeys } from './types';
 import { uriMatchSchema } from './protocol';
 import { webUrl } from './urls';
 
@@ -31,6 +39,9 @@ export const emptyCard: CardFields = {
   expYear: '',
   code: '',
 };
+export const emptyIdentity = Object.fromEntries(
+  identityKeys.map((key) => [key, '']),
+) as IdentityFields;
 export function cardLabel(brand: string, number: string) {
   return [brand, number && `•••• ${number.slice(-4)}`].filter(Boolean).join(' ');
 }
@@ -48,9 +59,17 @@ export function itemDraft(item: ItemDetail): ItemDraft {
     name: item.name,
     notes: item.notes,
     favorite: item.favorite,
+    folderId: item.folderId,
+    fields: item.fields.map((field, sourceIndex): CustomFieldDraft =>
+      field.kind === 'linked' || field.kind === 'unknown'
+        ? { action: 'keep', sourceIndex }
+        : { action: 'write', sourceIndex, name: field.name, value: field.value, kind: field.kind },
+    ),
   };
   if (item.type === 2) return { ...base, type: 2 };
   if (item.type === 3) return { ...base, type: 3, card: item.card ?? emptyCard };
+  if (item.type === 4) return { ...base, type: 4, identity: { ...emptyIdentity, ...item.details } };
+  if (item.type === 5) return { ...base, type: 5 };
   return {
     ...base,
     type: 1,

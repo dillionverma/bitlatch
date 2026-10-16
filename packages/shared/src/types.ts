@@ -143,7 +143,8 @@ export interface CardFields {
 export interface CustomField {
   name: string;
   value: string;
-  kind: 'text' | 'hidden' | 'boolean' | 'linked';
+  /** `unknown` is a field type Bitlatch does not know; it shows masked and is never rewritten. */
+  kind: 'text' | 'hidden' | 'boolean' | 'linked' | 'unknown';
 }
 
 /**
@@ -192,6 +193,40 @@ export interface LoginInput {
 }
 
 export type UriMatch = null | 0 | 1 | 2 | 3 | 5;
+export const identityKeys = [
+  'title',
+  'firstName',
+  'middleName',
+  'lastName',
+  'address1',
+  'address2',
+  'address3',
+  'city',
+  'state',
+  'postalCode',
+  'country',
+  'company',
+  'email',
+  'phone',
+  'ssn',
+  'username',
+  'passportNumber',
+  'licenseNumber',
+] as const;
+/** Bitwarden's identity fields, with the CLI's nulls read as empty strings. */
+export type IdentityFields = Record<(typeof identityKeys)[number], string>;
+
+/** Custom fields keep their position, so a linked or unknown field survives an edit untouched. */
+export type CustomFieldDraft =
+  | { action: 'keep'; sourceIndex: number }
+  | {
+      action: 'write';
+      sourceIndex?: number;
+      name: string;
+      value: string;
+      kind: 'text' | 'hidden' | 'boolean';
+    };
+
 export type UriDraft =
   | { action: 'keep'; sourceIndex: number }
   | { action: 'write'; sourceIndex?: number; uri: string; match: UriMatch };
@@ -201,10 +236,17 @@ export type ItemDraft = {
   name: string;
   notes: string;
   favorite: boolean;
+  /** Omitted keeps the item's folder; null is No folder. */
+  folderId?: string | null;
+  /** Omitted keeps the item's custom fields. */
+  fields?: CustomFieldDraft[];
 } & (
   | { type: 1; username: string; password: string; uris: UriDraft[] }
   | { type: 2 }
   | { type: 3; card: CardFields }
+  | { type: 4; identity: IdentityFields }
+  /** SSH keys keep their key material; only the shared fields change. */
+  | { type: 5 }
 );
 
 export interface FillCredential {

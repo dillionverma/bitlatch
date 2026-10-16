@@ -1,7 +1,21 @@
 import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { Check, Eye, EyeSlash as EyeOff, X } from '@phosphor-icons/react';
-import type { CardFields, ItemDetail, ItemDraft, UriDraft } from '@latch/shared/types';
-import { cardBrands, emptyCard, itemDraft, uriMatchOptions } from '@latch/shared/item-drafts';
+import type {
+  CardFields,
+  CustomFieldDraft,
+  Folder,
+  IdentityFields,
+  ItemDetail,
+  ItemDraft,
+  UriDraft,
+} from '@latch/shared/types';
+import {
+  cardBrands,
+  emptyCard,
+  emptyIdentity,
+  itemDraft,
+  uriMatchOptions,
+} from '@latch/shared/item-drafts';
 import { uriMatchSchema } from '@latch/shared/protocol';
 import type { Notifier } from './Toasts';
 import { Button } from '@/components/ui/button';
@@ -27,10 +41,10 @@ import {
 import { PasswordGenerator } from './PasswordGenerator';
 import './tasks.css';
 
-type DraftBase = Pick<ItemDraft, 'name' | 'notes' | 'favorite'>;
+type DraftBase = Pick<ItemDraft, 'name' | 'notes' | 'favorite' | 'folderId' | 'fields'>;
 const draftTypes: Record<
   ItemDraft['type'],
-  { label: string; save: string; empty: (base: DraftBase) => ItemDraft }
+  { label: string; save: string; empty: (base: DraftBase) => ItemDraft; creatable?: false }
 > = {
   1: {
     label: 'Login',
@@ -47,7 +61,44 @@ const draftTypes: Record<
     save: 'Save card',
     empty: (base) => ({ ...base, type: 3, card: emptyCard }),
   },
+  4: {
+    label: 'Identity',
+    save: 'Save identity',
+    empty: (base) => ({ ...base, type: 4, identity: emptyIdentity }),
+  },
+  // SSH keys come from Bitwarden with their key pair; here only their shared fields change.
+  5: {
+    label: 'SSH key',
+    save: 'Save SSH key',
+    empty: (base) => ({ ...base, type: 5 }),
+    creatable: false,
+  },
 };
+const identityLabels: Record<keyof IdentityFields, string> = {
+  title: 'Title',
+  firstName: 'First name',
+  middleName: 'Middle name',
+  lastName: 'Last name',
+  username: 'Username',
+  company: 'Company',
+  email: 'Email',
+  phone: 'Phone',
+  ssn: 'Social Security number',
+  passportNumber: 'Passport number',
+  licenseNumber: 'License number',
+  address1: 'Address 1',
+  address2: 'Address 2',
+  address3: 'Address 3',
+  city: 'City',
+  state: 'State or province',
+  postalCode: 'Postal code',
+  country: 'Country',
+};
+const fieldKindOptions = [
+  { value: 'text', label: 'Text' },
+  { value: 'hidden', label: 'Hidden' },
+  { value: 'boolean', label: 'Checkbox' },
+] as const;
 const brandOptions = cardBrands.map((brand) => ({ value: brand, label: brand }));
 const monthName = new Intl.DateTimeFormat(undefined, { month: 'long' });
 const monthOptions = Array.from({ length: 12 }, (_, index) => {
@@ -60,11 +111,16 @@ const monthOptions = Array.from({ length: 12 }, (_, index) => {
 
 export function Editor({
   item,
+  folders,
+  folderId = null,
   onClose,
   onSaved,
   notify,
 }: {
   item: ItemDetail | null;
+  folders: Folder[];
+  /** The folder a new item starts in. */
+  folderId?: string | null;
   onClose: () => void;
   onSaved: (item: ItemDetail) => void;
   notify: Notifier;
@@ -72,13 +128,24 @@ export function Editor({
   const [initial] = useState<ItemDraft>(() =>
     item
       ? itemDraft(item)
-      : { type: 1, name: '', username: '', password: '', uris: [], notes: '', favorite: false },
+      : {
+          type: 1,
+          name: '',
+          username: '',
+          password: '',
+          uris: [],
+          notes: '',
+          favorite: false,
+          folderId,
+          fields: [],
+        },
   );
   const [draft, setDraft] = useState(initial);
   const isNote = draft.type === 2;
   const [busy, setBusy] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [codeRevealed, setCodeRevealed] = useState(false);
+  const [revealedFields, setRevealedFields] = useState<ReadonlySet<number>>(new Set());
   const [error, setError] = useState('');
   const [discarding, setDiscarding] = useState(false);
   const [active, setActive] = useState(true);
@@ -144,6 +211,24 @@ export function Editor({
   function cardField(key: keyof CardFields, value: string) {
     setDraft((current) =>
       current.type === 3 ? { ...current, card: { ...current.card, [key]: value } } : current,
+    );
+  }
+  function identityField(key: keyof IdentityFields, value: string) {
+    setDraft((current) =>
+      current.type === 4
+        ? { ...current, identity: { ...current.identity, [key]: value } }
+        : current,
+    );
+  }
+  function fieldRows(change: (rows: CustomFieldDraft[]) => CustomFieldDraft[]) {
+    setDraft((current) => ({ ...current, fields: change(current.fields ?? []) }));
+  }
+  function fieldRow(
+    index: number,
+    change: Partial<Extract<CustomFieldDraft, { action: 'write' }>>,
+  ) {
+    fieldRows((rows) =>
+      rows.map((row, i) => (i === index && row.action === 'write' ? { ...row, ...change } : row)),
     );
   }
   function uriRows(change: (rows: UriDraft[]) => UriDraft[]) {
@@ -255,15 +340,19 @@ export function Editor({
                           name: draft.name,
                           notes: draft.notes,
                           favorite: draft.favorite,
+                          folderId: draft.folderId,
+                          fields: draft.fields,
                         }),
                       );
                     }}
                   >
-                    {Object.entries(draftTypes).map(([type, { label }]) => (
-                      <option key={type} value={type}>
-                        {label}
-                      </option>
-                    ))}
+                    {Object.entries(draftTypes)
+                      .filter(([, { creatable }]) => creatable !== false)
+                      .map(([type, { label }]) => (
+                        <option key={type} value={type}>
+                          {label}
+                        </option>
+                      ))}
                   </select>
                 </Field>
               )}
@@ -279,6 +368,40 @@ export function Editor({
                   disabled={busy}
                 />
               </Field>
+              <Field>
+                <FieldLabel htmlFor="editor-folder">Folder</FieldLabel>
+                <select
+                  id="editor-folder"
+                  value={draft.folderId ?? ''}
+                  disabled={busy}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, folderId: event.target.value || null }))
+                  }
+                >
+                  <option value="">No folder</option>
+                  {folders.map((folder) => (
+                    <option key={folder.id} value={folder.id}>
+                      {folder.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {draft.type === 4 &&
+                (Object.keys(identityLabels) as (keyof IdentityFields)[]).map((key) => (
+                  <Field key={key}>
+                    <FieldLabel htmlFor={`editor-identity-${key}`}>
+                      {identityLabels[key]}
+                    </FieldLabel>
+                    <Input
+                      id={`editor-identity-${key}`}
+                      value={draft.identity[key]}
+                      onChange={(event) => identityField(key, event.target.value)}
+                      autoComplete="off"
+                      maxLength={16_384}
+                      disabled={busy}
+                    />
+                  </Field>
+                ))}
               {draft.type === 1 && (
                 <>
                   <Field>
@@ -328,6 +451,7 @@ export function Editor({
                           </>
                         )}
                         <Button
+                          aria-label={`Remove website ${index + 1}`}
                           type="button"
                           variant="outline"
                           disabled={busy}
@@ -474,6 +598,123 @@ export function Editor({
                   </Field>
                 </>
               )}
+              <Field>
+                <FieldLabel>Custom fields</FieldLabel>
+                {(draft.fields ?? []).map((row, index) => (
+                  <div key={index} className="task-uri-row">
+                    {row.action === 'keep' ? (
+                      <p className="text-xs text-muted-foreground">
+                        {item?.fields[row.sourceIndex]?.name || 'This field'}
+                        {item?.fields[row.sourceIndex]?.kind === 'linked'
+                          ? ' links to another field'
+                          : ' has a type Bitlatch cannot edit'}{' '}
+                        and is kept as it is. Edit it in Bitwarden or remove it.
+                      </p>
+                    ) : (
+                      <>
+                        <Input
+                          aria-label={`Field ${index + 1} name`}
+                          placeholder="Name"
+                          value={row.name}
+                          maxLength={1_000}
+                          disabled={busy}
+                          onChange={(event) => fieldRow(index, { name: event.target.value })}
+                        />
+                        <select
+                          aria-label={`Field ${index + 1} type`}
+                          value={row.kind}
+                          disabled={busy}
+                          onChange={(event) => {
+                            const kind = fieldKindOptions.find(
+                              (option) => option.value === event.target.value,
+                            )!.value;
+                            fieldRow(index, {
+                              kind,
+                              value: kind === 'boolean' ? String(row.value === 'true') : row.value,
+                            });
+                          }}
+                        >
+                          {fieldKindOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        {row.kind === 'boolean' ? (
+                          <Switch
+                            aria-label={`Field ${index + 1} value`}
+                            checked={row.value === 'true'}
+                            disabled={busy}
+                            onCheckedChange={(checked) =>
+                              fieldRow(index, { value: String(checked) })
+                            }
+                          />
+                        ) : (
+                          <InputGroup>
+                            <InputGroupInput
+                              aria-label={`Field ${index + 1} value`}
+                              type={
+                                row.kind === 'hidden' && !revealedFields.has(index)
+                                  ? 'password'
+                                  : 'text'
+                              }
+                              autoComplete="off"
+                              value={row.value}
+                              maxLength={16_384}
+                              disabled={busy}
+                              onChange={(event) => fieldRow(index, { value: event.target.value })}
+                            />
+                            {row.kind === 'hidden' && (
+                              <InputGroupAddon align="inline-end">
+                                <InputGroupButton
+                                  size="icon-sm"
+                                  aria-label={`${revealedFields.has(index) ? 'Hide' : 'Reveal'} field ${index + 1} value`}
+                                  aria-pressed={revealedFields.has(index)}
+                                  disabled={busy}
+                                  onClick={() =>
+                                    setRevealedFields((current) => {
+                                      const next = new Set(current);
+                                      if (!next.delete(index)) next.add(index);
+                                      return next;
+                                    })
+                                  }
+                                >
+                                  {revealedFields.has(index) ? <EyeOff /> : <Eye />}
+                                </InputGroupButton>
+                              </InputGroupAddon>
+                            )}
+                          </InputGroup>
+                        )}
+                      </>
+                    )}
+                    <Button
+                      aria-label={`Remove field ${index + 1}`}
+                      type="button"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => {
+                        setRevealedFields(new Set());
+                        fieldRows((rows) => rows.filter((_, i) => i !== index));
+                      }}
+                    >
+                      Remove field
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() =>
+                    fieldRows((rows) => [
+                      ...rows,
+                      { action: 'write', name: '', value: '', kind: 'text' },
+                    ])
+                  }
+                >
+                  Add field
+                </Button>
+              </Field>
               <Field>
                 <FieldLabel htmlFor="editor-notes">Notes</FieldLabel>
                 <Textarea

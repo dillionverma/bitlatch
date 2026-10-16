@@ -27,6 +27,7 @@ import type {
   CaptureOffer,
   ChallengeAnswer,
   CustomField,
+  CustomFieldDraft,
   Folder,
   ItemDetail,
   ItemSummary,
@@ -1075,6 +1076,8 @@ export class Vault extends EventEmitter {
         throw new UserError('Edit this item in the official Bitwarden client.');
       cipher = { ...latest };
     } else {
+      if (draft.type === 5)
+        throw new UserError('Add SSH keys in the official Bitwarden client for now.');
       cipher = {
         id: '',
         type: draft.type,
@@ -1091,6 +1094,16 @@ export class Vault extends EventEmitter {
       notes: draft.notes || null,
       favorite: draft.favorite,
     });
+    // Only a move is checked, so a folder list that failed to load never blocks a save.
+    if (draft.folderId !== undefined && draft.folderId !== (cipher.folderId ?? null)) {
+      if (
+        draft.folderId !== null &&
+        !this.folderList.some((folder) => folder.id === draft.folderId)
+      )
+        throw new UserError('That folder no longer exists. Sync your vault and try again.');
+      cipher.folderId = draft.folderId;
+    }
+    if (draft.fields) cipher.fields = mergeFields(cipher.fields ?? [], draft.fields);
     if (draft.type === 2) {
       delete cipher.login;
       cipher.secureNote ??= { type: 0 };
@@ -1100,7 +1113,13 @@ export class Vault extends EventEmitter {
         ([key, value]) => [key, value || null] as const,
       );
       cipher.card = { ...cipher.card, ...Object.fromEntries(fields) };
-    } else {
+    } else if (draft.type === 4) {
+      delete cipher.login;
+      const fields = Object.entries(draft.identity).map(
+        ([key, value]) => [key, value || null] as const,
+      );
+      cipher.identity = { ...(cipher.identity as object), ...Object.fromEntries(fields) };
+    } else if (draft.type === 1) {
       const previous = cipher.login?.uris ?? [];
       const seen = new Set<number>();
       const uris = draft.uris.map((row): CipherUri => {
@@ -1267,10 +1286,45 @@ function isRemovable(cipher: Cipher) {
 }
 function isEditable(cipher: Cipher) {
   return (
-    (cipher.type === 1 || cipher.type === 2 || cipher.type === 3) &&
+    cipher.type >= 1 &&
+    cipher.type <= 5 &&
     !isRestricted(cipher) &&
     !cipher.login?.fido2Credentials?.length
   );
+}
+const fieldKinds = { text: 0, hidden: 1, boolean: 2 } as const;
+/** Applies edited custom fields by position, keeping each field's unknown keys. */
+function mergeFields(
+  previous: NonNullable<Cipher['fields']>,
+  drafts: CustomFieldDraft[],
+): NonNullable<Cipher['fields']> {
+  const seen = new Set<number>();
+  return drafts.map((row) => {
+    const index = row.sourceIndex;
+    if (index !== undefined) {
+      if (index >= previous.length || seen.has(index))
+        throw new UserError('The custom fields changed. Reopen this item and try again.');
+      seen.add(index);
+    }
+    if (row.action === 'keep') return previous[row.sourceIndex]!;
+    const original = index === undefined ? undefined : previous[index];
+    const type = fieldKinds[row.kind];
+    // An untouched row keeps the stored field exactly, including values such as "TRUE".
+    if (
+      original &&
+      (original.name ?? '') === row.name &&
+      (original.value ?? '') === row.value &&
+      (original.type ?? 0) === type
+    )
+      return original;
+    return {
+      ...original,
+      name: row.name,
+      value: row.kind === 'boolean' ? String(row.value === 'true') : row.value,
+      type,
+      linkedId: null,
+    };
+  });
 }
 function canFill(cipher: Cipher, url: string) {
   return (
@@ -1324,8 +1378,8 @@ const linkedFieldNames: Record<number, string> = {
 };
 const customFieldKinds: CustomField['kind'][] = ['text', 'hidden', 'boolean', 'linked'];
 function customField(field: NonNullable<Cipher['fields']>[number]): CustomField {
-  // An unknown kind could hold a secret, so it is masked like a hidden field.
-  const kind = customFieldKinds[field.type ?? 0] ?? 'hidden';
+  // An unknown kind could hold a secret, so it shows masked like a hidden field.
+  const kind = customFieldKinds[field.type ?? 0] ?? 'unknown';
   return {
     name: field.name ?? '',
     value: kind === 'linked' ? (linkedFieldNames[field.linkedId ?? -1] ?? '') : (field.value ?? ''),

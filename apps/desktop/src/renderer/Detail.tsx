@@ -463,7 +463,7 @@ function customFieldRows({ fields, revisionDate }: ItemDetail): DetailRow[] {
       return { name, label, value: field.value === 'true' ? 'Yes' : 'No' };
     if (field.kind === 'linked')
       return { name, label, value: field.value ? `Linked to ${field.value}` : 'Linked field' };
-    if (field.kind === 'hidden')
+    if (field.kind === 'hidden' || field.kind === 'unknown')
       return { name, label, value: field.value, masked: '••••••••', copy };
     return { name, label, value: field.value, copy };
   });
