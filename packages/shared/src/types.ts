@@ -232,6 +232,12 @@ export const identityKeys = [
 /** Bitwarden's identity fields, with the CLI's nulls read as empty strings. */
 export type IdentityFields = Record<(typeof identityKeys)[number], string>;
 
+export interface SshKeyFields {
+  privateKey: string;
+  publicKey: string;
+  keyFingerprint: string;
+}
+
 /** Custom fields keep their position, so a linked or unknown field survives an edit untouched. */
 export type CustomFieldDraft =
   | { action: 'keep'; sourceIndex: number }
@@ -261,8 +267,8 @@ export type ItemDraft = {
   | { type: 2 }
   | { type: 3; card: CardFields }
   | { type: 4; identity: IdentityFields }
-  /** SSH keys keep their key material; only the shared fields change. */
-  | { type: 5 }
+  /** A new SSH key carries its key pair; an edit keeps the stored one. */
+  | { type: 5; sshKey?: SshKeyFields }
 );
 
 export interface FillCredential {
@@ -340,6 +346,10 @@ export interface LatchApi {
   trash(): Promise<Result<ItemSummary[]>>;
   folders(): Promise<Result<Folder[]>>;
   sharing(): Promise<Result<{ organizations: Organization[]; collections: Collection[] }>>;
+  /** A new Ed25519 key pair for an SSH key item. */
+  generateSshKey(): Promise<Result<SshKeyFields>>;
+  /** Reads a pasted private key into the fields an SSH key item stores. */
+  importSshKey(privateKey: string): Promise<Result<SshKeyFields>>;
   /** Creates a folder when `id` is null, otherwise renames it. */
   saveFolder(id: string | null, name: string): Promise<Result<Folder>>;
   deleteFolder(id: string): Promise<Result<void>>;

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { Check, Eye, EyeSlash as EyeOff, X } from '@phosphor-icons/react';
 import type {
   CardFields,
@@ -6,6 +6,7 @@ import type {
   Folder,
   IdentityFields,
   ItemDetail,
+  SshKeyFields as SshKey,
   ItemDraft,
   UriDraft,
 } from '@latch/shared/types';
@@ -66,13 +67,8 @@ const draftTypes: Record<
     save: 'Save identity',
     empty: (base) => ({ ...base, type: 4, identity: emptyIdentity }),
   },
-  // SSH keys come from Bitwarden with their key pair; here only their shared fields change.
-  5: {
-    label: 'SSH key',
-    save: 'Save SSH key',
-    empty: (base) => ({ ...base, type: 5 }),
-    creatable: false,
-  },
+  // A new SSH key needs a generated or imported key pair; an edit keeps the stored one.
+  5: { label: 'SSH key', save: 'Save SSH key', empty: (base) => ({ ...base, type: 5 }) },
 };
 const identityLabels: Record<keyof IdentityFields, string> = {
   title: 'Title',
@@ -145,6 +141,7 @@ export function Editor({
   const [busy, setBusy] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [codeRevealed, setCodeRevealed] = useState(false);
+  const [keyWorking, setKeyWorking] = useState(false);
   const [revealedFields, setRevealedFields] = useState<ReadonlySet<number>>(new Set());
   const [error, setError] = useState('');
   const [discarding, setDiscarding] = useState(false);
@@ -386,6 +383,17 @@ export function Editor({
                   ))}
                 </select>
               </Field>
+              {draft.type === 5 && (
+                <SshKeyFields
+                  sshKey={item ? (item.details as SshKey | null) : (draft.sshKey ?? null)}
+                  editable={!item}
+                  disabled={busy}
+                  onWorking={setKeyWorking}
+                  onKey={(sshKey) =>
+                    setDraft((current) => (current.type === 5 ? { ...current, sshKey } : current))
+                  }
+                />
+              )}
               {draft.type === 4 &&
                 (Object.keys(identityLabels) as (keyof IdentityFields)[]).map((key) => (
                   <Field key={key}>
@@ -746,7 +754,11 @@ export function Editor({
             <Button type="button" variant="outline" onClick={close} disabled={busy}>
               Cancel
             </Button>
-            <Button type="submit" disabled={busy} aria-busy={busy}>
+            <Button
+              type="submit"
+              disabled={busy || (draft.type === 5 && !item && (!draft.sshKey || keyWorking))}
+              aria-busy={busy}
+            >
               {busy ? <Spinner /> : <Check data-icon="inline-start" />}
               {busy ? 'Saving…' : draftTypes[draft.type].save}
             </Button>
@@ -769,4 +781,100 @@ function choices(options: { value: string; label: string }[], current: string) {
       {option.label}
     </option>
   ));
+}
+
+/** A new key is generated or imported here; a saved key pair is only shown. */
+function SshKeyFields({
+  sshKey,
+  editable,
+  disabled,
+  onWorking,
+  onKey,
+}: {
+  sshKey: SshKey | null;
+  editable: boolean;
+  disabled: boolean;
+  onWorking: (working: boolean) => void;
+  onKey: (sshKey: SshKey) => void;
+}) {
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState('');
+  const [pasted, setPasted] = useState('');
+  // Only the latest request, from this mounted section, may set the key.
+  const latest = useRef(0);
+  useEffect(() => {
+    const requests = latest;
+    return () => {
+      requests.current++;
+      onWorking(false);
+    };
+  }, [onWorking]);
+  async function use(
+    request: () => Promise<{ ok: true; value: SshKey } | { ok: false; error: string }>,
+  ) {
+    const ticket = ++latest.current;
+    setWorking(true);
+    onWorking(true);
+    setError('');
+    const result = await request().catch(() => undefined);
+    if (ticket !== latest.current) return;
+    if (result?.ok) {
+      onKey(result.value);
+      setPasted('');
+    } else setError(result?.error ?? 'Could not create the key. Try again.');
+    setWorking(false);
+    onWorking(false);
+  }
+  return (
+    <Field data-invalid={!!error}>
+      <FieldLabel>Key pair</FieldLabel>
+      {sshKey ? (
+        <div className="task-ssh-key">
+          <p className="text-xs text-muted-foreground">Public key</p>
+          <p className="field-value text-sm">{sshKey.publicKey}</p>
+          <p className="text-xs text-muted-foreground">Fingerprint</p>
+          <p className="field-value text-sm">{sshKey.keyFingerprint}</p>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Generate a new key, or import a private key you have.
+        </p>
+      )}
+      {editable ? (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={disabled || working}
+            aria-busy={working}
+            onClick={() => void use(() => window.latch.generateSshKey())}
+          >
+            {working && <Spinner />}
+            {sshKey ? 'Generate a different key' : 'Generate key'}
+          </Button>
+          <Textarea
+            aria-label="Private key to import"
+            placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+            className="font-mono text-xs"
+            rows={3}
+            spellCheck={false}
+            value={pasted}
+            disabled={disabled || working}
+            onChange={(event) => setPasted(event.target.value)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            disabled={disabled || working || !pasted.trim()}
+            onClick={() => void use(() => window.latch.importSshKey(pasted))}
+          >
+            Import private key
+          </Button>
+        </>
+      ) : (
+        <p className="text-xs text-muted-foreground">The key pair stays as it is.</p>
+      )}
+      {error && <FieldError>{error}</FieldError>}
+    </Field>
+  );
 }

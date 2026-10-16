@@ -188,13 +188,16 @@ const ANSI_SEQUENCE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[A-Za-z]`
 const WRONG_PASSWORD = /decryption operation failed|invalid master password/i;
 const LOCKED = 'Vault locked. Try again after unlocking.';
 
-/** Removes password-check copies a crash left behind; they hold encrypted account state. */
+/**
+ * Removes temporary directories a crash left behind: password-check copies of
+ * account state and SSH keys being generated or imported.
+ */
 export async function removeVerifyCopies(dataDir: string) {
   const parent = dirname(dataDir);
   const entries = await readdir(parent).catch(() => [] as string[]);
   await Promise.all(
     entries
-      .filter((name) => /^verify-[A-Za-z0-9]{6}$/.test(name))
+      .filter((name) => /^(verify|sshkey)-[A-Za-z0-9]{6}$/.test(name))
       .map((name) => rm(join(parent, name), { recursive: true, force: true })),
   );
 }

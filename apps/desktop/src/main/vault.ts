@@ -1185,8 +1185,8 @@ export class Vault extends EventEmitter {
         throw new UserError('Edit this item in the official Bitwarden client.');
       cipher = { ...latest };
     } else {
-      if (draft.type === 5)
-        throw new UserError('Add SSH keys in the official Bitwarden client for now.');
+      if (draft.type === 5 && !draft.sshKey)
+        throw new UserError('Generate or import a key pair first.');
       cipher = {
         id: '',
         type: draft.type,
@@ -1228,6 +1228,10 @@ export class Vault extends EventEmitter {
         ([key, value]) => [key, value || null] as const,
       );
       cipher.identity = { ...(cipher.identity as object), ...Object.fromEntries(fields) };
+    } else if (draft.type === 5) {
+      delete cipher.login;
+      // The key pair never changes after creation.
+      if (!draft.id) cipher.sshKey = draft.sshKey;
     } else if (draft.type === 1) {
       const previous = cipher.login?.uris ?? [];
       const seen = new Set<number>();

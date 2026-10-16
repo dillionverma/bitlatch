@@ -388,3 +388,9 @@ html[data-reduced-motion='true'] .auth-mark[data-scanning='true'] {
   border-radius: 6px;
   padding: 8px;
 }
+
+.task-ssh-key {
+  display: grid;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
