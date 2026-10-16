@@ -64,7 +64,8 @@ const tokens: Record<string, Slot> = {
 const patterns: [Slot, RegExp][] = [
   ['ccCsc', /\b(?:cvc|cvv2?|csc|cvn|security ?code|card ?code|card ?verification)\b/],
   // A combined date first, so "MM / YY" is not read as a month field.
-  ['ccExp', /(?:\bmm ?\/ ?yy(?:yy)?\b|\bexp\w* ?date\b|\bvalid ?(?:thru|through|until)\b)/],
+  // describe() turns - and . into spaces, so MM-YY reads as "mm yy".
+  ['ccExp', /(?:\bmm ?[/ ] ?yy(?:yy)?\b|\bexp\w* ?date\b|\bvalid ?(?:thru|through|until)\b)/],
   ['ccExpMonth', /\b(?:exp\w* ?month|card ?month|cc ?month|mm)\b/],
   ['ccExpYear', /\b(?:exp\w* ?year|card ?year|cc ?year|yy(?:yy)?)\b/],
   ['ccExp', /\bexpir\w*\b/],
@@ -139,18 +140,46 @@ function fillable(field: Field) {
   )
     return false;
   let opacity = 1;
-  for (let element: Element | null = field; element; element = element.parentElement)
-    opacity *= Number(getComputedStyle(element).opacity);
+  for (let element: Element | null = field; element; element = parentOf(element)) {
+    const style = getComputedStyle(element);
+    opacity *= Number(style.opacity);
+    for (const [, amount, percent] of style.filter.matchAll(/opacity\(([\d.]+)(%?)\)/g))
+      opacity *= Number(amount) / (percent ? 100 : 1);
+  }
   if (opacity < 0.5) return false;
   const x = rect.left + rect.width / 2;
   const y = rect.top + rect.height / 2;
   if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return true;
-  const hit = document.elementFromPoint(x, y);
+  // Inside a shadow root, the document's hit test returns the host instead.
+  const root = field.getRootNode() as Document | ShadowRoot;
+  const hit = root.elementFromPoint(x, y);
   return (
     !!hit &&
     (hit === field ||
       field.contains(hit) ||
       (hit instanceof HTMLLabelElement && hit.control === field))
+  );
+}
+
+/** The parent element, stepping out of a shadow root to its host. */
+function parentOf(element: Element): Element | null {
+  return element.parentElement ?? ((element.getRootNode() as ShadowRoot).host || null);
+}
+
+/** Every input, select, and textarea, including those inside open shadow roots. */
+function allFields(root: Document | ShadowRoot = document): Field[] {
+  const found = Array.from(root.querySelectorAll<Field>('input, select, textarea'));
+  for (const element of root.querySelectorAll('*'))
+    if (element.shadowRoot) found.push(...allFields(element.shadowRoot));
+  return found;
+}
+
+/** The form a field belongs to, or for pages without one, its nearest section. */
+function groupOf(field: Field): Element | null {
+  return (
+    field.form ??
+    field.closest('fieldset, [role="form"], section, article, dialog, [role="dialog"], main') ??
+    null
   );
 }
 
@@ -171,17 +200,21 @@ export function classify(field: Field): Slot | undefined {
 
 /** The matching fields of the one form with the most of them, so unrelated forms stay empty. */
 function fields(kind: FormKind) {
-  const matched = Array.from(document.querySelectorAll<Field>('input, select, textarea'))
+  const matched = allFields()
     .filter(fillable)
     .map((field) => ({ field, slot: classify(field) }))
     .filter(
       (entry): entry is { field: Field; slot: Slot } =>
         !!entry.slot && cardSlots.has(entry.slot) === (kind === 'card'),
     );
-  const groups = new Map<HTMLFormElement | null, typeof matched>();
-  for (const entry of matched)
-    groups.set(entry.field.form, [...(groups.get(entry.field.form) ?? []), entry]);
-  return [...groups.values()].sort((a, b) => b.length - a.length)[0] ?? [];
+  const groups = new Map<Element | null, typeof matched>();
+  for (const entry of matched) {
+    const group = groupOf(entry.field);
+    groups.set(group, [...(groups.get(group) ?? []), entry]);
+  }
+  // Count distinct slots, so repeated fields cannot make an unrelated form win.
+  const distinct = (entries: typeof matched) => new Set(entries.map(({ slot }) => slot)).size;
+  return [...groups.values()].sort((a, b) => distinct(b) - distinct(a))[0] ?? [];
 }
 
 /** The slots this document can fill, for the extension to decide which frames to ask. */
@@ -231,7 +264,15 @@ function expiration(field: Field, values: FormValues) {
   const year = values.ccExpYear;
   if (!month || !year) return '';
   if (field instanceof HTMLInputElement && field.type === 'month') return `${year}-${month}`;
-  return /yyyy/.test(describe(field)) ? `${month}/${year}` : `${month}/${year.slice(-2)}`;
+  const hint = [
+    field.getAttribute('placeholder'),
+    field.getAttribute('aria-label'),
+    ...Array.from(field.labels ?? [], (label) => label.textContent),
+  ]
+    .join(' ')
+    .toLowerCase();
+  const separator = /mm\s*([/\-.])\s*yy/.exec(hint)?.[1] ?? '/';
+  return `${month}${separator}${/yyyy/.test(hint + describe(field)) ? year : year.slice(-2)}`;
 }
 
 /** Fills every field this document has a value for; returns how many it filled. */
@@ -239,19 +280,21 @@ export function fillForm(kind: FormKind, values: FormValues) {
   let filled = 0;
   for (const { field, slot } of fields(kind)) {
     const value = slot === 'ccExp' ? expiration(field, values) : values[slot];
-    if (!value) continue;
+    // A page can hide or replace the next field while an earlier one fills.
+    if (!value || !field.isConnected || !fillable(field)) continue;
     if (field instanceof HTMLSelectElement) {
       if (choose(field, value, slot)) filled++;
-    } else if (field instanceof HTMLInputElement) {
-      setValue(field, value);
-      filled++;
-    } else {
+      continue;
+    }
+    if (field instanceof HTMLInputElement) setValue(field, value);
+    else {
       const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
       descriptor?.set?.call(field, value);
       field.dispatchEvent(new Event('input', { bubbles: true }));
       field.dispatchEvent(new Event('change', { bubbles: true }));
-      filled++;
     }
+    // Count only values that stayed; an input mask may reformat but not clear them.
+    if (field.value) filled++;
   }
   return filled;
 }

@@ -338,6 +338,7 @@ function formFillButton(item: ItemDetail) {
     const response = await send<{ filled?: number; confirm?: string[] }>({
       type: 'formFill',
       id: item.id,
+      kind: item.type === 3 ? 'card' : 'identity',
       tabId: context.tabId,
       url: context.url,
       confirmed,

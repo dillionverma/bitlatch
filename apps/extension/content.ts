@@ -33,6 +33,8 @@ export function startContent(ctx: ContentScriptContext) {
   // the popup; a frame from another origin only after the user confirms it.
   // This listener is the only part that runs in frames from another origin,
   // where payment fields often sit; it shows no UI there.
+  // Names this document, so a fill meant for it never lands in a replacement.
+  const documentToken = crypto.randomUUID();
   const onFormFill = (
     message: unknown,
     sender: Browser.runtime.MessageSender,
@@ -51,7 +53,7 @@ export function startContent(ctx: ContentScriptContext) {
     )
       return false;
     if (message.type === 'scanForm') {
-      respond(scanForm(message.kind));
+      respond({ token: documentToken, slots: scanForm(message.kind) });
       return false;
     }
     if (
@@ -59,6 +61,8 @@ export function startContent(ctx: ContentScriptContext) {
       'origin' in message &&
       message.origin === self.origin &&
       self.origin !== 'null' &&
+      'token' in message &&
+      message.token === documentToken &&
       'values' in message &&
       message.values &&
       typeof message.values === 'object'

@@ -18,9 +18,10 @@ import type {
   VaultStatus,
 } from '@latch/shared/types';
 import { formValues } from '../form-values';
+import type { FormKind } from '../content/forms';
 
 type Native = <T>(request: BrowserRequest) => Promise<Result<T>>;
-type FrameTarget = { frameId: number; documentId?: string; origin: string };
+type FrameTarget = { frameId: number; documentId?: string; origin: string; token?: unknown };
 
 /**
  * Fills a card or identity into the active tab after a click in the popup.
@@ -31,6 +32,7 @@ type FrameTarget = { frameId: number; documentId?: string; origin: string };
 async function fillForm(
   native: Native,
   id: string,
+  kind: FormKind,
   tabId: unknown,
   url: unknown,
   confirmed: string[],
@@ -52,10 +54,6 @@ async function fillForm(
   if (!tab) return changed;
   const request = browserRequestSchema.safeParse({ type: 'detail', id });
   if (!request.success) return { ok: false, error: 'Invalid fill request.' };
-  const detail = await native<ItemDetail>(request.data);
-  if (!detail.ok) return detail;
-  const form = formValues(detail.value);
-  if (!form) return { ok: false, error: 'Only cards and identities fill forms.' };
   const top = new URL(tab.url!).origin;
   const target = (frame: FrameTarget) =>
     frame.documentId ? { documentId: frame.documentId } : { frameId: frame.frameId };
@@ -76,10 +74,17 @@ async function fillForm(
         return {
           ...entry,
           slots: await browser.tabs
-            .sendMessage(tabId, { type: 'scanForm', kind: form.kind }, target(entry))
-            .catch(() => []),
+            .sendMessage(tabId, { type: 'scanForm', kind }, target(entry))
+            .then((reply: { token?: unknown; slots?: unknown } | undefined) => reply)
+            .catch(() => undefined),
         };
       }),
+    ).then((scanned) =>
+      scanned.map(({ slots: reply, ...frame }) => ({
+        ...frame,
+        token: reply?.token,
+        slots: reply?.slots,
+      })),
     );
   } catch {
     return { ok: false, error: 'Reload this page to enable autofill.' };
@@ -93,6 +98,7 @@ async function fillForm(
         frame.origin.startsWith('https://') ||
         !top.startsWith('https://')) &&
       /^https?:\/\//.test(frame.origin) &&
+      typeof frame.token === 'string' &&
       Array.isArray(frame.slots) &&
       frame.slots.length,
   );
@@ -100,26 +106,36 @@ async function fillForm(
     return {
       ok: false,
       error:
-        form.kind === 'card'
+        kind === 'card'
           ? 'This page has no card fields Bitlatch can fill.'
           : 'This page has no name, contact, or address fields Bitlatch can fill.',
     };
   const foreign = [...new Set(targets.map((frame) => frame.origin).filter((o) => o !== top))];
   const unconfirmed = foreign.filter((origin) => !confirmed.includes(origin));
   if (unconfirmed.length) return { ok: true, value: { confirm: unconfirmed } };
+  // The values leave the desktop only now, after scanning and confirmation, so a
+  // lock before this point leaves nothing to deliver.
+  if (!(await current())) return changed;
+  const detail = await native<ItemDetail>(request.data);
+  if (!detail.ok) return detail;
+  const form = formValues(detail.value);
+  if (!form || form.kind !== kind)
+    return { ok: false, error: 'Only cards and identities fill forms.' };
   let filled = 0;
   for (const frame of targets) {
-    // A lock or a navigation while frames were scanned stops every delivery.
     if (!(await current())) return changed;
-    const status = await native<VaultStatus>({ type: 'status' });
-    if (!status.ok || status.value !== 'unlocked')
-      return { ok: false, error: 'Unlock Bitlatch to continue.' };
     filled +=
       Number(
         await browser.tabs
           .sendMessage(
             tabId,
-            { type: 'fillForm', kind: form.kind, values: form.values, origin: frame.origin },
+            {
+              type: 'fillForm',
+              kind,
+              values: form.values,
+              origin: frame.origin,
+              token: frame.token,
+            },
             target(frame),
           )
           .catch(() => 0),
@@ -350,7 +366,9 @@ export default defineBackground(() => {
           'confirmed' in message && Array.isArray(message.confirmed)
             ? message.confirmed.filter((origin): origin is string => typeof origin === 'string')
             : [];
-        return fillForm(native, message.id, message.tabId, message.url, confirmed);
+        if (!('kind' in message) || (message.kind !== 'card' && message.kind !== 'identity'))
+          return { ok: false, error: 'Invalid fill request.' };
+        return fillForm(native, message.id, message.kind, message.tabId, message.url, confirmed);
       }
       if (isPopup && type === 'browse' && 'query' in message) {
         const query = browserVaultQuerySchema.safeParse(message.query);
