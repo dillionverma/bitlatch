@@ -1,6 +1,6 @@
 import { Action, ActionPanel, Detail, Icon, List, open, showToast, Toast } from '@raycast/api';
 import { useEffect, useState } from 'react';
-import { CopyField, ItemDetail, request, VaultItem } from './bridge';
+import { CopyField, DetailRow, ItemDetail, request, VaultItem } from './bridge';
 
 export function OpenLatch() {
   return (
@@ -21,12 +21,12 @@ export function ItemActions({
   onFailure: () => void;
   primary?: CopyField | 'open';
 }) {
-  async function copy(field: CopyField) {
+  async function copy(field: CopyField, label: string) {
     try {
       await request({ type: 'copy', id: item.id, field });
       await showToast({
         style: Toast.Style.Success,
-        title: `${field === 'notes' ? 'Note' : field.charAt(0).toUpperCase() + field.slice(1)} copied`,
+        title: `${label} copied`,
         message: 'Bitlatch clears it after 30 seconds.',
       });
     } catch (error) {
@@ -41,6 +41,7 @@ export function ItemActions({
   const fields = [
     {
       field: 'password',
+      label: 'Password',
       title: 'Copy Password',
       icon: Icon.Key,
       key: 'p',
@@ -48,6 +49,7 @@ export function ItemActions({
     },
     {
       field: 'username',
+      label: 'Username',
       title: 'Copy Username',
       icon: Icon.Person,
       key: 'u',
@@ -55,6 +57,7 @@ export function ItemActions({
     },
     {
       field: 'notes',
+      label: 'Note',
       title: 'Copy Note',
       icon: Icon.Document,
       key: 'n',
@@ -62,6 +65,7 @@ export function ItemActions({
     },
     {
       field: 'website',
+      label: 'Website',
       title: 'Copy Website',
       icon: Icon.Link,
       key: 'c',
@@ -87,7 +91,7 @@ export function ItemActions({
                   : ['cmd'],
               key: action.key,
             }}
-            onAction={() => copy(action.field)}
+            onAction={() => copy(action.field, action.label)}
           />
         ))}
       {primary !== 'open' && canOpen && <Action.OpenInBrowser url={item.website} />}
@@ -110,6 +114,47 @@ export function ItemActions({
   );
 }
 
+/** Copies one detail row through Bitlatch, which clears the clipboard after 30 seconds. */
+function RowActions({
+  item,
+  row,
+  onFailure,
+}: {
+  item: ItemDetail;
+  row: DetailRow;
+  onFailure: () => void;
+}) {
+  const field = row.copy;
+  return (
+    <ActionPanel>
+      {field && (
+        <Action
+          title={`Copy ${row.label}`}
+          icon={Icon.Clipboard}
+          onAction={async () => {
+            try {
+              await request({ type: 'copy', id: item.id, field });
+              await showToast({
+                style: Toast.Style.Success,
+                title: `${row.label} copied`,
+                message: 'Bitlatch clears it after 30 seconds.',
+              });
+            } catch (error) {
+              onFailure();
+              await showToast({
+                style: Toast.Style.Failure,
+                title: 'Could not copy',
+                message: error instanceof Error ? error.message : 'Try again.',
+              });
+            }
+          }}
+        />
+      )}
+      <ItemActions item={item} onFailure={onFailure} />
+    </ActionPanel>
+  );
+}
+
 // Render vault text literally: note Markdown must never load remote images.
 function literal(text: string) {
   const fence = '`'.repeat(
@@ -122,33 +167,24 @@ export function ItemPage({ id, showNote = false }: { id: string; showNote?: bool
   const [item, setItem] = useState<ItemDetail>();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  // Load once: in signed builds every detail request asks for Touch ID, so
+  // polling would prompt again and again. A failed copy reports a lock.
   useEffect(() => {
     const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    async function refresh() {
-      try {
-        const next = await request<ItemDetail>({ type: 'detail', id }, controller.signal);
-        if (!controller.signal.aborted) {
-          setItem(next);
-          setError('');
-        }
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          setItem(undefined);
-          setError(error instanceof Error ? error.message : 'Item unavailable.');
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-          timer = setTimeout(refresh, 2000);
-        }
-      }
-    }
-    void refresh();
-    return () => {
-      controller.abort();
-      clearTimeout(timer);
-    };
+    request<ItemDetail>({ type: 'detail', id }, controller.signal)
+      .then((next) => {
+        setItem(next);
+        setError('');
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setItem(undefined);
+        setError(error instanceof Error ? error.message : 'Item unavailable.');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [id]);
   function unavailable() {
     setItem(undefined);
@@ -159,7 +195,7 @@ export function ItemPage({ id, showNote = false }: { id: string; showNote?: bool
       {item ? <ItemActions item={item} primary={primary} onFailure={unavailable} /> : <OpenLatch />}
     </ActionPanel>
   );
-  if (!item || item.type === 2 || showNote) {
+  if (!item || (item.type === 2 && !item.rows.length) || showNote) {
     return (
       <Detail
         navigationTitle={item?.name || 'Item Details'}
@@ -200,13 +236,15 @@ export function ItemPage({ id, showNote = false }: { id: string; showNote?: bool
             actions={actions('username')}
           />
         )}
-        <List.Item
-          id="password"
-          title="Password"
-          subtitle={item.hasPassword ? '••••••••' : 'Not set'}
-          icon={Icon.Key}
-          actions={actions(item.hasPassword ? 'password' : undefined)}
-        />
+        {item.type === 1 && (
+          <List.Item
+            id="password"
+            title="Password"
+            subtitle={item.hasPassword ? '••••••••' : 'Not set'}
+            icon={Icon.Key}
+            actions={actions(item.hasPassword ? 'password' : undefined)}
+          />
+        )}
         {item.website && (
           <List.Item
             id="website"
@@ -216,6 +254,16 @@ export function ItemPage({ id, showNote = false }: { id: string; showNote?: bool
             actions={actions(/^https?:\/\//i.test(item.website) ? 'open' : 'website')}
           />
         )}
+        {item.rows.map((row) => (
+          <List.Item
+            key={row.id}
+            id={row.id}
+            title={row.label}
+            subtitle={row.value}
+            icon={row.secret ? Icon.Lock : Icon.Text}
+            actions={<RowActions item={item} row={row} onFailure={unavailable} />}
+          />
+        ))}
         {item.notes.trim() && (
           <List.Item
             id="notes"

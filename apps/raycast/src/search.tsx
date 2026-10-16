@@ -4,6 +4,27 @@ import { request, SearchResult } from './bridge';
 import { ItemActions, ItemPage, OpenLatch } from './item';
 import { Unlock } from './unlock';
 
+const typeIcons: Record<number, Icon> = {
+  1: Icon.Key,
+  2: Icon.Document,
+  3: Icon.CreditCard,
+  4: Icon.Person,
+  5: Icon.Terminal,
+  6: Icon.BankNote,
+  7: Icon.Car,
+  8: Icon.Airplane,
+};
+const typeNames: Record<number, string> = {
+  1: 'Login',
+  2: 'Secure note',
+  3: 'Card',
+  4: 'Identity',
+  5: 'SSH key',
+  6: 'Bank account',
+  7: "Driver's license",
+  8: 'Passport',
+};
+
 export default function SearchVault() {
   const [query, setQuery] = useState('');
   const [revision, setRevision] = useState(0);
@@ -73,14 +94,12 @@ export default function SearchVault() {
           key={item.id}
           id={item.id}
           icon={
-            item.type === 2
-              ? Icon.Document
-              : item.iconUrl
-                ? { source: item.iconUrl, fallback: Icon.Key }
-                : Icon.Key
+            item.iconUrl
+              ? { source: item.iconUrl, fallback: Icon.Key }
+              : (typeIcons[item.type] ?? Icon.Key)
           }
           title={item.name || 'Untitled item'}
-          subtitle={item.type === 2 ? 'Secure note' : item.username}
+          subtitle={item.username || item.subtitle || typeNames[item.type]}
           actions={
             <ActionPanel>
               <Action.Push
