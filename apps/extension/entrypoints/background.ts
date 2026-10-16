@@ -123,7 +123,11 @@ async function fillForm(
     return { ok: false, error: 'Only cards and identities fill forms.' };
   let filled = 0;
   for (const frame of targets) {
+    // A lock or a navigation after the values arrived stops the rest.
     if (!(await current())) return changed;
+    const status = await native<VaultStatus>({ type: 'status' });
+    if (!status.ok || status.value !== 'unlocked')
+      return { ok: false, error: 'Vault locked. Try again after unlocking.' };
     filled +=
       Number(
         await browser.tabs

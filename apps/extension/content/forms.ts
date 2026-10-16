@@ -143,8 +143,11 @@ function fillable(field: Field) {
   for (let element: Element | null = field; element; element = parentOf(element)) {
     const style = getComputedStyle(element);
     opacity *= Number(style.opacity);
-    for (const [, amount, percent] of style.filter.matchAll(/opacity\(([\d.]+)(%?)\)/g))
-      opacity *= Number(amount) / (percent ? 100 : 1);
+    // Chromium can serialize tiny values in exponent form, such as opacity(1e-07).
+    for (const [, amount = ''] of style.filter.matchAll(/opacity\(([^)]*)\)/g)) {
+      const value = Number.parseFloat(amount);
+      opacity *= Number.isFinite(value) ? (amount.trim().endsWith('%') ? value / 100 : value) : 0;
+    }
   }
   if (opacity < 0.5) return false;
   const x = rect.left + rect.width / 2;
@@ -174,13 +177,42 @@ function allFields(root: Document | ShadowRoot = document): Field[] {
   return found;
 }
 
-/** The form a field belongs to, or for pages without one, its nearest section. */
-function groupOf(field: Field): Element | null {
-  return (
-    field.form ??
-    field.closest('fieldset, [role="form"], section, article, dialog, [role="dialog"], main') ??
-    null
-  );
+/** A named autocomplete section, such as section-billing, which a page uses to keep forms apart. */
+function sectionOf(field: Field) {
+  return /(?:^|\s)(section-\S+)/.exec(field.autocomplete.toLowerCase())?.[1] ?? '';
+}
+
+/** What keeps one form apart from another: its autocomplete section, then its form element. */
+function groupOf(field: Field): string | Element | null {
+  return sectionOf(field) || field.form || null;
+}
+
+/**
+ * Pages without form elements: from each field for the slot that matters most,
+ * widen to the largest container that holds no second field for the same slot,
+ * and keep the container that covers the most distinct slots.
+ */
+function scopeOf(entries: { field: Field; slot: Slot }[], kind: FormKind) {
+  const order: Slot[] =
+    kind === 'card'
+      ? ['ccNumber', 'ccCsc', 'ccExp', 'ccExpMonth', 'ccName']
+      : ['address1', 'streetAddress', 'firstName', 'fullName', 'email', 'phone'];
+  const slot = order.find((candidate) => entries.some((entry) => entry.slot === candidate));
+  const anchors = entries.filter((entry) => entry.slot === (slot ?? entries[0]?.slot));
+  let best: { scope: Element; distinct: number } | null = null;
+  for (const anchor of anchors) {
+    let scope: Element = anchor.field;
+    for (let parent = parentOf(scope); parent; parent = parentOf(parent)) {
+      const inside = entries.filter(({ field }) => parent!.contains(field));
+      if (new Set(inside.map((entry) => entry.slot)).size < inside.length) break;
+      scope = parent;
+    }
+    const distinct = new Set(
+      entries.filter(({ field }) => scope.contains(field)).map((entry) => entry.slot),
+    ).size;
+    if (!best || distinct > best.distinct) best = { scope, distinct };
+  }
+  return best?.scope ?? null;
 }
 
 export function classify(field: Field): Slot | undefined {
@@ -207,14 +239,20 @@ function fields(kind: FormKind) {
       (entry): entry is { field: Field; slot: Slot } =>
         !!entry.slot && cardSlots.has(entry.slot) === (kind === 'card'),
     );
-  const groups = new Map<Element | null, typeof matched>();
+  const groups = new Map<string | Element | null, typeof matched>();
   for (const entry of matched) {
     const group = groupOf(entry.field);
     groups.set(group, [...(groups.get(group) ?? []), entry]);
   }
   // Count distinct slots, so repeated fields cannot make an unrelated form win.
   const distinct = (entries: typeof matched) => new Set(entries.map(({ slot }) => slot)).size;
-  return [...groups.values()].sort((a, b) => distinct(b) - distinct(a))[0] ?? [];
+  const [group, best = []] =
+    [...groups.entries()].sort(([, a], [, b]) => distinct(b) - distinct(a))[0] ?? [];
+  if (group !== null) return best.map((entry) => ({ ...entry, group, scope: null }));
+  const scope = scopeOf(best, kind);
+  return best
+    .filter(({ field }) => scope?.contains(field))
+    .map((entry) => ({ ...entry, group, scope }));
 }
 
 /** The slots this document can fill, for the extension to decide which frames to ask. */
@@ -255,7 +293,7 @@ function choose(select: HTMLSelectElement, value: string, slot: Slot) {
   select.value = match.value;
   select.dispatchEvent(new Event('input', { bubbles: true }));
   select.dispatchEvent(new Event('change', { bubbles: true }));
-  return true;
+  return select.value === match.value && !!select.value;
 }
 
 /** A combined expiration in the format the field asks for: a month input, MM/YYYY, or MM/YY. */
@@ -278,10 +316,18 @@ function expiration(field: Field, values: FormValues) {
 /** Fills every field this document has a value for; returns how many it filled. */
 export function fillForm(kind: FormKind, values: FormValues) {
   let filled = 0;
-  for (const { field, slot } of fields(kind)) {
+  for (const { field, slot, group, scope } of fields(kind)) {
     const value = slot === 'ccExp' ? expiration(field, values) : values[slot];
-    // A page can hide or replace the next field while an earlier one fills.
-    if (!value || !field.isConnected || !fillable(field)) continue;
+    // A page can hide, relabel, or move the next field while an earlier one fills.
+    if (
+      !value ||
+      !field.isConnected ||
+      !fillable(field) ||
+      classify(field) !== slot ||
+      groupOf(field) !== group ||
+      (scope && !scope.contains(field))
+    )
+      continue;
     if (field instanceof HTMLSelectElement) {
       if (choose(field, value, slot)) filled++;
       continue;
