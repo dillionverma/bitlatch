@@ -33,7 +33,7 @@ export function spawnCli(
   env: NodeJS.ProcessEnv,
   secrets: CliSecrets,
   stdio: Extract<StdioOptions, unknown[]>,
-  probe = false,
+  mode: { probe?: true; offline?: true } = {},
 ): ChildProcess {
   const values = Object.fromEntries(
     Object.entries(secrets).filter((entry): entry is [string, string] => Boolean(entry[1])),
@@ -57,9 +57,7 @@ export function spawnCli(
   );
   const channel = child.stdio[fd] as Writable;
   channel.on('error', () => undefined);
-  channel.end(
-    JSON.stringify({ env: values, ...(probe ? { probe: true } : {}) } satisfies BootstrapPayload),
-  );
+  channel.end(JSON.stringify({ env: values, ...mode } satisfies BootstrapPayload));
   return child;
 }
 
@@ -72,7 +70,7 @@ export function bootstrapRuns(options: CliOptions) {
       cliEnvironment(options.dataDir),
       {},
       ['ignore', 'pipe', 'ignore'],
-      true,
+      { probe: true },
     );
     let output = '';
     const timer = setTimeout(() => child.kill('SIGKILL'), 10_000);
@@ -156,8 +154,6 @@ const TIMED_OUT = Symbol('timed out');
 const ANSI_SEQUENCE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[A-Za-z]`, 'g');
 
 const WRONG_PASSWORD = /decryption operation failed|invalid master password/i;
-/** Nothing listens on the discard port, so every request from the CLI fails at once. */
-const OFFLINE_PROXY = 'http://127.0.0.1:9';
 
 /** Removes password-check copies a crash left behind; they hold encrypted account state. */
 export async function removeVerifyCopies(dataDir: string) {
@@ -171,7 +167,7 @@ export async function removeVerifyCopies(dataDir: string) {
 }
 
 export class BitwardenCli implements CliPort {
-  private verifying?: ChildProcess;
+  private readonly verifying = new Set<ChildProcess>();
   private queue: Promise<unknown> = Promise.resolve();
   private generation = 0;
   private child?: ChildProcess;
@@ -185,11 +181,14 @@ export class BitwardenCli implements CliPort {
    * is discarded with the copy; the running session never changes.
    */
   async verifyPassword(password: string): Promise<boolean> {
+    const generation = this.generation;
     for (let attempt = 0; ; attempt++) {
       const directory = await mkdtemp(join(dirname(this.options.dataDir), 'verify-'));
       try {
         await copyFile(join(this.options.dataDir, 'data.json'), join(directory, 'data.json'));
         const { code, stderr } = await this.unlockCopy(directory, password);
+        if (generation !== this.generation)
+          throw new UserError('Vault locked. Try again after unlocking.');
         if (code === 0) return true;
         if (WRONG_PASSWORD.test(stderr)) return false;
       } finally {
@@ -209,18 +208,14 @@ export class BitwardenCli implements CliPort {
       const child = spawnCli(
         { ...this.options, dataDir: directory },
         ['unlock', '--passwordenv', 'LATCH_MASTER_PASSWORD', '--raw', '--nointeraction'],
-        {
-          ...cliEnvironment(directory),
-          BW_NOINTERACTION: 'true',
-          // Unlock can run account migrations that write to the server, such as
-          // a key rotation. A dead proxy keeps the copy offline so it never can.
-          https_proxy: OFFLINE_PROXY,
-          http_proxy: OFFLINE_PROXY,
-        },
+        { ...cliEnvironment(directory), BW_NOINTERACTION: 'true' },
         { LATCH_MASTER_PASSWORD: password },
         ['ignore', 'ignore', 'pipe'],
+        // Unlock can run account migrations that write to the server, such as a
+        // KDF change. Offline, the copy can only check the password.
+        { offline: true },
       );
-      this.verifying = child;
+      this.verifying.add(child);
       let stderr = '';
       const timer = setTimeout(() => child.kill('SIGKILL'), COMMAND_TIMEOUT_MS);
       child.stderr!.setEncoding('utf8');
@@ -228,14 +223,14 @@ export class BitwardenCli implements CliPort {
       child.on('error', () => settle({ code: null, stderr }));
       child.on('close', (code) => {
         clearTimeout(timer);
-        if (this.verifying === child) this.verifying = undefined;
+        this.verifying.delete(child);
         settle({ code, stderr });
       });
     });
   }
 
   cancel() {
-    this.verifying?.kill('SIGKILL');
+    for (const child of this.verifying) child.kill('SIGKILL');
     this.generation += 1;
     this.abandon?.(new UserError('Vault locked. Try again after unlocking.'));
     this.child?.kill('SIGKILL');

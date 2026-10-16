@@ -25,6 +25,13 @@ export function Protected({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const working = useRef(false);
+  const mounted = useRef(true);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
   const input = useRef<HTMLInputElement>(null);
   // The field is disabled while the password is checked; give focus back for a retry.
   useEffect(() => {
@@ -38,6 +45,8 @@ export function Protected({
     setError('');
     try {
       const result = await window.latch.openProtected(item.id, password);
+      // A reply that arrives after this form closed belongs to an earlier visit.
+      if (!mounted.current) return;
       setPassword('');
       if (result.ok) {
         onOpened(result.value);
@@ -45,6 +54,7 @@ export function Protected({
       }
       setError(result.error);
     } catch {
+      if (!mounted.current) return;
       setPassword('');
       setError('Could not open this item. Try again.');
     }
