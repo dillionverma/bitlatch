@@ -502,7 +502,8 @@ function VaultWorkspace({
     if (!alive.current) return;
     if (result?.ok) {
       notify.show('done', 'Folder deleted');
-      setFilter('folder:none');
+      // No folder only lists while other folders remain.
+      setFilter(folders.length > 1 ? 'folder:none' : 'all');
     } else notify.show('error', 'Could not delete the folder.');
   }
   const indexed = useMemo(() => indexItems(items), [items]);
