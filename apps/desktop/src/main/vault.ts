@@ -1442,15 +1442,15 @@ function passkeysOf(cipher: Cipher): Fido2Credential[] {
  * password was entered for it. For organization items the server decides.
  */
 function isRemovable(cipher: Cipher, opened = false) {
-  return (
-    !cipher.sharedUnsupported &&
-    (!cipher.reprompt || opened) &&
-    !cipher.login?.fido2Credentials?.length
-  );
+  return !cipher.sharedUnsupported && (!cipher.reprompt || opened);
 }
 function isEditable(cipher: Cipher, opened = false) {
   return (
-    cipher.type >= 1 && cipher.type <= 5 && isRemovable(cipher, opened) && !hidesPasswords(cipher)
+    cipher.type >= 1 &&
+    cipher.type <= 5 &&
+    isRemovable(cipher, opened) &&
+    !cipher.login?.fido2Credentials?.length &&
+    !hidesPasswords(cipher)
   );
 }
 const fieldKinds = { text: 0, hidden: 1, boolean: 2 } as const;
