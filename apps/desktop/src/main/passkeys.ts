@@ -33,8 +33,13 @@ export interface Fido2Credential {
 /** COSE algorithm identifier for ECDSA with P-256 and SHA-256. */
 export const ES256 = -7;
 
-/** Bitlatch's authenticator identifier. Relying parties may show it in their key list. */
-const AAGUID = Buffer.from('7c4b2f7ad3a546c2b8e1a2a6f0c1e3d9', 'hex');
+/**
+ * Bitwarden's authenticator identifier, borrowed on purpose. Relying parties such
+ * as Chase reject identifiers they do not list, and an unlisted Bitlatch one fails
+ * registration. Sites will label these passkeys as Bitwarden and may apply
+ * Bitwarden-specific policy to them.
+ */
+const AAGUID = Buffer.from('d548826e79b4db40a3d811116f7e8349', 'hex');
 
 const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
 
