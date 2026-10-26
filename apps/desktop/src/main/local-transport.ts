@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { safely, UserError } from '@latch/shared/protocol';
 import type { ZodType } from 'zod';
 
-import { launcherName, namedLauncherRequirement } from './launchers';
+import { launcherName, launcherPolicies } from './launchers';
 import { MAX_MESSAGE_BYTES } from './native-config';
 
 export interface LocalTransportOptions<Request> {
@@ -34,6 +34,7 @@ export interface VerifiedListener {
     path: string,
     identifier: string,
     launcherRequirement: string | null,
+    requirementNamesLauncherParent: boolean,
     accept: (
       fd: number,
       pid: number,
@@ -49,6 +50,7 @@ export class LocalTransport<Request> {
   private server?: Server;
   private verified?: { native: VerifiedListener; handle: object };
   private sockets = new Set<Socket>();
+  private readonly launchedRelays = new Set<string>();
   private readonly token = randomBytes(32).toString('hex');
   readonly socketPath: string;
 
@@ -74,11 +76,22 @@ export class LocalTransport<Request> {
       ) as VerifiedListener;
       const identifier =
         this.options.channel === 'safari' ? 'app.latch.vault.safari' : 'app.latch.vault.bridgehost';
+      const launchers =
+        launcherPolicies[this.options.channel === 'raycast' ? 'raycast' : 'browser'];
       const handle = native.startVerifiedSocket(
         this.socketPath,
         identifier,
-        namedLauncherRequirement,
+        launchers.requirement,
+        launchers.namesLauncherParent,
         (fd, pid, auditToken, launcherKey, launcherIdentifier) => {
+          // A launcher that has let go of its relay, as Raycast does when it unloads a command,
+          // will not read the reply. Refuse the request rather than treat the relay as unknown.
+          if (launcherKey === null && this.launchedRelays.has(auditToken)) return false;
+          if (launcherKey !== null) {
+            this.launchedRelays.add(auditToken);
+            if (this.launchedRelays.size > 100)
+              this.launchedRelays.delete(this.launchedRelays.values().next().value!);
+          }
           try {
             this.accept(new Socket({ fd, readable: true, writable: true }), {
               pid,

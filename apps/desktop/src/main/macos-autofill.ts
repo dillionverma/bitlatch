@@ -199,6 +199,7 @@ export class MacAutoFill {
         socketPath,
         'app.latch.vault.autofill',
         null,
+        false,
         (fd) => {
           try {
             this.accept(new Socket({ fd, readable: true, writable: true }));

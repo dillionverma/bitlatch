@@ -33,6 +33,7 @@ typedef struct {
   ino_t path_inode;
   SecRequirementRef requirement;
   SecRequirementRef launcher_requirement;
+  bool requirement_names_launcher_parent;
   pthread_t thread;
   atomic_bool stopped;
   atomic_int references;
@@ -110,7 +111,8 @@ static bool verify_peer(int fd, const VerifiedListener *listener, AcceptedPeer *
   // The audit token carries the pid version, so this second check fails if the relay
   // exited and its pid now names another process.
   peer->attached =
-      latch_find_launcher(peer->pid, listener->launcher_requirement, &peer->launcher) &&
+      latch_find_launcher(peer->pid, listener->launcher_requirement,
+                          listener->requirement_names_launcher_parent, &peer->launcher) &&
       peer_satisfies(&peer->audit, listener->requirement);
   return true;
 }
@@ -232,14 +234,16 @@ static bool create_launcher_requirement(napi_env env, napi_value value,
 }
 
 static napi_value start_verified_socket(napi_env env, napi_callback_info info) {
-  size_t count = 4;
-  napi_value args[4];
+  size_t count = 5;
+  napi_value args[5];
   napi_get_cb_info(env, info, &count, args, NULL, NULL);
   napi_valuetype callback_type;
-  if (count != 4 || napi_typeof(env, args[3], &callback_type) != napi_ok ||
-      callback_type != napi_function) {
+  bool names_launcher_parent;
+  if (count != 5 || napi_get_value_bool(env, args[3], &names_launcher_parent) != napi_ok ||
+      napi_typeof(env, args[4], &callback_type) != napi_ok || callback_type != napi_function) {
     napi_throw_type_error(env, NULL,
-                          "Expected socket path, client identifier, launcher requirement, and callback");
+                          "Expected socket path, client identifier, launcher requirement, "
+                          "whether it names the launcher's parent, and callback");
     return NULL;
   }
   char *path = copy_string(env, args[0], sizeof(((struct sockaddr_un *)0)->sun_path) - 1);
@@ -261,6 +265,7 @@ static napi_value start_verified_socket(napi_env env, napi_callback_info info) {
   listener->path = path;
   listener->requirement = requirement;
   listener->launcher_requirement = launcher_requirement;
+  listener->requirement_names_launcher_parent = names_launcher_parent;
   listener->listen_fd = -1;
   atomic_init(&listener->references, 1);
   atomic_init(&listener->stopped, false);
@@ -278,7 +283,7 @@ static napi_value start_verified_socket(napi_env env, napi_callback_info info) {
   if (chmod(path, 0600) != 0 || listen(listener->listen_fd, 16) != 0) goto listener_failure;
   napi_value name;
   if (napi_create_string_utf8(env, "Bitlatch verified socket", NAPI_AUTO_LENGTH, &name) != napi_ok ||
-      napi_create_threadsafe_function(env, args[3], NULL, name, 64, 1, listener,
+      napi_create_threadsafe_function(env, args[4], NULL, name, 64, 1, listener,
                                       callback_finished, listener, deliver_peer,
                                       &listener->callback) != napi_ok) goto listener_failure;
   atomic_fetch_add(&listener->references, 1);

@@ -18,8 +18,7 @@ export class ExternalAccess {
 
   private key(client: Client, peer?: VerifiedPeer) {
     if (!peer) throw new UserError('Could not verify the local client.');
-    // Raycast's own relays never have a launcher, so one that does is not Raycast.
-    return `${client}:${(client === 'browser' && peer.launcher?.key) || peer.auditToken}`;
+    return `${client}:${peer.launcher?.key ?? peer.auditToken}`;
   }
 
   private limit(prompts: number[], maximum: number) {
@@ -39,8 +38,7 @@ export class ExternalAccess {
     let pending = this.pending.get(key);
     if (!pending) {
       this.sessionPrompts = this.limit(this.sessionPrompts, 6);
-      const name =
-        client === 'raycast' ? 'Raycast' : (peer?.launcher?.name ?? 'an unrecognized app');
+      const name = peer?.launcher?.name ?? 'an unrecognized app';
       pending = (async () => {
         await this.presence.requirePresence(`give ${name} access to your vault`);
         if (this.epoch() !== currentEpoch)

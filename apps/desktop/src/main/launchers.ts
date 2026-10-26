@@ -1,4 +1,4 @@
-const namedLaunchers = [
+const browsers = [
   { identifier: 'com.google.Chrome', team: 'EQHXZ8M8AV', name: 'Google Chrome' },
   { identifier: 'com.google.chrome.for.testing', team: 'EQHXZ8M8AV', name: 'Chrome for Testing' },
   { identifier: 'org.mozilla.firefox', team: '43AQ936H96', name: 'Firefox' },
@@ -8,14 +8,23 @@ const namedLaunchers = [
   { identifier: 'com.vivaldi.Vivaldi', team: '4XF3XNRN6Y', name: 'Vivaldi' },
   { identifier: 'at.studio.AsideBrowser', team: '8CPD4K4TBB', name: 'Aside' },
 ];
+const raycast = { identifier: 'com.raycast.macos', team: 'SY64MV22J9', name: 'Raycast' };
 
-export const namedLauncherRequirement = namedLaunchers
-  .map(
-    ({ identifier, team }) =>
-      `(identifier "${identifier}" and anchor apple generic and certificate leaf[subject.OU] = "${team}")`,
-  )
-  .join(' or ');
+const requirement = (launchers: (typeof browsers)[number][]) =>
+  launchers
+    .map(
+      ({ identifier, team }) =>
+        `(identifier "${identifier}" and anchor apple generic and certificate leaf[subject.OU] = "${team}")`,
+    )
+    .join(' or ');
+
+// Browsers launch relays themselves. Raycast runs extensions in a Node child that launches
+// the relay, so its requirement names the launcher's parent.
+export const launcherPolicies = {
+  browser: { requirement: requirement(browsers), namesLauncherParent: false },
+  raycast: { requirement: requirement([raycast]), namesLauncherParent: true },
+};
 
 export const launcherName = (identifier: string | null) =>
-  namedLaunchers.find((launcher) => launcher.identifier === identifier)?.name ??
+  [...browsers, raycast].find((launcher) => launcher.identifier === identifier)?.name ??
   'an unrecognized app';
