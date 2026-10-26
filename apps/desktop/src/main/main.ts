@@ -45,6 +45,8 @@ let bridges: Awaited<ReturnType<typeof startBridges>>;
 let macAutoFill: MacAutoFill;
 let updates: ReturnType<typeof createUpdates> | undefined;
 let busy = false;
+/** Settles when the running unlock finishes, whether or not it succeeded. */
+let unlocking: Promise<void> | undefined;
 let setupError: string | undefined;
 let hasAccountHint = false;
 const lifecycle = new DesktopLifecycle();
@@ -239,7 +241,7 @@ lifecycle.startup = app
           throw new UserError('Request denied.');
         const parsed = desktopRequestSchema.safeParse(raw);
         if (!parsed.success) throw new UserError('Please check the values you entered.');
-        return handleRequest(parsed.data);
+        return handleRequest(parsed.data, true);
       }),
     );
     updates = lifecycle.updates = createUpdates();
@@ -254,7 +256,7 @@ lifecycle.startup = app
     app.quit();
   });
 
-async function handleRequest(request: DesktopRequest): Promise<unknown> {
+async function handleRequest(request: DesktopRequest, fromWindow = false): Promise<unknown> {
   lifecycle.assertRunning();
   switch (request.type) {
     case 'lockTimeout':
@@ -349,7 +351,7 @@ async function handleRequest(request: DesktopRequest): Promise<unknown> {
     case 'copy':
       return lifecycle.copy(request.id, request.field);
     default:
-      return mutateVault(request);
+      return mutateVault(request, fromWindow);
   }
 }
 
@@ -371,10 +373,24 @@ async function mutateVault(
         | 'setBiometrics';
     }
   >,
+  fromWindow: boolean,
 ) {
+  const epoch = lifecycle.epoch;
+  const unlock = request.type === 'unlock' || request.type === 'biometricUnlock';
+  // The window asks for Touch ID when it regains focus, which can happen while
+  // an unlock from the browser, Raycast, or the window itself is still running.
+  // It wants the same outcome, so it waits instead of failing. Browser and
+  // Raycast unlocks never wait: their success grants access without a prompt.
+  while (fromWindow && unlock && unlocking) {
+    await unlocking;
+    if (epoch !== lifecycle.epoch) throw new UserError('Vault locked. Try again after unlocking.');
+    if (vault.snapshot().status === 'unlocked') return vault.snapshot();
+  }
   if (busy) throw new UserError('Please wait for the current vault operation to finish.');
   busy = true;
-  const epoch = lifecycle.epoch;
+  let finish!: () => void;
+  const done = new Promise<void>((resolve) => (finish = resolve));
+  if (unlock) unlocking = done;
   try {
     await examined;
     if (epoch !== lifecycle.epoch) throw new UserError('Vault locked. Try again after unlocking.');
@@ -410,6 +426,8 @@ async function mutateVault(
     }
   } finally {
     busy = false;
+    if (unlocking === done) unlocking = undefined;
+    finish();
   }
 }
 

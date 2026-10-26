@@ -56,7 +56,8 @@ export function manageWindowLayout(window: BrowserWindow) {
     } else {
       const current = window.getBounds();
       const width = next === 'unlock' ? 420 : 440;
-      const height = next === 'unlock' ? 380 : 580;
+      // Fits Touch ID with a three-line error below the password field.
+      const height = next === 'unlock' ? 440 : 580;
       window.setBounds(
         fit({
           width,
