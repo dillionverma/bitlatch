@@ -84,10 +84,11 @@ export class LocalTransport<Request> {
         launchers.requirement,
         launchers.namesLauncherParent,
         (fd, pid, auditToken, launcherKey, launcherIdentifier) => {
-          // A launcher that has let go of its relay, as Raycast does when it unloads a command,
-          // will not read the reply. Refuse the request rather than treat the relay as unknown.
+          // A relay whose launcher has let go of its stdio, as Raycast does when it unloads a
+          // command, is refused without a prompt rather than treated as an unknown app.
           if (launcherKey === null && this.launchedRelays.has(auditToken)) return false;
           if (launcherKey !== null) {
+            this.launchedRelays.delete(auditToken);
             this.launchedRelays.add(auditToken);
             if (this.launchedRelays.size > 100)
               this.launchedRelays.delete(this.launchedRelays.values().next().value!);
