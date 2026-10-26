@@ -8,5 +8,7 @@ typedef struct {
   bool named;
 } LatchLauncher;
 
+// The requirement names the relay's launcher, or with requirement_names_parent the
+// launcher's own parent, for hosts such as Raycast that run extensions in a child runtime.
 bool latch_find_launcher(pid_t relay, SecRequirementRef _Nullable requirement,
-                         LatchLauncher *_Nonnull launcher);
+                         bool requirement_names_parent, LatchLauncher *_Nonnull launcher);
