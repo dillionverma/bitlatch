@@ -381,7 +381,7 @@ async function mutateVault(
   // an unlock from the browser, Raycast, or the window itself is still running.
   // It wants the same outcome, so it waits instead of failing. Browser and
   // Raycast unlocks never wait: their success grants access without a prompt.
-  if (fromWindow && unlock && unlocking) {
+  while (fromWindow && unlock && unlocking) {
     await unlocking;
     if (epoch !== lifecycle.epoch) throw new UserError('Vault locked. Try again after unlocking.');
     if (vault.snapshot().status === 'unlocked') return vault.snapshot();
