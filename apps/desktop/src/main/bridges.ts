@@ -179,14 +179,8 @@ export async function startBridges({
       },
       authorize: async (request, peer) => {
         if (vault.snapshot().status !== 'unlocked') return;
-        if (request.type === 'search') await externalAccess.require('raycast', peer);
-        if (request.type === 'detail' || request.type === 'copy')
-          await externalAccess.requireFresh(
-            request.type === 'copy'
-              ? 'copy a credential for Raycast'
-              : 'show a vault item in Raycast',
-            peer,
-          );
+        if (request.type === 'search' || request.type === 'detail' || request.type === 'copy')
+          await externalAccess.require('raycast', peer);
       },
       async handle(request, peer) {
         assertRunning();
