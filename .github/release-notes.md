@@ -1,15 +1,9 @@
 ## What's new
 
-- Passkeys saved through Bitlatch now work on sites that only accept known password managers, such as Chase. Bitlatch registers them with Bitwarden's authenticator ID.
-- Passkey items can be moved to the trash and restored in Bitlatch.
-- Passkey sign-in signs with the counter that was saved.
-- View and edit cards, identities, custom fields, and folders. Create SSH keys.
-- Show SSH keys, bank accounts, licenses, passports, and password history.
-- Support items shared through organizations, and items that ask for the master password.
-- The browser extension fills cards and identities into page forms.
-- Raycast shows every item type and copies any field.
-- Security: the vault locks after 15 minutes by default, browser access is approved once per browser until lock, macOS IPC peers are verified, and CLI secrets stay out of process environments.
-- Privacy: website icons come from the vault's own server.
+- A passkey sign-in in progress no longer writes its counter to an item you just moved to the trash. Trash, restore and counter writes now run one at a time.
+- Raycast asks for Touch ID once per connection until the vault locks, instead of on every item view and copy.
+
+Everything from [v0.3.6](https://github.com/dillionverma/bitlatch/releases/tag/v0.3.6) is included.
 
 ## Downloads
 
