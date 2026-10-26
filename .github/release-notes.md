@@ -1,9 +1,10 @@
 ## What's new
 
-- A passkey sign-in in progress no longer writes its counter to an item you just moved to the trash. Trash, restore and counter writes now run one at a time.
-- Raycast asks for Touch ID once per connection until the vault locks, instead of on every item view and copy.
+- Touch ID unlock no longer flashes "Please wait for the current vault operation to finish." before the vault opens. A second unlock from the Bitlatch window now waits for the one already running.
+- Error messages on the unlock screen are no longer cut off when Touch ID is on.
+- Raycast stays approved for its whole run until the vault locks, even as it starts new helper processes. Only a correctly signed Raycast is named in the Touch ID prompt.
 
-Everything from [v0.3.6](https://github.com/dillionverma/bitlatch/releases/tag/v0.3.6) is included.
+Everything from [v0.3.7](https://github.com/dillionverma/bitlatch/releases/tag/v0.3.7) is included.
 
 ## Downloads
 
