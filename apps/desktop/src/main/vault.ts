@@ -1030,8 +1030,9 @@ export class Vault extends EventEmitter {
   /**
    * Saves the next signature counter and returns the value saved, which is past
    * `counter` when another client signed since the last sync. Writes run one at
-   * a time, so two sign-ins never save or sign the same value, and a sign-in
-   * never writes back an item that was moved to the trash.
+   * a time, so two sign-ins never save or sign the same value. A sign-in never
+   * writes back an item Bitlatch trashed or one the server already reports as
+   * trashed; another client trashing it mid-write is not detected.
    */
   private writeCounter(id: string, credentialId: string, counter: number, generation: number) {
     return this.serially(async () => {
