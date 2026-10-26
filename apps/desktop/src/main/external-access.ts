@@ -9,7 +9,6 @@ export class ExternalAccess {
   private readonly grantEpochs = new Map<string, number>();
   private readonly pending = new Map<string, Promise<void>>();
   private sessionPrompts: number[] = [];
-  private secretPrompts: number[] = [];
   private readonly enforced = process.platform === 'darwin' && app.isPackaged;
 
   constructor(
@@ -61,15 +60,5 @@ export class ExternalAccess {
       if (granted !== epoch) this.grantEpochs.delete(entry);
     this.grantEpochs.set(key, epoch);
     if (this.grantEpochs.size > 100) this.grantEpochs.delete(this.grantEpochs.keys().next().value!);
-  }
-
-  async requireFresh(reason: string, peer?: VerifiedPeer) {
-    if (!this.enforced) return;
-    this.key('raycast', peer);
-    this.secretPrompts = this.limit(this.secretPrompts, 30);
-    const currentEpoch = this.epoch();
-    await this.presence.requirePresence(reason);
-    if (this.epoch() !== currentEpoch)
-      throw new UserError('Vault locked. Try again after unlocking.');
   }
 }
