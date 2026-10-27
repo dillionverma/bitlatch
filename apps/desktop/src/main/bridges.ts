@@ -29,6 +29,7 @@ interface BridgeDependencies {
   macAutoFill: MacAutoFill;
   showWindow: () => void;
   handleRequest: (request: DesktopRequest) => Promise<unknown>;
+  syncIfStale: () => void;
   epoch: () => number;
   assertRunning: () => void;
 }
@@ -43,6 +44,7 @@ export async function startBridges({
   macAutoFill,
   showWindow,
   handleRequest,
+  syncIfStale,
   epoch,
   assertRunning,
 }: BridgeDependencies) {
@@ -71,6 +73,7 @@ export async function startBridges({
         return {
           state: status,
           canUseBiometrics: biometricsOn && biometrics === 'ready',
+          revision: vault.snapshot().itemsRevision,
         } satisfies BrowserUnlockState;
       }
       if (request.type === 'biometricUnlock') {
@@ -78,7 +81,10 @@ export async function startBridges({
         externalAccess.grant('browser', peer);
         return vault.snapshot().status;
       }
-      if (request.type === 'browse') return vault.browserItems(request.query, request.url);
+      if (request.type === 'browse') {
+        syncIfStale();
+        return vault.browserItems(request.query, request.url);
+      }
       if (request.type === 'detail') {
         vault.requireBrowserItem(request.id, true);
         return handleRequest(request);
@@ -214,6 +220,7 @@ export async function startBridges({
         const { status, email, biometrics, biometricsOn } = vault.snapshot();
         const state = { status, email, canUseBiometrics: biometricsOn && biometrics === 'ready' };
         if (status !== 'unlocked') return { ...state, items: [] };
+        syncIfStale();
         const terms = request.query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
         const items = vault
           .items()

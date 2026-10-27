@@ -296,6 +296,8 @@ export interface BrowserSuggestions extends BrowserMatches {
 export interface BrowserUnlockState {
   state: VaultStatus;
   canUseBiometrics: boolean;
+  /** Changes whenever the item list does. */
+  revision: number;
 }
 
 export interface BrowserSaveResult {

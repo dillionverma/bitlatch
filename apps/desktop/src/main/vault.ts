@@ -88,6 +88,8 @@ const ALL_METHODS: TwoStepMethod[] = ['authenticator', 'yubikey', 'email'];
 const MAX_CODE_ATTEMPTS = 3;
 /** How long an unanswered save offer stays on the table. */
 const CAPTURE_TIMEOUT_MS = 3 * 60_000;
+/** How old the vault may be when someone looks at it before it pulls changes. */
+const STALE_AFTER_MS = 30_000;
 
 /** A sign-in the browser saw, waiting for the user to accept or ignore it. */
 interface Captured {
@@ -154,6 +156,7 @@ export class Vault extends EventEmitter {
   private opened = new Map<string, Cipher>();
   private opening?: string;
   private openTicket = 0;
+  private syncStartedAt = 0;
   private state: Omit<
     VaultState,
     'biometrics' | 'biometricsOn' | 'revision' | 'itemsRevision' | 'trashLoaded'
@@ -504,9 +507,21 @@ export class Vault extends EventEmitter {
     return this.publish();
   }
 
+  /** Runs after pending trash, restore and counter writes, never between their read and write. */
   async sync() {
     this.requireUnlocked();
     const generation = this.generation;
+    this.syncStartedAt = Date.now();
+    return this.serially(() => this.pull(generation));
+  }
+
+  /** The CLI hears nothing when another Bitwarden client changes the vault. */
+  stale() {
+    return this.state.status === 'unlocked' && Date.now() - this.syncStartedAt >= STALE_AFTER_MS;
+  }
+
+  private async pull(generation: number) {
+    this.assertGeneration(generation);
     await this.cli.run(['sync'], { session: this.session });
     this.assertGeneration(generation);
     await this.load(generation);
@@ -722,7 +737,7 @@ export class Vault extends EventEmitter {
     return this.publish();
   }
 
-  /** Runs trash, restore and counter writes one at a time, in call order. */
+  /** Runs syncs and trash, restore and counter writes one at a time, in call order. */
   private serially<T>(task: () => Promise<T>): Promise<T> {
     const run = this.itemWrites.catch(() => undefined).then(task);
     this.itemWrites = run;
