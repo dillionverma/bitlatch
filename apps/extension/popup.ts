@@ -109,6 +109,8 @@ function clearView() {
 let items: ItemSummary[] = [];
 let suggestions: BrowserSuggestions | undefined;
 let total = 0;
+/** Whether the list holds rows past its first page. */
+let appended = false;
 let revision = -1;
 let generation = 0;
 let requestVersion = 0;
@@ -968,11 +970,31 @@ async function loadItems(append = false) {
   total = response.value.total;
   const firstAddedId = response.value.items[0]?.id;
   items = append ? [...items, ...response.value.items] : response.value.items;
+  appended = append;
+  const restoreFocus = append ? undefined : focusedControl();
   renderItems();
+  restoreFocus?.();
   if (append)
     [...results.querySelectorAll<HTMLButtonElement>('.item')]
       .find((row) => row.dataset.id === firstAddedId)
       ?.focus();
+}
+/** Finds the focused row control again after the rows are rebuilt from fresh data. */
+function focusedControl() {
+  const control = document.activeElement;
+  const row = control?.closest('.item-row');
+  const item = row?.querySelector<HTMLElement>('.item');
+  if (!control || !row || !item || !results.contains(row)) return undefined;
+  const id = item.dataset.id;
+  const same = () =>
+    [...results.querySelectorAll<HTMLElement>('.item')].filter((entry) => entry.dataset.id === id);
+  const copy = same().indexOf(item);
+  const index = [...row.querySelectorAll('button')].indexOf(control as HTMLButtonElement);
+  return () =>
+    same()
+      [copy]?.closest('.item-row')
+      ?.querySelectorAll<HTMLButtonElement>('button')
+      [index]?.focus();
 }
 function changeQuery() {
   clearTimeout(searchTimer);
@@ -1080,7 +1102,17 @@ async function refreshStatus() {
     if (changed && state === 'unlocked') {
       void loadItems();
       search.focus();
-    }
+    } else if (
+      // Show a background sync only while it cannot pull rows from under the user.
+      response.ok &&
+      state === 'unlocked' &&
+      view.kind === 'list' &&
+      revision !== -1 &&
+      response.value.revision !== revision &&
+      !appended &&
+      !results.contains(document.activeElement)
+    )
+      void loadItems();
   }
   statusTimer = setTimeout(() => void refreshStatus(), 1000);
 }

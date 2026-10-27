@@ -45,6 +45,8 @@ let bridges: Awaited<ReturnType<typeof startBridges>>;
 let macAutoFill: MacAutoFill;
 let updates: ReturnType<typeof createUpdates> | undefined;
 let busy = false;
+/** A sync nobody asked for holds the busy gate; requests wait for it instead of failing. */
+let backgroundSync: Promise<unknown> | undefined;
 /** Settles when the running unlock finishes, whether or not it succeeded. */
 let unlocking: Promise<void> | undefined;
 let setupError: string | undefined;
@@ -150,6 +152,7 @@ lifecycle.startup = app
             macAutoFill,
             showWindow,
             handleRequest,
+            syncIfStale,
             epoch: () => lifecycle.epoch,
             assertRunning: () => lifecycle.assertRunning(),
           }),
@@ -221,6 +224,7 @@ lifecycle.startup = app
     window.on('focus', () => {
       void macAutoFill.status().catch(() => undefined);
       refreshBiometrics();
+      syncIfStale();
     });
     powerMonitor.on('resume', refreshBiometrics);
     powerMonitor.on('unlock-screen', refreshBiometrics);
@@ -355,6 +359,19 @@ async function handleRequest(request: DesktopRequest, fromWindow = false): Promi
   }
 }
 
+/** Pulls in changes from other Bitwarden clients when someone looks at a stale vault. */
+function syncIfStale() {
+  if (busy || !vault.stale()) return;
+  busy = true;
+  backgroundSync = vault
+    .sync()
+    .catch(() => undefined)
+    .finally(() => {
+      busy = false;
+      backgroundSync = undefined;
+    });
+}
+
 async function mutateVault(
   request: Extract<
     DesktopRequest,
@@ -385,6 +402,10 @@ async function mutateVault(
     await unlocking;
     if (epoch !== lifecycle.epoch) throw new UserError('Vault locked. Try again after unlocking.');
     if (vault.snapshot().status === 'unlocked') return vault.snapshot();
+  }
+  if (backgroundSync) {
+    await backgroundSync;
+    if (epoch !== lifecycle.epoch) throw new UserError('Vault locked. Try again after unlocking.');
   }
   if (busy) throw new UserError('Please wait for the current vault operation to finish.');
   busy = true;
