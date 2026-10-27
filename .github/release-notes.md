@@ -1,10 +1,9 @@
 ## What's new
 
-- Touch ID unlock no longer flashes "Please wait for the current vault operation to finish." before the vault opens. A second unlock from the Bitlatch window now waits for the one already running.
-- Error messages on the unlock screen are no longer cut off when Touch ID is on.
-- Raycast stays approved for its whole run until the vault locks, even as it starts new helper processes. Only a correctly signed Raycast is named in the Touch ID prompt.
+- Logins you add or change in another Bitwarden app now show in Bitlatch without pressing Refresh. Opening the browser popup, searching in Raycast, or focusing the Bitlatch window pulls the latest vault when the last sync is more than 30 seconds old.
+- The browser popup shows those changes as soon as the background sync finishes.
 
-Everything from [v0.3.7](https://github.com/dillionverma/bitlatch/releases/tag/v0.3.7) is included.
+Everything from [v0.3.8](https://github.com/dillionverma/bitlatch/releases/tag/v0.3.8) is included.
 
 ## Downloads
 
