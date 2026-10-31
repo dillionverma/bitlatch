@@ -28,7 +28,7 @@ Bitlatch is an independent project, not affiliated with or endorsed by Bitwarden
 
 - ✨ **A more considered interface.** Clear layouts, system colors, and native vibrancy on macOS.
 - ⚡ **Keep your hands on the keyboard.** Jump to search with ⌘K / Ctrl+K, find a login, and copy what you need.
-- 🌐 **Fill where you browse.** Bring Bitlatch to Chrome, Aside, and other browsers. [See browser availability](#browser-extensions).
+- 🌐 **Fill where you browse.** Bring Bitlatch to Chrome, Aside, and other browsers, and use your passkeys from a Bitlatch window. [See browser availability](#browser-extensions).
 - 🚀 **Your vault in Raycast.** Search, unlock, and copy credentials straight from your launcher on Mac.
 - 👆 **Less typing, more control.** Unlock with Touch ID on Mac, choose when your vault locks, and configure generated passwords.
 - 🔑 **Keep Bitwarden underneath.** Your existing account and vault, with authentication and cryptography handled by the official Bitwarden CLI.

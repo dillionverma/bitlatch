@@ -63,9 +63,19 @@ passkey chooser show the wrong provider name and icon.
 - Only fillable personal password items enter Apple's suggestion index. The index contains website origins, usernames and record IDs, not passwords or URL paths. Exact/prefix URI rules stay in the picker because a selected suggestion does not include the current page URL. Apple handles the association of indexed suggestions with apps and websites. Locking queues index removal and immediately denies new credential reads.
 - A sandboxed AppKit extension offers matching logins for the service identifiers provided by macOS. Selection requests one credential through a bounded, authenticated Unix socket in the app group. Bitlatch rechecks the current vault and URI rules before releasing it.
 - Bitlatch must be running and unlocked. The extension tells the user to unlock Bitlatch and retry. It cannot unlock the vault or run the Bitwarden CLI itself.
-- Passkeys stay in the Bitwarden vault; Bitlatch has no separate passkey store. Personal items with a P-256 passkey are indexed by relying party and credential ID, so the system passkey sheet lists them in Safari, Chromium browsers and apps. The app requires Touch ID or the Mac login password before every passkey assertion or registration, including requests that discourage verification. The app signs with the stored key, using the same authenticator data, `none` attestation and counter rule as Bitwarden's clients, and writes new passkeys and counter changes back through the CLI, so nothing is released or created if the write fails. Bitlatch creates discoverable ES256 passkeys only; requests that exclude ES256 or that name an already-saved credential are refused.
+- Passkeys stay in the Bitwarden vault; Bitlatch has no separate passkey store. Personal items with a P-256 passkey are indexed by relying party and credential ID, so the system passkey sheet lists them in Safari and apps. The app requires Touch ID or the Mac login password before every passkey assertion or registration, including requests that discourage verification. The app signs with the stored key, using the same authenticator data, `none` attestation and counter rule as Bitwarden's clients, and writes new passkeys and counter changes back through the CLI, so nothing is released or created if the write fails. Bitlatch creates discoverable ES256 passkeys only; requests that exclude ES256 or that name an already-saved credential are refused.
+- The Chrome and Firefox extensions answer passkey requests themselves, so those browsers show a Bitlatch window instead of the system sheet. See [Passkeys in the browser extension](#passkeys-in-the-browser-extension).
 - Dismissing or replacing a request cancels native IPC and user verification; late replies cannot fill. Oversized passkey allow/exclude lists are rejected, never truncated.
 - OTPs and native save prompts are not implemented. Passkey registration does not receive the relying party's display name from macOS, so a new item is named after the relying party identifier.
+
+## Passkeys in the browser extension
+
+In Chromium browsers and Firefox, the extension handles `navigator.credentials.create()` and `get()` on top-level HTTPS pages, as Bitwarden's extension does. A Bitlatch window lists the site's passkeys or offers to save a new one. **Use another device** hands the request back to the browser, which then shows its own passkey options, including the system sheet.
+
+- The browser hands the request back without a window when Bitlatch is not running or signed out, when a sign-in has no matching Bitlatch passkey, and for conditional (autofill) requests, frames, security-key-only requests and registrations without ES256.
+- The page's origin comes from the browser's sender metadata. The app checks that the relying party is the page's host or a parent domain and not a public suffix, then builds the client data itself.
+- The vault must be unlocked. A locked vault shows **Unlock with Touch ID** or **Open Bitlatch to unlock** in the window. Choosing a passkey in the window counts as user verification, as in Bitwarden's extension; the extension path does not ask for Touch ID again. Items that ask for the master password are never offered.
+- Safari keeps the system sheet served by the AutoFill extension.
 
 ## Manual acceptance (synthetic vault only)
 
@@ -74,6 +84,7 @@ passkey chooser show the wrong provider name and icon.
 3. Verify suggestions and the picker in Safari and an app with a matching associated domain. Check wrong-domain, Never-match, trashed and restricted items.
 4. Lock while the picker is open. Filling must fail. Unlock in Bitlatch and retry. Repeat after deleting the selected item.
    4a. With a synthetic account on a passkey test site (for example webauthn.io), register a passkey through the system sheet, confirm the new item appears in Bitlatch and Bitwarden with the key, then sign in with it in Safari and a Chromium browser. Cancel Touch ID once and confirm nothing is created or released. Repeat sign-in after locking Bitlatch.
+   4b. In Chrome with the extension, register and sign in on the same site through the Bitlatch window. Check **Cancel**, **Use another device**, closing the window, and sign-in while locked.
 5. Change and sync a synthetic login, then confirm the refreshed suggestion fills the new value.
 6. Disable Bitlatch in System Settings, return to Bitlatch and confirm the control updates. Quit Bitlatch and confirm the extension cannot fill.
 
