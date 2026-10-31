@@ -19,6 +19,7 @@ import type {
 } from '@latch/shared/types';
 import { formValues } from '../form-values';
 import type { FormKind } from '../content/forms';
+import { passkeySessions } from '../passkeys/sessions';
 
 type Native = <T>(request: BrowserRequest) => Promise<Result<T>>;
 type FrameTarget = { frameId: number; documentId?: string; origin: string; token?: unknown };
@@ -304,6 +305,8 @@ export default defineBackground(() => {
   }, 5000);
   void refreshBadge(true);
 
+  const passkeys = import.meta.env.BROWSER === 'safari' ? undefined : passkeySessions(native);
+
   browser.runtime.onMessage.addListener((message: unknown, sender, respond) => {
     if (!message || typeof message !== 'object' || !('type' in message)) return false;
     const type = message.type;
@@ -431,6 +434,11 @@ export default defineBackground(() => {
       // same trusted same-origin sender metadata as matches and fills.
       if (type === 'status' && (isPopup || senderUrl(sender)))
         return native<VaultStatus>({ type: 'status' });
+      if (passkeys && 'id' in message && typeof message.id === 'string') {
+        if (type === 'passkeyRequest' && 'request' in message)
+          return passkeys.request(message.id, message.request, sender, senderUrl(sender));
+        if (type === 'passkeyCancel') return passkeys.cancel(message.id, sender);
+      }
       const url = senderUrl(sender);
       if (!url) return { ok: false, error: 'Autofill is unavailable in this frame.' };
       if (type === 'matches') return native<BrowserMatches>({ type, url });

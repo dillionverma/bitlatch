@@ -26,7 +26,7 @@ export default defineConfig({
     includeSources: [
       'apps/extension/{content,popup}.ts',
       'apps/extension/popup.css',
-      'apps/extension/{content,entrypoints}/**/*.{ts,css,html}',
+      'apps/extension/{content,entrypoints,passkeys}/**/*.{ts,css,html}',
       'apps/extension/public/*.png',
       'apps/extension/{package,tsconfig}.json',
       'apps/extension/wxt.config.ts',
