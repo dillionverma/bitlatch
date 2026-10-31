@@ -6,7 +6,9 @@ import {
   randomUUID,
   sign,
 } from 'node:crypto';
+import { parse } from 'tldts';
 import { UserError } from '@latch/shared/protocol';
+import { webUrl } from '@latch/shared/urls';
 
 /**
  * A passkey as Bitwarden stores it on a login item. Field names, string
@@ -199,4 +201,40 @@ export function isValidRpId(rpId: string): boolean {
     rpId.length <= 253 &&
     /^(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))*$/i.test(rpId)
   );
+}
+
+/**
+ * The origin of a page that may use a relying party's passkeys, from the page
+ * address the extension read out of the browser. The relying party has to be
+ * the page's host or a parent domain of it, and never a public suffix, so one
+ * site cannot use another site's passkeys.
+ */
+export function relyingPartyOrigin(url: string, rpId: string) {
+  const page = webUrl(url);
+  const host = page?.hostname.toLowerCase() ?? '';
+  if (!page || (page.protocol !== 'https:' && host !== 'localhost' && host !== '127.0.0.1'))
+    throw new UserError('Passkeys need a secure website.');
+  const id = rpId.toLowerCase();
+  const site = parse(id, { allowPrivateDomains: true });
+  const registrable =
+    (id === 'localhost' && host === 'localhost') ||
+    (isValidRpId(id) && !!site.domain && (site.isIcann || site.isPrivate));
+  if (!registrable || (host !== id && !host.endsWith(`.${id}`)))
+    throw new UserError('This website asked for a passkey that belongs to another website.');
+  return page.origin;
+}
+
+/** The client data a browser sends with a WebAuthn request, and its hash. */
+export function clientData(
+  origin: string,
+  type: 'webauthn.get' | 'webauthn.create',
+  challenge: string,
+) {
+  const bytes = fromBase64Url(challenge);
+  if (bytes.length < 16 || bytes.length > 1024)
+    throw new UserError('The passkey request is malformed.');
+  const json = Buffer.from(
+    JSON.stringify({ type, challenge: toBase64Url(bytes), origin, crossOrigin: false }),
+  );
+  return { json, hash: createHash('sha256').update(json).digest() };
 }

@@ -36,6 +36,7 @@ import type {
   LoginChallenge,
   ItemDraft,
   LoginInput,
+  PasskeyMatch,
   PasswordOptions,
   TwoStepMethod,
   VaultState,
@@ -111,16 +112,6 @@ interface PendingLogin {
   restart: boolean;
   failure?: UserError;
   settle?: (answer: ChallengeAnswer) => void;
-}
-
-/** A passkey the picker can offer for a relying party. Nothing secret. */
-export interface PasskeyMatch {
-  id: string;
-  name: string;
-  userName: string;
-  credentialId: string;
-  userHandle: string;
-  rpId: string;
 }
 
 export interface PasskeyIdentity {
@@ -1014,6 +1005,7 @@ export class Vault extends EventEmitter {
     credentialId: string;
     rpId: string;
     clientDataHash: string;
+    userVerified: boolean;
   }) {
     const cipher = this.item(input.id);
     const generation = this.generation;
@@ -1032,7 +1024,7 @@ export class Vault extends EventEmitter {
     const authData = authenticatorData({
       rpId: input.rpId,
       counter: next,
-      userVerified: true,
+      userVerified: input.userVerified,
     });
     return {
       credentialId: input.credentialId,
@@ -1087,6 +1079,7 @@ export class Vault extends EventEmitter {
     clientDataHash: string;
     algorithms: number[];
     excluded: string[];
+    userVerified: boolean;
   }) {
     this.requireUnlocked();
     const generation = this.generation;
@@ -1151,12 +1144,15 @@ export class Vault extends EventEmitter {
     const authData = authenticatorData({
       rpId: input.rpId,
       counter: 0,
-      userVerified: true,
+      userVerified: input.userVerified,
       attested: { credentialId: raw, publicKeyDer: key.publicKeyDer },
     });
     return {
       credentialId: toBase64Url(raw),
       attestationObject: toBase64Url(attestationObject(authData)),
+      authenticatorData: toBase64Url(authData),
+      publicKey: toBase64Url(key.publicKeyDer),
+      publicKeyAlgorithm: ES256,
     };
   }
 

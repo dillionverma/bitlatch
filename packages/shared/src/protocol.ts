@@ -264,6 +264,24 @@ export const browserVaultQuerySchema = z
   .strict();
 export type BrowserVaultQuery = z.infer<typeof browserVaultQuerySchema>;
 
+const base64url = z
+  .string()
+  .max(2_048)
+  .regex(/^[\w-]*$/);
+const rpId = z
+  .string()
+  .min(1)
+  .max(253)
+  .regex(/^[a-z0-9.-]+$/i);
+const passkeyText = z.string().max(512);
+export const userVerificationSchema = z.enum(['required', 'preferred', 'discouraged']);
+const passkeyRequest = {
+  url: z.string().max(4_096),
+  rpId,
+  challenge: base64url,
+  userVerification: userVerificationSchema,
+};
+
 export const browserRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('detail'), id }).strict(),
   z.object({ type: z.literal('save'), draft: browserDraftSchema }).strict(),
@@ -309,7 +327,58 @@ export const browserRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('pendingCapture'), url: z.string().max(4_096) }).strict(),
   z.object({ type: z.literal('commitCapture'), url: z.string().max(4_096) }).strict(),
   z.object({ type: z.literal('dismissCapture') }).strict(),
+  z
+    .object({
+      type: z.literal('passkeys'),
+      url: z.string().max(4_096),
+      rpId,
+      allowed: z.array(base64url).max(64),
+    })
+    .strict(),
+  z
+    .object({ type: z.literal('assertPasskey'), ...passkeyRequest, id, credentialId: base64url })
+    .strict(),
+  z
+    .object({
+      type: z.literal('registerPasskey'),
+      ...passkeyRequest,
+      rpName: passkeyText,
+      userName: passkeyText,
+      userDisplayName: passkeyText,
+      userHandle: base64url,
+      algorithms: z.array(z.number().int()).max(32),
+      excluded: z.array(base64url).max(64),
+    })
+    .strict(),
 ]);
+
+const pageTimeout = z.number().min(0).max(1e12).optional();
+/** A page's WebAuthn request as the extension's page script serialised it. */
+export const passkeyPageRequestSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('get'),
+      rpId: rpId.optional(),
+      challenge: base64url,
+      allowCredentials: z.array(base64url).max(64),
+      userVerification: userVerificationSchema.optional(),
+      timeout: pageTimeout,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('create'),
+      rp: z.object({ id: rpId.optional(), name: passkeyText }).strict(),
+      user: z.object({ id: base64url, name: passkeyText, displayName: passkeyText }).strict(),
+      challenge: base64url,
+      algorithms: z.array(z.number().int()).max(32),
+      excludeCredentials: z.array(base64url).max(64),
+      userVerification: userVerificationSchema.optional(),
+      timeout: pageTimeout,
+    })
+    .strict(),
+]);
+export type PasskeyPageRequest = z.infer<typeof passkeyPageRequestSchema>;
 
 export type DesktopRequest = z.infer<typeof desktopRequestSchema>;
 export type BrowserRequest = z.infer<typeof browserRequestSchema>;

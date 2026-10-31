@@ -181,6 +181,39 @@ export interface PasskeySummary {
   creationDate: string | null;
 }
 
+/** A passkey a site can sign in with. Nothing secret. */
+export interface PasskeyMatch {
+  id: string;
+  name: string;
+  userName: string;
+  credentialId: string;
+  userHandle: string;
+  rpId: string;
+}
+
+export type UserVerification = 'required' | 'preferred' | 'discouraged';
+
+/** A signed WebAuthn assertion. Byte fields are base64url. */
+export interface PasskeyAssertion {
+  credentialId: string;
+  userHandle: string;
+  authenticatorData: string;
+  signature: string;
+  clientDataJSON: string;
+}
+
+/** A new passkey's WebAuthn registration. Byte fields are base64url. */
+export interface PasskeyRegistration {
+  credentialId: string;
+  clientDataJSON: string;
+  attestationObject: string;
+  authenticatorData: string;
+  /** DER SubjectPublicKeyInfo. */
+  publicKey: string;
+  /** COSE algorithm; always ES256 (-7). */
+  publicKeyAlgorithm: number;
+}
+
 export interface ItemDetail extends ItemSummary {
   password: string;
   /** The organization hides this item's password, history, and hidden fields from this account. */

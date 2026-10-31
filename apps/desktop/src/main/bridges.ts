@@ -14,7 +14,13 @@ import { launcherRows } from './launcher-rows';
 import type { VerifiedPeer } from './local-transport';
 import { ExternalAccess } from './external-access';
 import { installBrowser } from './browser-registration';
-import type { BrowserConnection, BrowserUnlockState } from '@latch/shared/types';
+import type {
+  BrowserConnection,
+  BrowserUnlockState,
+  PasskeyAssertion,
+  PasskeyRegistration,
+} from '@latch/shared/types';
+import { clientData, relyingPartyOrigin, toBase64Url } from './passkeys';
 import { iconHostname, iconUrl, type WebsiteIcons } from './website-icons';
 import type { Vault } from './vault';
 import type { MacAutoFill } from './macos-autofill';
@@ -131,6 +137,48 @@ export async function startBridges({
         return startedAt === epoch() && vault.snapshot().status === 'unlocked' ? icon : null;
       }
       if (request.type === 'fill') return vault.fill(request.id, request.url);
+      if (request.type === 'passkeys') {
+        relyingPartyOrigin(request.url, request.rpId);
+        return vault.passkeys(
+          request.rpId,
+          request.allowed.map((id) => Buffer.from(id, 'base64url')),
+        );
+      }
+      // An unlocked vault and a click in the extension's window verify the
+      // user, as in Bitwarden's extension. Items that reprompt never get here.
+      const userVerified = request.userVerification !== 'discouraged';
+      if (request.type === 'assertPasskey') {
+        const client = clientData(
+          relyingPartyOrigin(request.url, request.rpId),
+          'webauthn.get',
+          request.challenge,
+        );
+        const assertion = await vault.assertPasskey({
+          ...request,
+          clientDataHash: toBase64Url(client.hash),
+          userVerified,
+        });
+        return {
+          ...assertion,
+          clientDataJSON: toBase64Url(client.json),
+        } satisfies PasskeyAssertion;
+      }
+      if (request.type === 'registerPasskey') {
+        const client = clientData(
+          relyingPartyOrigin(request.url, request.rpId),
+          'webauthn.create',
+          request.challenge,
+        );
+        const registration = await vault.registerPasskey({
+          ...request,
+          clientDataHash: toBase64Url(client.hash),
+          userVerified,
+        });
+        return {
+          ...registration,
+          clientDataJSON: toBase64Url(client.json),
+        } satisfies PasskeyRegistration;
+      }
       const unhandled: never = request;
       throw new UserError(`Unsupported browser request: ${String(unhandled)}`);
     };

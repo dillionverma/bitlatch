@@ -284,12 +284,14 @@ export class MacAutoFill {
         await this.requirePresence(`use your passkey for ${request.rpId}`);
         if (this.epoch() !== startedAt || socket.destroyed || this.stopped)
           throw new UserError('Vault locked. Try again after unlocking.');
-        if (request.type === 'assert') value = await this.vault.assertPasskey(request);
+        if (request.type === 'assert')
+          value = await this.vault.assertPasskey({ ...request, userVerified: true });
         else
           value = await this.vault.registerPasskey({
             ...request,
             rpName: request.rpId,
             userDisplayName: request.userName,
+            userVerified: true,
           });
       }
       if (
