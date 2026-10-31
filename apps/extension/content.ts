@@ -772,6 +772,16 @@ export function startContent(ctx: ContentScriptContext) {
       if (event.isTrusted) void show(navigator.userActivation.isActive);
     }
   });
+  // Typing means the user is not picking a saved login. An open picker would
+  // otherwise cover the sign-in button below the field.
+  ctx.addEventListener(
+    document,
+    'input',
+    (event) => {
+      if (event.isTrusted && open && event.target === active && !filling) close();
+    },
+    true,
+  );
   ctx.addEventListener(
     document,
     'pointerdown',
