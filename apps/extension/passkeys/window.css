@@ -1,4 +1,7 @@
 :root {
+  /* Brand blue, as on the desktop unlock screen. */
+  --primary: #145cff;
+  --primary-foreground: #fff;
   font-family: var(--font-ui);
   background: var(--background);
   color: var(--foreground);
@@ -116,6 +119,14 @@ h1 {
   border: 0;
   background: transparent;
 }
+.item:hover {
+  background: var(--accent);
+}
+.item:active,
+.item:focus-visible {
+  outline: none;
+  background: var(--selection);
+}
 .account {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -165,9 +176,9 @@ h1 {
   border-color: transparent;
   font-weight: 500;
 }
-.primary:hover {
-  background: var(--primary);
-  filter: brightness(1.08);
+.primary:hover,
+.primary:active {
+  background: var(--primary-hover);
 }
 #message {
   margin: 0;

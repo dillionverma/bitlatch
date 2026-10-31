@@ -103,14 +103,14 @@ function render(view: PasskeyView) {
     }),
   );
   list.hidden = false;
-  list.querySelector<HTMLButtonElement>('button')?.focus();
+  list.querySelector<HTMLButtonElement>('button')?.focus({ focusVisible: false });
 }
 
 function showPrimary(label: string, action: PasskeyWindowRequest) {
   primary.textContent = label;
   primary.hidden = false;
   primaryAction = action;
-  primary.focus();
+  primary.focus({ focusVisible: false });
 }
 
 primary.addEventListener('click', () => {
