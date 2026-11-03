@@ -32,6 +32,7 @@ writeFileSync(bridge, readFileSync(bridge, 'utf8').replace('@latch/shared/protoc
 
 const manifest = readJson(resolve(source, 'package.json'));
 delete manifest.dependencies['@latch/shared'];
+delete manifest.private;
 delete manifest.scripts.typecheck;
 manifest.access = 'public';
 manifest.scripts.build = 'ray build -e dist';

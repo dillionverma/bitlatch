@@ -2,6 +2,8 @@
 
 Search your Bitlatch vault, copy credentials and secure notes, and lock your vault from Raycast.
 
+Bitlatch is a separate desktop app. This extension requires it to run. Bitlatch is an independent client for Bitwarden and is not affiliated with Bitwarden.
+
 ## Setup
 
 1. [Download Bitlatch](https://github.com/dillionverma/bitlatch/releases) for macOS 14 or later on Apple Silicon.
@@ -36,4 +38,4 @@ From the Bitlatch repository, run `pnpm run package:raycast`. This creates a sta
 
 When dependencies change, run `pnpm run package:raycast --update-lock` and commit `apps/raycast/store/package-lock.json` with the manifest and pnpm lockfile.
 
-Before submitting, make the Bitlatch download accessible, capture Raycast screenshots using synthetic data, and manually check unlock, search, copy, lock, and reconnection. After reviewing the exported files, run `npm run publish` from `release/raycast/bitlatch` to open the public Raycast Store pull request.
+Before submitting, make the Bitlatch download accessible, capture Raycast screenshots using synthetic data, and manually check unlock, search, copy, lock, and reconnection. Store submission requires Dillion’s approval. After approval and review of the exported files, run `npm run publish` from `release/raycast/bitlatch` to open the public Raycast Store pull request.
